@@ -1,0 +1,6 @@
+{
+  "name": "记了个屁",
+  "description": "心理咨询档案、督导师关联、思考反思与多维日程管理系统",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
