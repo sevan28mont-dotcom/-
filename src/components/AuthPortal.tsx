@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { UserAccount, loginUser, registerUser } from '../services/auth';
 import { EMPTY_SYSTEM_DATA, getDefaultSampleSystemData, saveDataToLocalStorage } from '../services/storage';
 import {
@@ -13,12 +13,8 @@ import {
   Feather,
   Sparkles,
   ShieldCheck,
-  Mail,
-  Send,
   Eye,
   EyeOff,
-  Check,
-  Loader2,
 } from 'lucide-react';
 
 interface AuthPortalProps {
@@ -27,8 +23,6 @@ interface AuthPortalProps {
   onToggleTheme?: () => void;
 }
 
-type RegType = 'email' | 'username';
-
 const AVATAR_OPTIONS = [
   '🩺', '👩‍⚕️', '👨‍⚕️', '🧠', '🌿', '🌱', '🌸', '☕',
   '🦉', '🎨', '📜', '🛡️', '💎', '☀️', '🌊', '🕯️'
@@ -36,37 +30,19 @@ const AVATAR_OPTIONS = [
 
 export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMode = false, onToggleTheme }) => {
   const [isRegister, setIsRegister] = useState(false);
-  const [regType, setRegType] = useState<RegType>('email');
 
   // Input states
   const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [verifyCode, setVerifyCode] = useState('');
   const [password, setPassword] = useState('123456');
   const [showPassword, setShowPassword] = useState(false);
   const [title, setTitle] = useState('心理咨询师');
   const [avatar, setAvatar] = useState('🩺');
-
-  // Email Code Countdown State
-  const [codeSending, setCodeSending] = useState(false);
-  const [countdown, setCountdown] = useState(0);
 
   // Load demo data by default
   const [includeDemoData, setIncludeDemoData] = useState(true);
 
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-
-  // Countdown timer effect
-  useEffect(() => {
-    let timer: any = null;
-    if (countdown > 0) {
-      timer = setInterval(() => {
-        setCountdown((prev) => prev - 1);
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [countdown]);
 
   // Compute Password Strength
   const getPasswordStrength = (pass: string) => {
@@ -88,53 +64,16 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
 
   const passStrength = getPasswordStrength(password);
 
-  // Send Email Code Handler
-  const handleSendEmailCode = async () => {
-    setErrorMsg('');
-    setSuccessMsg('');
-
-    const trimmedEmail = email.trim().toLowerCase();
-    if (!trimmedEmail || !trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      setErrorMsg('请输入有效且完整的电子邮箱地址（例如 counselor@psych.cn）');
-      return;
-    }
-
-    setCodeSending(true);
-    try {
-      const response = await fetch('/api/auth/send-email-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmedEmail }),
-      });
-      const data = await response.json();
-
-      if (data.success) {
-        setCountdown(60);
-        if (data.code) {
-          setVerifyCode(data.code);
-          setSuccessMsg(`邮件触发成功！已为您生成专属 6 位验证码: [${data.code}]（演示环境中已自动填充）`);
-        } else {
-          setSuccessMsg(data.message || '验证码邮件已触发发送，请前往收件箱查收');
-        }
-      } else {
-        setErrorMsg(data.error || '验证码发送失败，请检查邮箱后重试');
-      }
-    } catch (err) {
-      console.error('Email code request error:', err);
-      // Fallback code generation
-      const fallbackCode = Math.floor(100000 + Math.random() * 900000).toString();
-      setVerifyCode(fallbackCode);
-      setCountdown(60);
-      setSuccessMsg(`验证码发送请求已处理！[专属验证码: ${fallbackCode}] (已为您自动填入)`);
-    } finally {
-      setCodeSending(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
+
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
+      setErrorMsg('请填写正确的账号/咨询师姓名');
+      return;
+    }
 
     if (isRegister) {
       // Validate Password Strength
@@ -143,75 +82,21 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
         return;
       }
 
-      if (regType === 'email') {
-        if (!email || !email.includes('@')) {
-          setErrorMsg('请输入正确的电子邮箱地址');
-          return;
-        }
-        if (!verifyCode || verifyCode.length < 4) {
-          setErrorMsg('请填写邮箱收到的验证码');
-          return;
-        }
-
-        // Verify Email Code with Backend
-        try {
-          const vRes = await fetch('/api/auth/verify-email-code', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, code: verifyCode }),
-          });
-          const vData = await vRes.json();
-          if (!vRes.ok || !vData.success) {
-            setErrorMsg(vData.error || '邮箱验证码校验未通过，请重新获取');
-            return;
-          }
-        } catch (err) {
-          console.error('Verify email code error:', err);
-        }
-
-        // Register using email as account identifier
-        const regRes = registerUser(email.trim(), password, title, avatar);
-        if (!regRes.success) {
-          setErrorMsg(regRes.error || '该邮箱已被注册，请直接登录！');
-          return;
-        }
-        if (regRes.user) {
-          saveDataToLocalStorage(
-            includeDemoData ? getDefaultSampleSystemData() : EMPTY_SYSTEM_DATA,
-            regRes.user.id
-          );
-          onLoginSuccess(regRes.user);
-        }
-      } else {
-        // Username registration
-        const trimmedUsername = username.trim();
-        if (!trimmedUsername) {
-          setErrorMsg('请填写正确的账号/咨询师姓名');
-          return;
-        }
-
-        const regRes = registerUser(trimmedUsername, password, title, avatar);
-        if (!regRes.success) {
-          setErrorMsg(regRes.error || '注册失败，该用户名已被使用！');
-          return;
-        }
-        if (regRes.user) {
-          saveDataToLocalStorage(
-            includeDemoData ? getDefaultSampleSystemData() : EMPTY_SYSTEM_DATA,
-            regRes.user.id
-          );
-          onLoginSuccess(regRes.user);
-        }
+      const regRes = registerUser(trimmedUsername, password, title, avatar);
+      if (!regRes.success) {
+        setErrorMsg(regRes.error || '注册失败，该用户名已被使用！');
+        return;
+      }
+      if (regRes.user) {
+        saveDataToLocalStorage(
+          includeDemoData ? getDefaultSampleSystemData() : EMPTY_SYSTEM_DATA,
+          regRes.user.id
+        );
+        onLoginSuccess(regRes.user);
       }
     } else {
       // Login flow
-      const accountInput = (regType === 'email' ? email : username).trim();
-      if (!accountInput) {
-        setErrorMsg(regType === 'email' ? '请输入登录邮箱' : '请输入登录用户名');
-        return;
-      }
-
-      const loginRes = loginUser(accountInput, password);
+      const loginRes = loginUser(trimmedUsername, password);
       if (!loginRes.success) {
         setErrorMsg(loginRes.error || '登录失败！请检查账号或密码');
         return;
@@ -285,7 +170,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
             </span>
           </div>
           <p className="text-xs text-zinc-500 dark:text-slate-400 font-medium">
-            {isRegister ? '输入邮箱或名字快速注册专属账号' : '请登录您的心理咨询师专属工作台'}
+            {isRegister ? '输入用户名与密码注册专属账号' : '请登录您的心理咨询师专属工作台'}
           </p>
         </div>
 
@@ -305,7 +190,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
             }`}
           >
             <LogIn className="w-3.5 h-3.5" />
-            <span>账号登录</span>
+            <span>密码登录</span>
           </button>
           <button
             type="button"
@@ -325,42 +210,6 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
           </button>
         </div>
 
-        {/* Secondary RegType Toggle: Email / Username */}
-        <div className="flex bg-zinc-100/80 dark:bg-slate-800/60 p-0.5 rounded-xl border border-zinc-200 dark:border-slate-700 text-[11px] font-bold shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              setRegType('email');
-              setErrorMsg('');
-              setSuccessMsg('');
-            }}
-            className={`flex-1 py-1 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${
-              regType === 'email'
-                ? 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-2xs font-extrabold'
-                : 'text-zinc-500 dark:text-slate-400 hover:text-zinc-800'
-            }`}
-          >
-            <Mail className="w-3 h-3" />
-            <span>{isRegister ? '邮箱验证注册' : '邮箱登录'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setRegType('username');
-              setErrorMsg('');
-              setSuccessMsg('');
-            }}
-            className={`flex-1 py-1 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${
-              regType === 'username'
-                ? 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-2xs font-extrabold'
-                : 'text-zinc-500 dark:text-slate-400 hover:text-zinc-800'
-            }`}
-          >
-            <User className="w-3 h-3" />
-            <span>{isRegister ? '用户名注册' : '用户名登录'}</span>
-          </button>
-        </div>
-
         {/* Error / Success Feedback */}
         {errorMsg && (
           <div className="bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 p-2.5 rounded-2xl flex items-center gap-2 text-rose-800 dark:text-rose-200 text-xs font-semibold shrink-0">
@@ -377,84 +226,23 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="space-y-3 flex-1 overflow-y-auto pr-1">
-          {regType === 'email' ? (
-            /* Email Input & Verification */
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-zinc-700 dark:text-slate-300 mb-1">
-                  电子邮箱地址 *
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-zinc-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="例如: counselor@psych.cn"
-                    className="w-full pl-9 pr-3 py-2 bg-zinc-50/50 dark:bg-slate-800/80 border border-zinc-200 dark:border-slate-700 rounded-xl text-xs text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-400 transition"
-                  />
-                </div>
-              </div>
-
-              {isRegister && (
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-slate-300 mb-1">
-                    邮箱验证码 *
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      required
-                      maxLength={6}
-                      value={verifyCode}
-                      onChange={(e) => setVerifyCode(e.target.value)}
-                      placeholder="6 位数字验证码"
-                      className="flex-1 px-3 py-2 bg-zinc-50/50 dark:bg-slate-800/80 border border-zinc-200 dark:border-slate-700 rounded-xl text-xs text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-400"
-                    />
-                    <button
-                      type="button"
-                      disabled={codeSending || countdown > 0}
-                      onClick={handleSendEmailCode}
-                      className="px-3.5 py-2 bg-rose-500 hover:bg-rose-600 dark:bg-rose-600 dark:hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl border border-rose-400 dark:border-rose-500 transition cursor-pointer shrink-0 flex items-center gap-1.5 shadow-2xs active:scale-95"
-                    >
-                      {codeSending ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>正在触发...</span>
-                        </>
-                      ) : countdown > 0 ? (
-                        <span>{countdown}s 后重新发送</span>
-                      ) : (
-                        <>
-                          <Send className="w-3.5 h-3.5" />
-                          <span>获取邮箱验证码</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
+          {/* Username Input */}
+          <div>
+            <label className="block text-xs font-bold text-zinc-700 dark:text-slate-300 mb-1">
+              登录账号 / 咨询师姓名 *
+            </label>
+            <div className="relative">
+              <User className="w-4 h-4 text-zinc-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="如: 林心理咨询师 或 张咨询"
+                className="w-full pl-9 pr-3 py-2 bg-zinc-50/50 dark:bg-slate-800/80 border border-zinc-200 dark:border-slate-700 rounded-xl text-xs text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-400 transition"
+              />
             </div>
-          ) : (
-            /* Username Input */
-            <div>
-              <label className="block text-xs font-bold text-zinc-700 dark:text-slate-300 mb-1">
-                登录账号 / 咨询师姓名 *
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-zinc-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="如: 林心理咨询师 或 张咨询"
-                  className="w-full pl-9 pr-3 py-2 bg-zinc-50/50 dark:bg-slate-800/80 border border-zinc-200 dark:border-slate-700 rounded-xl text-xs text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-400 transition"
-                />
-              </div>
-            </div>
-          )}
+          </div>
 
           {/* Password Input & Strength Indicator */}
           <div>

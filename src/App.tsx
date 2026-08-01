@@ -16,6 +16,7 @@ import { ReminderModal } from './components/ReminderModal';
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
   const [activeTab, setActiveTab] = useState<ActiveTab>('longTerm');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [supervisionTypeFilter, setSupervisionTypeFilter] = useState<'all' | 'individual' | 'group'>('all');
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [privacyModalTab, setPrivacyModalTab] = useState<'privacy' | 'backup' | 'clear' | 'layout'>('privacy');
@@ -389,10 +390,11 @@ export default function App() {
         onDeleteReminder={handleDeleteReminder}
         onOpenReminderModal={() => setIsReminderModalOpen(true)}
         onNavigateTab={(tab) => setActiveTab(tab)}
+        onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
       {/* 主界面 (左侧精美侧边栏 + 右侧主内容区) */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* 左侧侧边栏 (集成数据控制、导入导出、提醒中心、隐私说明、后台同步、自定义工作区布局) */}
         <Sidebar
           activeTab={activeTab}
@@ -408,10 +410,12 @@ export default function App() {
           syncStatus={syncStatus}
           lastSyncTime={lastSyncTime}
           layoutConfig={workspaceLayout}
+          isMobileOpen={isMobileMenuOpen}
+          onCloseMobile={() => setIsMobileMenuOpen(false)}
         />
 
         {/* 主内容展示区 */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-rose-50/40 dark:bg-slate-900/60 transition-colors duration-300">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 md:p-8 bg-rose-50/40 dark:bg-slate-900/60 transition-colors duration-300">
           <div className="max-w-7xl mx-auto">
             {activeTab === 'longTerm' && (
               <CaseManagement

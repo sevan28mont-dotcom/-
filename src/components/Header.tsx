@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Bell, LogOut, Sun, Moon, Search, X, FolderOpen, FileText, UserCheck, Brain, ArrowRight, Feather, Sparkles, Cloud, AlertTriangle, GitMerge } from 'lucide-react';
+import { Bell, LogOut, Sun, Moon, Search, X, FolderOpen, FileText, UserCheck, Brain, ArrowRight, Feather, Sparkles, Cloud, AlertTriangle, GitMerge, Menu } from 'lucide-react';
 import { SystemData, ReminderItem, SessionData } from '../types';
 import { ReminderModal } from './ReminderModal';
 import { UserAccount } from '../services/auth';
@@ -18,6 +18,7 @@ interface HeaderProps {
   onOpenSyncModal?: () => void;
   hasConflict?: boolean;
   onNavigateTab?: (tab: ActiveTab) => void;
+  onToggleMobileMenu?: () => void;
 }
 
 interface SearchResultItem {
@@ -43,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSyncModal,
   hasConflict = false,
   onNavigateTab,
+  onToggleMobileMenu,
 }) => {
   const [beijingTime, setBeijingTime] = useState<string>('');
   const [isReminderOpenInternal, setIsReminderOpenInternal] = useState(false);
@@ -263,23 +265,34 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-rose-200 dark:border-slate-800 px-6 py-3 flex flex-wrap items-center justify-between gap-4 shadow-2xs z-30 transition-colors duration-300">
+    <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-rose-200 dark:border-slate-800 px-3 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2.5 sm:gap-4 shadow-2xs z-30 transition-colors duration-300">
       {/* 左侧标头标题 */}
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 bg-gradient-to-br from-rose-100 via-pink-50 to-amber-100 dark:from-rose-950 dark:via-slate-800 dark:to-slate-900 border border-rose-200/80 dark:border-slate-700/80 rounded-2xl shadow-2xs flex items-center justify-center shrink-0 group transition-transform hover:scale-105">
-          <Feather className="w-5 h-5 text-rose-500 dark:text-rose-400 group-hover:rotate-12 transition-transform duration-300" />
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* 手机端 Drawer 菜单 Toggle 按钮 */}
+        {onToggleMobileMenu && (
+          <button
+            type="button"
+            onClick={onToggleMobileMenu}
+            className="p-2 -ml-1 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-slate-800 rounded-xl md:hidden transition-colors cursor-pointer border border-rose-200/80 dark:border-slate-700/80 shadow-2xs flex items-center justify-center shrink-0 active:scale-95"
+            title="打开/关闭导航菜单"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+        <div className="p-2 sm:p-2.5 bg-gradient-to-br from-rose-100 via-pink-50 to-amber-100 dark:from-rose-950 dark:via-slate-800 dark:to-slate-900 border border-rose-200/80 dark:border-slate-700/80 rounded-2xl shadow-2xs flex items-center justify-center shrink-0 group transition-transform hover:scale-105">
+          <Feather className="w-4 h-4 sm:w-5 sm:h-5 text-rose-500 dark:text-rose-400 group-hover:rotate-12 transition-transform duration-300" />
         </div>
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight bg-gradient-to-r from-rose-800 via-rose-900 to-zinc-800 dark:from-rose-200 dark:via-rose-100 dark:to-slate-200 bg-clip-text text-transparent drop-shadow-2xs">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <h1 className="text-lg sm:text-2xl font-black tracking-tight bg-gradient-to-r from-rose-800 via-rose-900 to-zinc-800 dark:from-rose-200 dark:via-rose-100 dark:to-slate-200 bg-clip-text text-transparent drop-shadow-2xs">
               记了个屁
             </h1>
-            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-100/90 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/80 shadow-2xs flex items-center gap-1">
+            <span className="text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-full bg-rose-100/90 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/80 shadow-2xs flex items-center gap-1">
               <Sparkles className="w-2.5 h-2.5 text-rose-500" />
               <span>闹心工作台</span>
             </span>
           </div>
-          <p className="text-xs font-semibold text-rose-600/90 dark:text-rose-400/90 flex items-center gap-1.5 mt-0.5">
+          <p className="text-[11px] sm:text-xs font-semibold text-rose-600/90 dark:text-rose-400/90 flex items-center gap-1.5 mt-0.5">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>北京时间: {beijingTime || '加载中...'}</span>
           </p>
@@ -287,7 +300,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* 中间：全局搜索栏 (支持检索个案、逐字稿、督导记录、反思笔记) */}
-      <div ref={searchContainerRef} className="relative flex-1 max-w-md min-w-[260px]">
+      <div ref={searchContainerRef} className="relative flex-1 max-w-md min-w-[200px] order-3 md:order-2 w-full md:w-auto">
         <div className="relative flex items-center">
           <Search className="w-4 h-4 text-rose-400 dark:text-slate-400 absolute left-3 pointer-events-none" />
           <input
