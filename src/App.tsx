@@ -150,22 +150,28 @@ export default function App() {
   };
 
   // Handlers for systemData mutations
-  const handleAddCase = (newRecord: CaseRecord) => {
+  const handleAddCase = (newRecordInput: Omit<CaseRecord, 'id' | 'sessions'> & Partial<CaseRecord>) => {
+    const fullRecord: CaseRecord = {
+      id: `case_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      sessions: {},
+      pinned: false,
+      ...newRecordInput,
+    };
     setSystemData((prev) => ({
       ...prev,
-      records: [newRecord, ...prev.records],
+      records: [fullRecord, ...(prev.records || [])],
     }));
   };
 
   const handleDeleteCase = (id: string) => {
     setSystemData((prev) => ({
       ...prev,
-      records: prev.records.filter((r) => r.id !== id),
+      records: (prev.records || []).filter((r) => r.id !== id),
       // 解绑导师关联
-      mentors: prev.mentors.map((m) => ({
+      mentors: (prev.mentors || []).map((m) => ({
         ...m,
-        boundCaseIds: m.boundCaseIds.filter((cid) => cid !== id),
-        records: m.records.filter((r) => r.caseId !== id),
+        boundCaseIds: (m.boundCaseIds || []).filter((cid) => cid !== id),
+        records: (m.records || []).filter((r) => r.caseId !== id),
       })),
     }));
   };
@@ -177,9 +183,10 @@ export default function App() {
   ) => {
     setSystemData((prev) => ({
       ...prev,
-      records: prev.records.map((r) => {
+      records: (prev.records || []).map((r) => {
         if (r.id !== caseId) return r;
-        const currentSession = r.sessions[sessionNum] || {};
+        const currentSessions = r.sessions || {};
+        const currentSession = currentSessions[sessionNum] || {};
         const updatedSession: SessionData = {
           ...currentSession,
           ...sessionData,
@@ -187,7 +194,7 @@ export default function App() {
         return {
           ...r,
           sessions: {
-            ...r.sessions,
+            ...currentSessions,
             [sessionNum]: updatedSession,
           },
         };
@@ -198,39 +205,55 @@ export default function App() {
   const handleUpdateCaseTotalSessions = (caseId: string, newTotal: number) => {
     setSystemData((prev) => ({
       ...prev,
-      records: prev.records.map((r) => (r.id === caseId ? { ...r, totalSessions: newTotal } : r)),
+      records: (prev.records || []).map((r) => (r.id === caseId ? { ...r, totalSessions: newTotal } : r)),
     }));
   };
 
-  const handleAddMentor = (newMentor: Supervisor) => {
+  const handleAddMentor = (newMentorInput: Omit<Supervisor, 'id' | 'records' | 'boundCaseIds'> & Partial<Supervisor>) => {
+    const fullMentor: Supervisor = {
+      id: `mentor_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      records: [],
+      boundCaseIds: [],
+      ...newMentorInput,
+    };
     setSystemData((prev) => ({
       ...prev,
-      mentors: [newMentor, ...prev.mentors],
+      mentors: [fullMentor, ...(prev.mentors || [])],
     }));
   };
 
   const handleDeleteMentor = (id: string) => {
     setSystemData((prev) => ({
       ...prev,
-      mentors: prev.mentors.filter((m) => m.id !== id),
+      mentors: (prev.mentors || []).filter((m) => m.id !== id),
     }));
   };
 
   const handleUpdateMentorCaseBinding = (mentorId: string, boundCaseIds: string[]) => {
     setSystemData((prev) => ({
       ...prev,
-      mentors: prev.mentors.map((m) => (m.id === mentorId ? { ...m, boundCaseIds } : m)),
+      mentors: (prev.mentors || []).map((m) => (m.id === mentorId ? { ...m, boundCaseIds } : m)),
     }));
   };
 
-  const handleAddSupervisionRecord = (mentorId: string, record: SupervisionRecord) => {
+  const handleAddSupervisionRecord = (mentorId: string, recordInput: Omit<SupervisionRecord, 'id'> & Partial<SupervisionRecord>) => {
+    const fullRecord: SupervisionRecord = {
+      id: `sup_rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      caseId: '',
+      sessionNum: 1,
+      date: new Date().toISOString().split('T')[0],
+      timeRange: '14:00-15:00',
+      type: 'individual',
+      reflection: '',
+      ...recordInput,
+    };
     setSystemData((prev) => ({
       ...prev,
-      mentors: prev.mentors.map((m) => {
+      mentors: (prev.mentors || []).map((m) => {
         if (m.id !== mentorId) return m;
         return {
           ...m,
-          records: [record, ...m.records],
+          records: [fullRecord, ...(m.records || [])],
         };
       }),
     }));

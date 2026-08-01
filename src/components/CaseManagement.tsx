@@ -125,7 +125,8 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   };
 
   const openSessionModal = (caseRecord: CaseRecord, sessionNum: number) => {
-    const sData = caseRecord.sessions[sessionNum] || { completed: false, note: '' };
+    const sessions = caseRecord.sessions || {};
+    const sData = sessions[sessionNum] || { completed: false, note: '' };
     setSelectedCaseId(caseRecord.id);
     setSelectedSessionNum(sessionNum);
     setModalNote(sData.note || '');
@@ -309,15 +310,16 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
       {/* 个案档案列表 */}
       <div className="space-y-4">
         {sortedRecords.length === 0 ? (
-          <div className="bg-white border border-rose-200 rounded-2xl p-8 text-center text-zinc-500 text-xs">
-            暂无此分类下的个案档案，请在上方创建。
+          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-2xl p-8 text-center text-zinc-500 dark:text-slate-400 text-xs space-y-3">
+            <p>暂无此分类下的个案档案。请在上方表单输入代号/名称直接“新建个案”。</p>
           </div>
         ) : (
           sortedRecords.map((item) => {
+            const sessions = item.sessions || {};
             let completedCount = 0;
             let recordedCount = 0;
             for (let i = 1; i <= item.totalSessions; i++) {
-              const sess = item.sessions[i];
+              const sess = sessions[i];
               if (sess) {
                 if (sess.completed) completedCount++;
                 const hasContent = Boolean(

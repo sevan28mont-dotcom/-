@@ -172,6 +172,16 @@ export const EMPTY_SYSTEM_DATA: SystemData = {
   reminders: [],
 };
 
+export function getDefaultSampleSystemData(): SystemData {
+  return {
+    records: JSON.parse(JSON.stringify(DEFAULT_RECORDS)),
+    mentors: JSON.parse(JSON.stringify(DEFAULT_MENTORS)),
+    thinking: JSON.parse(JSON.stringify(DEFAULT_THINKING)),
+    schedules: JSON.parse(JSON.stringify(DEFAULT_SCHEDULES)),
+    reminders: JSON.parse(JSON.stringify(DEFAULT_REMINDERS)),
+  };
+}
+
 export function getZeroedSystemData(): SystemData {
   return { ...EMPTY_SYSTEM_DATA };
 }
@@ -192,9 +202,9 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
     const s = localStorage.getItem(keys.schedules);
     const rem = localStorage.getItem(keys.reminders);
 
-    // If a specific custom user ID is given and they have no saved records yet, return EMPTY_SYSTEM_DATA
+    // If a specific custom user ID is given and they have no saved records yet, default to full sample data for best experience
     if (userId && !r && !m && !t && !s && !rem) {
-      return { ...EMPTY_SYSTEM_DATA };
+      return getDefaultSampleSystemData();
     }
 
     return {
@@ -206,7 +216,7 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
     };
   } catch (err) {
     console.error('Failed to load from localStorage:', err);
-    return userId ? { ...EMPTY_SYSTEM_DATA } : {
+    return {
       records: DEFAULT_RECORDS,
       mentors: DEFAULT_MENTORS,
       thinking: DEFAULT_THINKING,

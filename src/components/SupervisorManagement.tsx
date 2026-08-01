@@ -79,12 +79,14 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     const q = searchQuery.toLowerCase().trim();
     const matchName = mentor.name.toLowerCase().includes(q);
     const matchGender = mentor.gender.toLowerCase().includes(q);
-    const boundCases = cases.filter((c) => mentor.boundCaseIds.includes(c.id));
+    const boundIds = mentor.boundCaseIds || [];
+    const boundCases = cases.filter((c) => boundIds.includes(c.id));
     const matchCase = boundCases.some((c) => c.name.toLowerCase().includes(q) || c.caseNum.toLowerCase().includes(q));
-    const matchReflection = mentor.records.some((r) => r.reflection?.toLowerCase().includes(q) || r.transcript?.toLowerCase().includes(q));
-    const matchResources = mentor.records.some((r) => r.resources?.some((res) => res.title.toLowerCase().includes(q) || res.url.toLowerCase().includes(q)));
-    const matchIdeas = mentor.records.some((r) => r.ideas?.some((i) => i.toLowerCase().includes(q)));
-    const matchDate = mentor.startDate.includes(q) || mentor.endDate.includes(q);
+    const records = mentor.records || [];
+    const matchReflection = records.some((r) => r.reflection?.toLowerCase().includes(q) || r.transcript?.toLowerCase().includes(q));
+    const matchResources = records.some((r) => r.resources?.some((res) => res.title.toLowerCase().includes(q) || res.url.toLowerCase().includes(q)));
+    const matchIdeas = records.some((r) => r.ideas?.some((i) => i.toLowerCase().includes(q)));
+    const matchDate = (mentor.startDate || '').includes(q) || (mentor.endDate || '').includes(q);
     return matchName || matchGender || matchCase || matchReflection || matchResources || matchIdeas || matchDate;
   });
 
@@ -282,7 +284,8 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
         ) : (
           filteredMentors.map((mentor) => {
             // Filter bound cases for this supervisor
-            const boundCases = cases.filter((c) => mentor.boundCaseIds.includes(c.id));
+            const boundIds = mentor.boundCaseIds || [];
+            const boundCases = cases.filter((c) => boundIds.includes(c.id));
 
             return (
               <div key={mentor.id} className="bg-white border border-rose-200 rounded-2xl p-5 shadow-xs space-y-4">
@@ -325,7 +328,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                       className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-rose-50 text-rose-800 hover:bg-rose-100 border border-rose-200 rounded-xl transition cursor-pointer"
                     >
                       <CheckSquare className="w-3.5 h-3.5 text-rose-500" />
-                      <span>勾选/关联个案 ({mentor.boundCaseIds.length})</span>
+                      <span>勾选/关联个案 ({boundIds.length})</span>
                     </button>
 
                     <button
