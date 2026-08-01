@@ -25,7 +25,7 @@ export const DEFAULT_WORKSPACE_LAYOUT: WorkspaceLayoutConfig = {
     { id: 'longTerm', label: '长程（下周见）', iconName: 'FolderOpen', visible: true, description: '管理长程心理咨询案例、会谈评估及深度逐字稿' },
     { id: 'shortTerm', label: '短程（拜拜了）', iconName: 'Folder', visible: true, description: '管理短程焦点解决型个案及短周期咨询进度' },
     { id: 'mentor', label: '督了个啥', iconName: 'UserCheck', visible: true, description: '绑定督导师与个案档案，记录督导要点及反思' },
-    { id: 'thinking', label: '想出来个啥（假装思考）', iconName: 'Brain', visible: true, description: '撰写日常临床感悟、自由联想与案例反思随笔' },
+    { id: 'thinking', label: '想出来个啥', iconName: 'Brain', visible: true, description: '撰写日常临床感悟、自由联想与案例反思随笔' },
     { id: 'schedule', label: '出了个门儿', iconName: 'Calendar', visible: true, description: '管理会谈预约、督导安排及个人工作历表' },
   ],
   widgets: {
@@ -59,8 +59,8 @@ export const loadWorkspaceLayout = (): WorkspaceLayoutConfig => {
           if (item.id === 'mentor' && (item.label === '督导师与个案关联' || !item.label)) {
             return { ...item, label: '督了个啥' };
           }
-          if (item.id === 'thinking' && (item.label === '思考与总结反思' || !item.label)) {
-            return { ...item, label: '想出来个啥（假装思考）' };
+          if (item.id === 'thinking' && (item.label === '思考与总结反思' || item.label === '想出来个啥（假装思考）' || !item.label)) {
+            return { ...item, label: '想出来个啥' };
           }
           if (item.id === 'schedule' && (item.label === '多维日程安排表' || !item.label)) {
             return { ...item, label: '出了个门儿' };

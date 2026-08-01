@@ -16,6 +16,7 @@ import { ReminderModal } from './components/ReminderModal';
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
   const [activeTab, setActiveTab] = useState<ActiveTab>('longTerm');
+  const [supervisionTypeFilter, setSupervisionTypeFilter] = useState<'all' | 'individual' | 'group'>('all');
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [privacyModalTab, setPrivacyModalTab] = useState<'privacy' | 'backup' | 'clear' | 'layout'>('privacy');
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
@@ -396,6 +397,8 @@ export default function App() {
         <Sidebar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+          supervisionTypeFilter={supervisionTypeFilter}
+          onSelectSupervisionFilter={setSupervisionTypeFilter}
           systemData={systemData}
           onOpenPrivacyModal={handleOpenPrivacyModal}
           onOpenReminderModal={() => setIsReminderModalOpen(true)}
@@ -450,6 +453,8 @@ export default function App() {
                 onAddSupervisionRecord={handleAddSupervisionRecord}
                 onDeleteSupervisionRecord={handleDeleteSupervisionRecord}
                 onUpdateSupervisionRecord={handleUpdateSupervisionRecord}
+                supervisionTypeFilter={supervisionTypeFilter}
+                onTypeFilterChange={setSupervisionTypeFilter}
               />
             )}
 

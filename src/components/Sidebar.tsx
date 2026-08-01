@@ -17,6 +17,8 @@ import {
   ChevronDown,
   ChevronRight,
   MessageSquare,
+  User,
+  Users,
 } from 'lucide-react';
 import { SystemData } from '../types';
 import { WorkspaceLayoutConfig, DEFAULT_WORKSPACE_LAYOUT } from '../services/layout';
@@ -26,6 +28,8 @@ export type ActiveTab = 'longTerm' | 'shortTerm' | 'mentor' | 'thinking' | 'sche
 interface SidebarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
+  supervisionTypeFilter?: 'all' | 'individual' | 'group';
+  onSelectSupervisionFilter?: (filter: 'all' | 'individual' | 'group') => void;
   systemData: SystemData;
   onOpenPrivacyModal: (initialTab?: 'privacy' | 'backup' | 'clear' | 'layout') => void;
   onOpenReminderModal: () => void;
@@ -50,6 +54,8 @@ const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
+  supervisionTypeFilter = 'all',
+  onSelectSupervisionFilter,
   systemData,
   onOpenPrivacyModal,
   onOpenReminderModal,
@@ -64,6 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isCasesDropdownOpen, setIsCasesDropdownOpen] = useState(true);
+  const [isMentorDropdownOpen, setIsMentorDropdownOpen] = useState(true);
 
   const pendingRemindersCount = (systemData.reminders || []).filter((r) => !r.completed).length;
 
@@ -78,7 +85,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const hasCasesGroup = Boolean(longTermItem || shortTermItem);
   const isCasesActive = activeTab === 'longTerm' || activeTab === 'shortTerm';
 
-  const otherNavItems = visibleNavItems.filter((i) => i.id !== 'longTerm' && i.id !== 'shortTerm');
+  const mentorItem = visibleNavItems.find((i) => i.id === 'mentor');
+
+  const otherNavItems = visibleNavItems.filter(
+    (i) => i.id !== 'longTerm' && i.id !== 'shortTerm' && i.id !== 'mentor'
+  );
 
   return (
     <aside className="w-72 max-sm:landscape:w-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-r border-rose-200 dark:border-slate-800 text-zinc-800 dark:text-slate-100 flex flex-col justify-between shrink-0 p-4 max-sm:landscape:p-2 shadow-xs transition-all duration-300 overflow-y-auto">
@@ -177,22 +188,110 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               )}
 
-              {/* 其余菜单项: 督了个啥、想出来个啥（假装思考）、出了个门儿 */}
+              {/* 督了个啥 (分组卡片及下拉菜单) */}
+              {mentorItem && (
+                <div className="rounded-xl border border-rose-200/80 dark:border-slate-800 bg-rose-50/40 dark:bg-slate-800/40 overflow-hidden transition-all shadow-2xs">
+                  {/* 下拉总标题: 督了个啥 */}
+                  <button
+                    onClick={() => {
+                      setIsMentorDropdownOpen((prev) => !prev);
+                      if (activeTab !== 'mentor') {
+                        setActiveTab('mentor');
+                        onSelectSupervisionFilter?.('all');
+                      }
+                    }}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === 'mentor'
+                        ? 'bg-rose-100/90 dark:bg-slate-800 text-rose-800 dark:text-rose-300 border-b border-rose-200/80 dark:border-slate-700/80'
+                        : 'text-zinc-700 dark:text-slate-200 hover:bg-rose-100/60 dark:hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-rose-200/70 dark:bg-slate-700 text-rose-700 dark:text-rose-300">
+                        <UserCheck className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="text-sm font-extrabold tracking-tight">督了个啥</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-rose-500 dark:text-slate-400">
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-rose-200/60 dark:bg-slate-700 text-rose-700 dark:text-rose-300">
+                        督导研讨
+                      </span>
+                      {isMentorDropdownOpen ? (
+                        <ChevronDown className="w-4 h-4 transition-transform duration-200" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 transition-transform duration-200" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* 下拉展开子菜单 */}
+                  {isMentorDropdownOpen && (
+                    <div className="p-1.5 space-y-1 bg-white/80 dark:bg-slate-900/80 border-t border-rose-100/80 dark:border-slate-800">
+                      <button
+                        onClick={() => {
+                          setActiveTab('mentor');
+                          onSelectSupervisionFilter?.('individual');
+                        }}
+                        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          activeTab === 'mentor' && supervisionTypeFilter === 'individual'
+                            ? 'bg-rose-500 text-white dark:bg-rose-600 font-bold shadow-xs'
+                            : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800 hover:text-rose-800 dark:hover:text-rose-300'
+                        }`}
+                      >
+                        <User className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'mentor' && supervisionTypeFilter === 'individual' ? 'text-white' : 'text-rose-500'}`} />
+                        <div className="flex flex-col text-left leading-tight">
+                          <span className="font-bold">个体督导</span>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setActiveTab('mentor');
+                          onSelectSupervisionFilter?.('group');
+                        }}
+                        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          activeTab === 'mentor' && supervisionTypeFilter === 'group'
+                            ? 'bg-rose-500 text-white dark:bg-rose-600 font-bold shadow-xs'
+                            : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800 hover:text-rose-800 dark:hover:text-rose-300'
+                        }`}
+                      >
+                        <Users className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'mentor' && supervisionTypeFilter === 'group' ? 'text-white' : 'text-rose-500'}`} />
+                        <div className="flex flex-col text-left leading-tight">
+                          <span className="font-bold">团体督导</span>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 其余菜单项: 想出来个啥、出了个门儿 */}
               {otherNavItems.map((item) => {
                 const IconComponent = ICON_MAP[item.iconName] || FolderOpen;
                 const isActive = activeTab === item.id;
+                
+                let cleanLabel = item.label;
+                if (item.id === 'thinking') cleanLabel = '想出来个啥';
+                if (item.id === 'schedule') cleanLabel = '出了个门儿';
+
                 return (
                   <button
                     key={item.id}
                     onClick={() => setActiveTab(item.id)}
-                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer ${
                       isActive
-                        ? 'bg-rose-500 text-white dark:bg-rose-600 dark:text-white font-bold shadow-md shadow-rose-200/80 dark:shadow-none'
-                        : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800/80 hover:text-rose-800 dark:hover:text-rose-300'
+                        ? 'bg-rose-500 text-white dark:bg-rose-600 dark:text-white font-extrabold shadow-md shadow-rose-200/80 dark:shadow-none'
+                        : 'bg-rose-50/40 dark:bg-slate-800/40 border border-rose-200/80 dark:border-slate-800 text-zinc-700 dark:text-slate-200 hover:bg-rose-100/60 dark:hover:bg-slate-800/60 font-bold'
                     }`}
                   >
-                    <IconComponent className={`w-4 h-4 ${isActive ? 'text-white' : 'text-zinc-400 dark:text-slate-500'}`} />
-                    <span>{item.label}</span>
+                    <div className={`p-1.5 rounded-lg transition-colors ${
+                      isActive
+                        ? 'bg-white/20 text-white'
+                        : 'bg-rose-200/70 dark:bg-slate-700 text-rose-700 dark:text-rose-300'
+                    }`}>
+                      <IconComponent className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-sm font-extrabold tracking-tight">{cleanLabel}</span>
                   </button>
                 );
               })}

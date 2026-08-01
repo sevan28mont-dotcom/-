@@ -36,12 +36,26 @@ const DEFAULT_ACCOUNTS: UserAccount[] = [
 
 export function getStoredAccounts(): UserAccount[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(DEFAULT_ACCOUNTS));
-      return DEFAULT_ACCOUNTS;
+    const fallbackKeys = [STORAGE_KEYS.ACCOUNTS, 'psy_user_accounts_backup', 'psy_user_accounts', 'psy_accounts'];
+    for (const key of fallbackKeys) {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            // Keep master backup updated
+            localStorage.setItem('psy_user_accounts_backup', JSON.stringify(parsed));
+            if (key !== STORAGE_KEYS.ACCOUNTS) {
+              localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(parsed));
+            }
+            return parsed;
+          }
+        } catch (e) { /* ignore parse error */ }
+      }
     }
-    return JSON.parse(raw);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(DEFAULT_ACCOUNTS));
+    localStorage.setItem('psy_user_accounts_backup', JSON.stringify(DEFAULT_ACCOUNTS));
+    return DEFAULT_ACCOUNTS;
   } catch {
     return DEFAULT_ACCOUNTS;
   }
@@ -49,7 +63,9 @@ export function getStoredAccounts(): UserAccount[] {
 
 export function saveAccounts(accounts: UserAccount[]): void {
   try {
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(accounts));
+    const jsonStr = JSON.stringify(accounts);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, jsonStr);
+    localStorage.setItem('psy_user_accounts_backup', jsonStr);
   } catch (err) {
     console.error('Failed to save accounts:', err);
   }
@@ -57,15 +73,29 @@ export function saveAccounts(accounts: UserAccount[]): void {
 
 export function getCurrentUser(): UserAccount | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-    if (raw) {
-      return JSON.parse(raw);
+    const sessionKeys = [STORAGE_KEYS.CURRENT_USER, 'psy_current_user_backup', 'psy_user_session'];
+    for (const key of sessionKeys) {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.id) {
+            localStorage.setItem('psy_current_user_backup', JSON.stringify(parsed));
+            if (key !== STORAGE_KEYS.CURRENT_USER) {
+              localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(parsed));
+            }
+            return parsed;
+          }
+        } catch (e) { /* ignore */ }
+      }
     }
+
     // Default to the main counselor account if first time visit
     const accounts = getStoredAccounts();
     const defaultUser = accounts[0];
     if (defaultUser) {
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(defaultUser));
+      localStorage.setItem('psy_current_user_backup', JSON.stringify(defaultUser));
       return defaultUser;
     }
     return null;
@@ -77,9 +107,12 @@ export function getCurrentUser(): UserAccount | null {
 export function setCurrentUserSession(user: UserAccount | null): void {
   try {
     if (user) {
-      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+      const str = JSON.stringify(user);
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, str);
+      localStorage.setItem('psy_current_user_backup', str);
     } else {
       localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+      localStorage.removeItem('psy_current_user_backup');
     }
   } catch (err) {
     console.error('Failed to set current user session:', err);

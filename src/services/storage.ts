@@ -188,32 +188,51 @@ export function getZeroedSystemData(): SystemData {
 
 export function loadDataFromLocalStorage(userId?: string): SystemData {
   try {
-    const keys = {
-      records: userId ? `psy_u_${userId}_records` : STORAGE_KEYS.RECORDS,
-      mentors: userId ? `psy_u_${userId}_mentors` : STORAGE_KEYS.MENTORS,
-      thinking: userId ? `psy_u_${userId}_thinking` : STORAGE_KEYS.THINKING,
-      schedules: userId ? `psy_u_${userId}_schedules` : STORAGE_KEYS.SCHEDULES,
-      reminders: userId ? `psy_u_${userId}_reminders` : STORAGE_KEYS.REMINDERS,
+    const userPrefix = userId ? `psy_u_${userId}_` : '';
+    const primaryKeys = {
+      records: userId ? `${userPrefix}records` : STORAGE_KEYS.RECORDS,
+      mentors: userId ? `${userPrefix}mentors` : STORAGE_KEYS.MENTORS,
+      thinking: userId ? `${userPrefix}thinking` : STORAGE_KEYS.THINKING,
+      schedules: userId ? `${userPrefix}schedules` : STORAGE_KEYS.SCHEDULES,
+      reminders: userId ? `${userPrefix}reminders` : STORAGE_KEYS.REMINDERS,
     };
 
-    const r = localStorage.getItem(keys.records);
-    const m = localStorage.getItem(keys.mentors);
-    const t = localStorage.getItem(keys.thinking);
-    const s = localStorage.getItem(keys.schedules);
-    const rem = localStorage.getItem(keys.reminders);
-
-    // If a specific custom user ID is given and they have no saved records yet, default to full sample data for best experience
-    if (userId && !r && !m && !t && !s && !rem) {
-      return getDefaultSampleSystemData();
-    }
-
-    return {
-      records: r ? JSON.parse(r) : DEFAULT_RECORDS,
-      mentors: m ? JSON.parse(m) : DEFAULT_MENTORS,
-      thinking: t ? JSON.parse(t) : DEFAULT_THINKING,
-      schedules: s ? JSON.parse(s) : DEFAULT_SCHEDULES,
-      reminders: rem ? JSON.parse(rem) : DEFAULT_REMINDERS,
+    // Helper to read from primary key or search legacy fallback keys
+    const readWithFallback = (primaryKey: string, fallbackKeys: string[], defaultVal: any) => {
+      // 1. Try primary key
+      const val = localStorage.getItem(primaryKey);
+      if (val) {
+        try { return JSON.parse(val); } catch (e) { /* ignore parse error */ }
+      }
+      // 2. Try legacy / versioned fallback keys
+      for (const fKey of fallbackKeys) {
+        const fallbackVal = localStorage.getItem(fKey);
+        if (fallbackVal) {
+          try {
+            const parsed = JSON.parse(fallbackVal);
+            // Save to primary key to complete migration
+            localStorage.setItem(primaryKey, fallbackVal);
+            return parsed;
+          } catch (e) { /* ignore */ }
+        }
+      }
+      return defaultVal;
     };
+
+    // Search keys fallback list
+    const legacyRecordsKeys = [STORAGE_KEYS.RECORDS, 'psy_records_v8', 'psy_records_v7', 'psy_records_v6', 'psy_records_v5', 'psy_records', 'psy_master_backup_records'];
+    const legacyMentorsKeys = [STORAGE_KEYS.MENTORS, 'psy_mentors_v8', 'psy_mentors_v7', 'psy_mentors_v6', 'psy_mentors_v5', 'psy_mentors', 'psy_master_backup_mentors'];
+    const legacyThinkingKeys = [STORAGE_KEYS.THINKING, 'psy_thinking_v8', 'psy_thinking_v7', 'psy_thinking_v6', 'psy_thinking_v5', 'psy_thinking', 'psy_master_backup_thinking'];
+    const legacySchedulesKeys = [STORAGE_KEYS.SCHEDULES, 'psy_schedules_v8', 'psy_schedules_v7', 'psy_schedules_v6', 'psy_schedules_v5', 'psy_schedules', 'psy_master_backup_schedules'];
+    const legacyRemindersKeys = [STORAGE_KEYS.REMINDERS, 'psy_reminders_v8', 'psy_reminders_v7', 'psy_reminders_v6', 'psy_reminders_v5', 'psy_reminders', 'psy_master_backup_reminders'];
+
+    const records = readWithFallback(primaryKeys.records, legacyRecordsKeys, DEFAULT_RECORDS);
+    const mentors = readWithFallback(primaryKeys.mentors, legacyMentorsKeys, DEFAULT_MENTORS);
+    const thinking = readWithFallback(primaryKeys.thinking, legacyThinkingKeys, DEFAULT_THINKING);
+    const schedules = readWithFallback(primaryKeys.schedules, legacySchedulesKeys, DEFAULT_SCHEDULES);
+    const reminders = readWithFallback(primaryKeys.reminders, legacyRemindersKeys, DEFAULT_REMINDERS);
+
+    return { records, mentors, thinking, schedules, reminders };
   } catch (err) {
     console.error('Failed to load from localStorage:', err);
     return {
@@ -228,19 +247,42 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
 
 export function saveDataToLocalStorage(data: SystemData, userId?: string): void {
   try {
+    const userPrefix = userId ? `psy_u_${userId}_` : '';
     const keys = {
-      records: userId ? `psy_u_${userId}_records` : STORAGE_KEYS.RECORDS,
-      mentors: userId ? `psy_u_${userId}_mentors` : STORAGE_KEYS.MENTORS,
-      thinking: userId ? `psy_u_${userId}_thinking` : STORAGE_KEYS.THINKING,
-      schedules: userId ? `psy_u_${userId}_schedules` : STORAGE_KEYS.SCHEDULES,
-      reminders: userId ? `psy_u_${userId}_reminders` : STORAGE_KEYS.REMINDERS,
+      records: userId ? `${userPrefix}records` : STORAGE_KEYS.RECORDS,
+      mentors: userId ? `${userPrefix}mentors` : STORAGE_KEYS.MENTORS,
+      thinking: userId ? `${userPrefix}thinking` : STORAGE_KEYS.THINKING,
+      schedules: userId ? `${userPrefix}schedules` : STORAGE_KEYS.SCHEDULES,
+      reminders: userId ? `${userPrefix}reminders` : STORAGE_KEYS.REMINDERS,
     };
 
-    localStorage.setItem(keys.records, JSON.stringify(data.records));
-    localStorage.setItem(keys.mentors, JSON.stringify(data.mentors));
-    localStorage.setItem(keys.thinking, JSON.stringify(data.thinking));
-    localStorage.setItem(keys.schedules, JSON.stringify(data.schedules));
-    localStorage.setItem(keys.reminders, JSON.stringify(data.reminders || []));
+    const recordsStr = JSON.stringify(data.records);
+    const mentorsStr = JSON.stringify(data.mentors);
+    const thinkingStr = JSON.stringify(data.thinking);
+    const schedulesStr = JSON.stringify(data.schedules);
+    const remindersStr = JSON.stringify(data.reminders || []);
+
+    // Save to user / current key
+    localStorage.setItem(keys.records, recordsStr);
+    localStorage.setItem(keys.mentors, mentorsStr);
+    localStorage.setItem(keys.thinking, thinkingStr);
+    localStorage.setItem(keys.schedules, schedulesStr);
+    localStorage.setItem(keys.reminders, remindersStr);
+
+    // Save mirror copies to master backup keys for version update durability
+    localStorage.setItem('psy_master_backup_records', recordsStr);
+    localStorage.setItem('psy_master_backup_mentors', mentorsStr);
+    localStorage.setItem('psy_master_backup_thinking', thinkingStr);
+    localStorage.setItem('psy_master_backup_schedules', schedulesStr);
+    localStorage.setItem('psy_master_backup_reminders', remindersStr);
+
+    if (userId) {
+      localStorage.setItem(STORAGE_KEYS.RECORDS, recordsStr);
+      localStorage.setItem(STORAGE_KEYS.MENTORS, mentorsStr);
+      localStorage.setItem(STORAGE_KEYS.THINKING, thinkingStr);
+      localStorage.setItem(STORAGE_KEYS.SCHEDULES, schedulesStr);
+      localStorage.setItem(STORAGE_KEYS.REMINDERS, remindersStr);
+    }
   } catch (err) {
     console.error('Failed to save to localStorage:', err);
   }

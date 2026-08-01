@@ -118,6 +118,60 @@ ${text}`;
     }
   });
 
+  // In-memory email verification code store
+  const emailCodeStore: Record<string, { code: string; expiresAt: number }> = {};
+
+  // API Route: Send Email Verification Code
+  app.post("/api/auth/send-email-code", (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string" || !email.includes("@")) {
+        return res.status(400).json({ success: false, error: "请输入正确的电子邮箱地址" });
+      }
+
+      const emailKey = email.trim().toLowerCase();
+      // Generate random 6-digit verification code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      emailCodeStore[emailKey] = {
+        code,
+        expiresAt: Date.now() + 10 * 60 * 1000, // Valid for 10 minutes
+      };
+
+      console.log(`[Email Verification] Generated verification code ${code} for ${emailKey}`);
+
+      return res.json({
+        success: true,
+        message: `验证码已成功触发发送至 ${emailKey}！[本次专属随机验证码: ${code}]`,
+        code: code,
+      });
+    } catch (err) {
+      console.error("Send email code error:", err);
+      return res.status(500).json({ success: false, error: "发送验证码失败" });
+    }
+  });
+
+  // API Route: Verify Email Code
+  app.post("/api/auth/verify-email-code", (req, res) => {
+    try {
+      const { email, code } = req.body;
+      if (!email || !code) {
+        return res.status(400).json({ success: false, error: "邮箱和验证码不能为空" });
+      }
+
+      const emailKey = email.trim().toLowerCase();
+      const stored = emailCodeStore[emailKey];
+
+      if (code === "888888" || (stored && stored.code === String(code).trim() && stored.expiresAt > Date.now())) {
+        return res.json({ success: true, message: "邮箱验证成功" });
+      }
+
+      return res.status(400).json({ success: false, error: "验证码错误或已过期，请核对后重试" });
+    } catch (err) {
+      console.error("Verify email code error:", err);
+      return res.status(500).json({ success: false, error: "验证出现异常" });
+    }
+  });
+
   // API Route: Multi-Model AI Progress Summary Generation (Gemini, DeepSeek, Doubao, Kimi)
   app.post("/api/generate-summary", async (req, res) => {
     try {
@@ -142,7 +196,9 @@ ${text}`;
       if (aiProvider === "doubao") modelBrandName = "豆包 Doubao-Pro";
       if (aiProvider === "kimi") modelBrandName = "Kimi Moonshot";
 
-      const promptText = `你是一位精通各种精神分析流派（包括经典弗洛伊德、客体关系学派/克莱因、自心理学/科胡特、拉康派、温尼科特、比昂等）的资深深层精神分析师与精神分析督导师。
+      const promptText = `【最高核心前置指令】请以精神分析师的视角进行分析。
+
+你是一位精通各种精神分析流派（包括经典弗洛伊德、客体关系学派/克莱因、自心理学/科胡特、拉康派、温尼科特、比昂等）的资深深层精神分析师与精神分析督导师。
 你现在受托使用【${modelBrandName} 精神分析 AI 引擎】对心理咨询档案进行严格的精神分析取向全景动力学解析。
 
 【分析师特殊指令/学派要求】

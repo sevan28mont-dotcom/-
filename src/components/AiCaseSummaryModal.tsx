@@ -31,7 +31,36 @@ export const AiCaseSummaryModal: React.FC<AiCaseSummaryModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [savedToNotes, setSavedToNotes] = useState(false);
   const [customFocus, setCustomFocus] = useState('');
+  const [selectedSchool, setSelectedSchool] = useState<'classic' | 'klein' | 'selfPsychology' | 'winnicott'>('classic');
   const [showCustomPrompt, setShowCustomPrompt] = useState(false);
+
+  // Psychoanalytic Orientation Presets
+  const PSYCHOANALYTIC_PRESETS = [
+    {
+      id: 'classic',
+      label: '🧠 经典全景精神分析',
+      desc: '请以精神分析师的视角进行分析，重点关注全景心理动力学、移情反移情与阻抗',
+      req: '请以精神分析师的视角进行分析：重点关注动力学心理结构、移情/反移情与阻抗防御。',
+    },
+    {
+      id: 'klein',
+      label: '🧸 克莱因方向 (Klein)',
+      desc: '聚焦偏执-分裂位置、抑郁位置、投射性认同与原始焦虑',
+      req: '请以精神分析师的视角进行分析：重点采用梅兰妮·克莱因 (Melanie Klein) 客体关系理论，聚焦偏执-分裂位置、抑郁位置、投射性认同与原始客体分裂。',
+    },
+    {
+      id: 'selfPsychology',
+      label: '🪞 自体心理学方向 (Kohut)',
+      desc: '聚焦自体-自客体关系、镜像移情、理想化与自体碎片化',
+      req: '请以精神分析师的视角进行分析：重点采用海因茨·科胡特 (Heinz Kohut) 自体心理学 (Self Psychology) 理论，聚焦自体-自客体 (Selfobject) 关系、镜像移情、理想化移情与自体脆弱性防御。',
+    },
+    {
+      id: 'winnicott',
+      label: '🌸 温尼科特学派',
+      desc: '聚焦抱持性环境、假我防御、镜像镜映与过渡客体',
+      req: '请以精神分析师的视角进行分析：重点关注唐纳德·温尼科特 (D. W. Winnicott) 客体关系，聚焦抱持环境、假我防御、镜像需求与过渡客体。',
+    },
+  ];
 
   // Compute stats for prompt context
   const recordedSessionsCount = Object.keys(caseRecord.sessions || {}).length;
@@ -127,6 +156,44 @@ export const AiCaseSummaryModal: React.FC<AiCaseSummaryModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* 预设“精神分析取向”模式切换按钮 */}
+        <div className="mb-3.5 space-y-1.5">
+          <div className="text-[11px] font-bold text-zinc-600 dark:text-slate-300 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-rose-700 dark:text-rose-300 font-extrabold">
+              <Brain className="w-3.5 h-3.5" />
+              <span>精神分析取向流派与视角 (自动前置指令):</span>
+            </span>
+            <span className="text-[10px] text-zinc-500">点击切换学派即刻重新分析</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-rose-100/60 dark:bg-slate-800/90 rounded-2xl border border-rose-200 dark:border-slate-700">
+            {PSYCHOANALYTIC_PRESETS.map((preset) => {
+              const active = selectedSchool === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setSelectedSchool(preset.id as any);
+                    setCustomFocus(preset.req);
+                    handleGenerateSummary(selectedProvider, preset.req);
+                  }}
+                  className={`p-2 rounded-xl text-left transition cursor-pointer flex flex-col justify-between ${
+                    active
+                      ? 'bg-rose-600 text-white shadow-xs font-black'
+                      : 'bg-white/80 dark:bg-slate-900/80 text-zinc-800 dark:text-slate-200 hover:bg-rose-50'
+                  }`}
+                >
+                  <span className="text-xs font-black line-clamp-1">{preset.label}</span>
+                  <span className={`text-[10px] line-clamp-1 mt-0.5 ${active ? 'text-rose-100' : 'text-zinc-500 dark:text-slate-400'}`}>
+                    {preset.desc}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* 多 AI 引擎切换选项卡 */}

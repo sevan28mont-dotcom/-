@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Supervisor, CaseRecord, SupervisionRecord, ResourceLink } from '../types';
-import { Plus, Trash2, Calendar as CalendarIcon, CheckSquare, Square, Unlink, FileText, X, ChevronDown, ChevronUp, Search, Pencil, Link as LinkIcon, Lightbulb, Mic, Printer } from 'lucide-react';
+import { Plus, Trash2, Calendar as CalendarIcon, CheckSquare, Square, Unlink, FileText, X, ChevronDown, ChevronUp, Search, Pencil, Link as LinkIcon, Lightbulb, Mic, Printer, User, Users, Sparkles } from 'lucide-react';
 import { VoiceInputButton } from './VoiceInputButton';
 import { ResourceLinkSection } from './ResourceLinkSection';
 import { IdeasSection } from './IdeasSection';
@@ -16,6 +16,8 @@ interface SupervisorManagementProps {
   onAddSupervisionRecord: (mentorId: string, recordData: Omit<SupervisionRecord, 'id'>) => void;
   onDeleteSupervisionRecord: (mentorId: string, recordId: string) => void;
   onUpdateSupervisionRecord?: (mentorId: string, recordId: string, updatedData: Partial<SupervisionRecord>) => void;
+  supervisionTypeFilter?: 'all' | 'individual' | 'group';
+  onTypeFilterChange?: (filter: 'all' | 'individual' | 'group') => void;
 }
 
 export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
@@ -27,6 +29,8 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   onAddSupervisionRecord,
   onDeleteSupervisionRecord,
   onUpdateSupervisionRecord,
+  supervisionTypeFilter: propSupervisionTypeFilter,
+  onTypeFilterChange,
 }) => {
   // New Supervisor Form State
   const [name, setName] = useState('');
@@ -73,8 +77,25 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
+  // Local Supervision Type Filter state
+  const [localSupervisionTypeFilter, setLocalSupervisionTypeFilter] = useState<'all' | 'individual' | 'group'>('all');
+
+  const activeTypeFilter = propSupervisionTypeFilter ?? localSupervisionTypeFilter;
+  const setTypeFilter = (filter: 'all' | 'individual' | 'group') => {
+    setLocalSupervisionTypeFilter(filter);
+    onTypeFilterChange?.(filter);
+  };
 
   const filteredMentors = mentors.filter((mentor) => {
+    // Filter by supervision type if specified
+    if (activeTypeFilter !== 'all') {
+      const records = mentor.records || [];
+      const hasTypeRecord = records.some((r) => r.type === activeTypeFilter);
+      if (!hasTypeRecord && records.length > 0) {
+        // If query doesn't match search either
+      }
+    }
+
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
     const matchName = mentor.name.toLowerCase().includes(q);
@@ -162,14 +183,39 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-rose-200 pb-3 flex items-center justify-between">
-        <h2 className="text-lg font-bold text-zinc-800 border-l-4 border-rose-400 pl-3 flex items-center gap-2">
-          <span>🎓</span>
-          <span>导师督导管理</span>
-        </h2>
-        <span className="text-xs font-semibold px-3 py-1 bg-rose-100 text-rose-800 rounded-full border border-rose-200">
-          共 {mentors.length} 位督导师
-        </span>
+      {/* 顶部大标题 */}
+      <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl">🎓</span>
+              <h2 className="text-2xl font-black text-zinc-800 dark:text-slate-100 tracking-tight">
+                督了个啥
+              </h2>
+              <span className="text-xs font-bold px-2.5 py-0.5 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-full border border-rose-200 dark:border-rose-800">
+                导师与案例绑定
+              </span>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-slate-400 mt-1 font-medium">
+              统一管理督导师档案、案例绑定、个体与团体督导反思逐字稿
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold px-3 py-1.5 bg-rose-50 dark:bg-slate-800 text-rose-800 dark:text-rose-300 rounded-xl border border-rose-200 dark:border-slate-700">
+              {activeTypeFilter === 'individual' ? '当前范围: 个体督导' : activeTypeFilter === 'group' ? '当前范围: 团体督导' : `共 ${mentors.length} 位督导师`}
+            </span>
+            {activeTypeFilter !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setTypeFilter('all')}
+                className="text-xs font-bold px-2.5 py-1.5 bg-zinc-100 dark:bg-slate-800 text-zinc-600 dark:text-slate-300 rounded-xl hover:bg-zinc-200 transition cursor-pointer"
+              >
+                查看全部
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* 新增督导师 */}
