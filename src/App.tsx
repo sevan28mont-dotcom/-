@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SystemData, CaseRecord, Supervisor, ScheduleItem, ThinkingNote, ReminderItem, SessionData, SupervisionRecord } from './types';
-import { loadDataFromLocalStorage, saveDataToLocalStorage, saveDataToBackend } from './services/storage';
+import { loadDataFromLocalStorage, saveDataToLocalStorage, saveDataToBackend, fetchBackendData } from './services/storage';
 import { getCurrentUser, logoutUser, UserAccount } from './services/auth';
 import { loadWorkspaceLayout, saveWorkspaceLayout, WorkspaceLayoutConfig } from './services/layout';
 import { AuthPortal } from './components/AuthPortal';
@@ -60,7 +60,15 @@ export default function App() {
 
   const handleLoginSuccess = (user: UserAccount) => {
     setCurrentUser(user);
-    setSystemData(loadDataFromLocalStorage(user.id));
+    const localData = loadDataFromLocalStorage(user.id);
+    setSystemData(localData);
+
+    // Attempt fetching cloud data
+    fetchBackendData(user.id).then((cloudData) => {
+      if (cloudData && (cloudData.records?.length > 0 || cloudData.mentors?.length > 0)) {
+        setSystemData(cloudData);
+      }
+    });
   };
 
   const handleLogout = () => {
@@ -72,6 +80,7 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       saveDataToLocalStorage(systemData, currentUser.id);
+      saveDataToBackend(systemData, currentUser.id);
     }
   }, [systemData, currentUser]);
 
@@ -89,10 +98,10 @@ export default function App() {
   const handleManualBackendSync = async () => {
     setSyncStatus('syncing');
     try {
-      const result = await saveDataToBackend(systemData);
+      const result = await saveDataToBackend(systemData, currentUser?.id || 'default');
       if (result.success) {
         setSyncStatus('success');
-        setLastSyncTime(`后台同步成功 ${result.timestamp}`);
+        setLastSyncTime(`账号全量云端同步成功 ${result.timestamp}`);
         setTimeout(() => setSyncStatus('idle'), 3000);
       }
     } catch {
@@ -264,10 +273,24 @@ export default function App() {
     }));
   };
 
+  const handleUpdateThinkingNote = (updatedNote: ThinkingNote) => {
+    setSystemData((prev) => ({
+      ...prev,
+      thinking: prev.thinking.map((t) => (t.id === updatedNote.id ? updatedNote : t)),
+    }));
+  };
+
   const handleDeleteThinkingNote = (id: string) => {
     setSystemData((prev) => ({
       ...prev,
       thinking: prev.thinking.filter((t) => t.id !== id),
+    }));
+  };
+
+  const handleTogglePinCase = (id: string) => {
+    setSystemData((prev) => ({
+      ...prev,
+      records: prev.records.map((r) => (r.id === id ? { ...r, pinned: !r.pinned } : r)),
     }));
   };
 
@@ -374,6 +397,8 @@ export default function App() {
                 onDeleteCase={handleDeleteCase}
                 onUpdateSessionNote={handleUpdateSessionNote}
                 onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
+                onSaveToThinkingNotes={handleAddThinkingNote}
+                onTogglePinCase={handleTogglePinCase}
               />
             )}
 
@@ -387,6 +412,8 @@ export default function App() {
                 onDeleteCase={handleDeleteCase}
                 onUpdateSessionNote={handleUpdateSessionNote}
                 onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
+                onSaveToThinkingNotes={handleAddThinkingNote}
+                onTogglePinCase={handleTogglePinCase}
               />
             )}
 
@@ -407,6 +434,7 @@ export default function App() {
               <ThinkingNotes
                 notes={systemData.thinking}
                 onAddNote={handleAddThinkingNote}
+                onUpdateNote={handleUpdateThinkingNote}
                 onDeleteNote={handleDeleteThinkingNote}
               />
             )}

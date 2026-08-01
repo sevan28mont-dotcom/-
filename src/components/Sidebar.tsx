@@ -81,10 +81,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const otherNavItems = visibleNavItems.filter((i) => i.id !== 'longTerm' && i.id !== 'shortTerm');
 
   return (
-    <aside className="w-72 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-r border-rose-200 dark:border-slate-800 text-zinc-800 dark:text-slate-100 flex flex-col justify-between shrink-0 p-4 shadow-xs transition-colors duration-300 overflow-y-auto">
+    <aside className="w-72 max-sm:landscape:w-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-r border-rose-200 dark:border-slate-800 text-zinc-800 dark:text-slate-100 flex flex-col justify-between shrink-0 p-4 max-sm:landscape:p-2 shadow-xs transition-all duration-300 overflow-y-auto">
       {/* Upper Navigation Sections */}
-      <div className="space-y-5">
-        <div className="px-3 py-1 flex items-center justify-between border-b border-rose-100 dark:border-slate-800 pb-2">
+      <div className="space-y-5 max-sm:landscape:space-y-3">
+        <div className="px-3 py-1 flex items-center justify-between border-b border-rose-100 dark:border-slate-800 pb-2 max-sm:landscape:hidden">
           <p className="text-[11px] font-extrabold uppercase tracking-wider text-rose-500 dark:text-rose-400">
             Navigation / 功能导航
           </p>

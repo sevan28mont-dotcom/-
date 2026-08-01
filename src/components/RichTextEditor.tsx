@@ -179,22 +179,18 @@ const HIGHLIGHT_COLOR_PALETTE = [
 
 // 丰富字体库
 const FONT_FAMILIES = [
+  { label: '✨ 华文楷体 (STKaiti)', value: '"STKaiti", "KaiTi", "楷体", "楷体_GB2312", "STKaiti SC", serif' },
   { label: '默认系统字体', value: 'system-ui, -apple-system, sans-serif' },
   { label: '微软雅黑 (Microsoft YaHei)', value: '"Microsoft YaHei", "PingFang SC", sans-serif' },
   { label: '微软正黑体 (Microsoft JhengHei)', value: '"Microsoft JhengHei", sans-serif' },
   { label: '宋体 (SimSun)', value: 'SimSun, "Songti SC", serif' },
   { label: '黑体 (SimHei)', value: 'SimHei, "Heiti SC", sans-serif' },
-  { label: '楷体 (KaiTi)', value: 'KaiTi, "Kaiti SC", STKaiti, serif' },
   { label: '仿宋 (FangSong)', value: 'FangSong, "Fangsong SC", STFangsong, serif' },
   { label: '隶书 (LiSu)', value: 'LiSu, "Lantinghei SC", serif' },
   { label: 'Arial (经典无衬线)', value: 'Arial, Helvetica, sans-serif' },
   { label: 'Georgia (典雅衬线体)', value: 'Georgia, serif' },
   { label: 'Times New Roman (正统衬线)', value: '"Times New Roman", Times, serif' },
   { label: 'Courier New (等宽代码体)', value: '"Courier New", Courier, monospace' },
-  { label: 'Trebuchet MS (人文无衬线)', value: '"Trebuchet MS", sans-serif' },
-  { label: 'Verdana (清晰无衬线)', value: 'Verdana, Geneva, sans-serif' },
-  { label: 'Impact (重磅标题体)', value: 'Impact, Charcoal, sans-serif' },
-  { label: 'Comic Sans MS (休闲活泼)', value: '"Comic Sans MS", cursive, sans-serif' },
 ];
 
 // 丰富字号
@@ -403,6 +399,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               ))}
             </select>
           </div>
+
 
           {/* 字号选择 */}
           <div className="flex items-center bg-white dark:bg-slate-900 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700">

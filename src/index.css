@@ -2,6 +2,15 @@
 
 @variant dark (&:where(.dark, .dark *));
 
+@layer utilities {
+  .font-kaiti {
+    font-family: "STKaiti", "KaiTi", "楷体", "楷体_GB2312", "STKaiti SC", Georgia, serif;
+  }
+  .font-song {
+    font-family: "SimSun", "STSong", "宋体", serif;
+  }
+}
+
 @layer base {
   html.dark, body.dark {
     color-scheme: dark;
@@ -9,3 +18,4 @@
     color: #f8fafc;
   }
 }
+

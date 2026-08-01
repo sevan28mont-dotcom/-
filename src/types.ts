@@ -16,6 +16,7 @@ export interface SessionData {
   transcript?: string; // 逐字稿内容
   ideas?: string[]; // 插入的想法/随想列表
   resources?: ResourceLink[]; // 关联的WPS文档、微信公众号、小红书博文等链接
+  durationMinutes?: number; // 咨询时长 (分钟)
 }
 
 export interface CaseRecord {
@@ -29,6 +30,7 @@ export interface CaseRecord {
   endDate?: string; // YYYY-MM-DD
   totalSessions: number;
   sessions: Record<number, SessionData>;
+  pinned?: boolean; // 是否重要置顶
 }
 
 export interface SupervisionRecord {

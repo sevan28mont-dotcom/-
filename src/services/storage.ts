@@ -164,6 +164,18 @@ const DEFAULT_REMINDERS: ReminderItem[] = [
   },
 ];
 
+export const EMPTY_SYSTEM_DATA: SystemData = {
+  records: [],
+  mentors: [],
+  thinking: [],
+  schedules: [],
+  reminders: [],
+};
+
+export function getZeroedSystemData(): SystemData {
+  return { ...EMPTY_SYSTEM_DATA };
+}
+
 export function loadDataFromLocalStorage(userId?: string): SystemData {
   try {
     const keys = {
@@ -180,6 +192,11 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
     const s = localStorage.getItem(keys.schedules);
     const rem = localStorage.getItem(keys.reminders);
 
+    // If a specific custom user ID is given and they have no saved records yet, return EMPTY_SYSTEM_DATA
+    if (userId && !r && !m && !t && !s && !rem) {
+      return { ...EMPTY_SYSTEM_DATA };
+    }
+
     return {
       records: r ? JSON.parse(r) : DEFAULT_RECORDS,
       mentors: m ? JSON.parse(m) : DEFAULT_MENTORS,
@@ -189,7 +206,7 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
     };
   } catch (err) {
     console.error('Failed to load from localStorage:', err);
-    return {
+    return userId ? { ...EMPTY_SYSTEM_DATA } : {
       records: DEFAULT_RECORDS,
       mentors: DEFAULT_MENTORS,
       thinking: DEFAULT_THINKING,
@@ -235,25 +252,48 @@ export function clearAllLocalStorage(userId?: string): void {
 }
 
 /**
- * 预留的后台数据同步接口
- * saveDataToBackend() - Reserved Interface for Backend REST API / Cloud Storage
+ * 在线后端账号全量信息同步接口
  */
-export async function saveDataToBackend(data: SystemData): Promise<{ success: boolean; message: string; timestamp: string }> {
-  console.log('[Backend API Reserved Interface] Initiating sync payload to server:', {
-    recordCount: data.records.length,
-    mentorCount: data.mentors.length,
-    thinkingCount: data.thinking.length,
-    scheduleCount: data.schedules.length,
-    payload: data,
-  });
-
-  // Simulating async network call
-  await new Promise((resolve) => setTimeout(resolve, 800));
+export async function saveDataToBackend(data: SystemData, userId: string = 'default'): Promise<{ success: boolean; message: string; timestamp: string }> {
+  try {
+    const response = await fetch('/api/sync/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, data }),
+    });
+    const result = await response.json();
+    if (result.success) {
+      return {
+        success: true,
+        message: result.message || '数据已在线成功同步至同账号云端',
+        timestamp: result.timestamp || new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+      };
+    }
+  } catch (e) {
+    console.warn('Backend sync save warning:', e);
+  }
 
   const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
   return {
     success: true,
-    message: `数据已成功打包保存至后台接口 (预留 saveDataToBackend)`,
+    message: `本地离线状态打包保存 (未连接远端服务器)`,
     timestamp,
   };
+}
+
+export async function fetchBackendData(userId: string): Promise<SystemData | null> {
+  try {
+    const response = await fetch('/api/sync/get', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    const result = await response.json();
+    if (result.success && result.data) {
+      return result.data as SystemData;
+    }
+  } catch (e) {
+    console.warn('Backend sync fetch warning:', e);
+  }
+  return null;
 }

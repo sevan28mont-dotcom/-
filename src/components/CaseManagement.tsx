@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CaseCategory, CaseRecord, SessionData, ResourceLink, Supervisor, ThinkingNote } from '../types';
-import { Plus, Minus, Pencil, Trash2, Calendar as CalendarIcon, CheckCircle, Clock, FileText, X, Search, Link as LinkIcon, Lightbulb, Mic, Eye, Download, Printer } from 'lucide-react';
+import { Plus, Minus, Pencil, Trash2, Calendar as CalendarIcon, CheckCircle, Clock, FileText, X, Search, Link as LinkIcon, Lightbulb, Mic, Eye, Download, Printer, Sparkles, Pin, PinOff, BarChart2 } from 'lucide-react';
 import { VoiceInputButton } from './VoiceInputButton';
 import { ResourceLinkSection } from './ResourceLinkSection';
 import { IdeasSection } from './IdeasSection';
@@ -8,6 +8,8 @@ import { RichTextEditor } from './RichTextEditor';
 import { LinkPreviewModal } from './LinkPreviewModal';
 import { ExportCasePdfModal } from './ExportCasePdfModal';
 import { ExportTranscriptPdfModal } from './ExportTranscriptPdfModal';
+import { AiCaseSummaryModal } from './AiCaseSummaryModal';
+import { CaseProgressCharts } from './CaseProgressCharts';
 
 interface CaseManagementProps {
   category: CaseCategory;
@@ -18,6 +20,8 @@ interface CaseManagementProps {
   onDeleteCase: (id: string) => void;
   onUpdateSessionNote: (caseId: string, sessionNum: number, sessionData: SessionData) => void;
   onUpdateCaseTotalSessions?: (caseId: string, newTotalSessions: number) => void;
+  onSaveToThinkingNotes?: (note: ThinkingNote) => void;
+  onTogglePinCase?: (id: string) => void;
 }
 
 export const CaseManagement: React.FC<CaseManagementProps> = ({
@@ -29,8 +33,12 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   onDeleteCase,
   onUpdateSessionNote,
   onUpdateCaseTotalSessions,
+  onSaveToThinkingNotes,
+  onTogglePinCase,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [summaryModalCase, setSummaryModalCase] = useState<CaseRecord | null>(null);
+  const [showChartsCaseId, setShowChartsCaseId] = useState<string | null>(null);
 
   const categoryRecords = records.filter((r) => r.category === category);
 
@@ -39,12 +47,20 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
     const q = searchQuery.toLowerCase().trim();
     const matchName = item.name.toLowerCase().includes(q);
     const matchNum = item.caseNum.toLowerCase().includes(q);
-    const matchNotes = Object.values(item.sessions).some((s: SessionData) => s.note?.toLowerCase().includes(q));
-    const matchTranscript = Object.values(item.sessions).some((s: SessionData) => s.transcript?.toLowerCase().includes(q));
-    const matchIdeas = Object.values(item.sessions).some((s: SessionData) => s.ideas?.some((idea) => idea.toLowerCase().includes(q)));
-    const matchResources = Object.values(item.sessions).some((s: SessionData) => s.resources?.some((res) => res.title.toLowerCase().includes(q) || res.url.toLowerCase().includes(q)));
-    const matchDate = item.startDate.includes(q) || (item.endDate && item.endDate.includes(q));
-    return matchName || matchNum || matchNotes || matchTranscript || matchIdeas || matchResources || matchDate;
+    const matchDiagnosis = (item.diagnosis || '').toLowerCase().includes(q);
+    const matchNotes = Object.values(item.sessions || {}).some((s: SessionData) => s.note?.toLowerCase().includes(q));
+    const matchTranscript = Object.values(item.sessions || {}).some((s: SessionData) => s.transcript?.toLowerCase().includes(q));
+    const matchIdeas = Object.values(item.sessions || {}).some((s: SessionData) => s.ideas?.some((idea) => idea.toLowerCase().includes(q)));
+    const matchResources = Object.values(item.sessions || {}).some((s: SessionData) => s.resources?.some((res) => res.title.toLowerCase().includes(q) || res.url.toLowerCase().includes(q)));
+    const matchDate = (item.startDate || '').includes(q) || (item.endDate && item.endDate.includes(q));
+    return matchName || matchNum || matchDiagnosis || matchNotes || matchTranscript || matchIdeas || matchResources || matchDate;
+  });
+
+  // 重要个案优先置顶
+  const sortedRecords = [...filteredRecords].sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return 0;
   });
 
   // New Case Form State
@@ -292,12 +308,12 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
       {/* 个案档案列表 */}
       <div className="space-y-4">
-        {filteredRecords.length === 0 ? (
+        {sortedRecords.length === 0 ? (
           <div className="bg-white border border-rose-200 rounded-2xl p-8 text-center text-zinc-500 text-xs">
             暂无此分类下的个案档案，请在上方创建。
           </div>
         ) : (
-          filteredRecords.map((item) => {
+          sortedRecords.map((item) => {
             let completedCount = 0;
             let recordedCount = 0;
             for (let i = 1; i <= item.totalSessions; i++) {
@@ -319,7 +335,11 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             return (
               <div
                 key={item.id}
-                className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs hover:border-rose-300 dark:hover:border-slate-700 transition"
+                className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-xs transition ${
+                  item.pinned
+                    ? 'border-amber-300 dark:border-amber-700/80 ring-2 ring-amber-400/20 bg-amber-50/20 dark:bg-slate-900/90'
+                    : 'border-rose-200 dark:border-slate-800 hover:border-rose-300 dark:hover:border-slate-700'
+                }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-rose-100 dark:border-slate-800 pb-3 mb-4">
                   <div className="flex items-center gap-3">
@@ -327,7 +347,13 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                       {item.avatar}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {item.pinned && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 rounded-md border border-amber-300 dark:border-amber-700 flex items-center gap-1 shadow-2xs">
+                            <Pin className="w-3 h-3 fill-amber-500 text-amber-600 shrink-0" />
+                            <span>重要个案</span>
+                          </span>
+                        )}
                         <span className="font-bold text-zinc-800 dark:text-slate-100 text-base">
                           {item.caseNum} {item.name}
                         </span>
@@ -445,27 +471,74 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {/* 重要个案置顶按钮 */}
+                    <button
+                      type="button"
+                      onClick={() => onTogglePinCase?.(item.id)}
+                      className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition cursor-pointer active:scale-95 ${
+                        item.pinned
+                          ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-xs'
+                          : 'bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-slate-700 text-zinc-700 dark:text-slate-300 border-zinc-200 dark:border-slate-700'
+                      }`}
+                      title={item.pinned ? '取消重要个案置顶' : '设为重要个案并置顶显示'}
+                    >
+                      {item.pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-amber-500" />}
+                      <span>{item.pinned ? '取消置顶' : '置顶'}</span>
+                    </button>
+
+                    {/* 可视化图表展开按钮 */}
+                    <button
+                      type="button"
+                      onClick={() => setShowChartsCaseId(showChartsCaseId === item.id ? null : item.id)}
+                      className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition cursor-pointer shadow-2xs active:scale-95 ${
+                        showChartsCaseId === item.id
+                          ? 'bg-rose-600 text-white border-rose-700'
+                          : 'bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-slate-700 hover:bg-rose-50'
+                      }`}
+                      title="查看基于 Recharts 的咨询节次进展与时长趋势图表"
+                    >
+                      <BarChart2 className="w-3.5 h-3.5 text-rose-500" />
+                      <span>{showChartsCaseId === item.id ? '收起图表' : '进度图表'}</span>
+                    </button>
+
+                    {/* Gemini AI 摘要生成 */}
+                    <button
+                      type="button"
+                      onClick={() => setSummaryModalCase(item)}
+                      className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 text-white bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 rounded-lg transition cursor-pointer shadow-2xs active:scale-95"
+                      title="利用 Gemini AI 总结个案进度、核心移情与阻抗并生成临床建议"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                      <span>AI摘要生成</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setExportingPdfCase(item)}
-                      className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 text-rose-700 dark:text-rose-300 hover:text-white bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-600 border border-rose-200 dark:border-rose-800 rounded-lg transition cursor-pointer shadow-2xs"
+                      className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 text-rose-700 dark:text-rose-300 hover:text-white bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-600 border border-rose-200 dark:border-rose-800 rounded-lg transition cursor-pointer shadow-2xs"
                       title="将当前个案的所有会谈记录、关联督导与思考笔记汇总导出为 PDF 卷宗"
                     >
                       <FileText className="w-3.5 h-3.5" />
-                      <span>导出为 PDF</span>
+                      <span>导出PDF</span>
                     </button>
 
                     <button
                       onClick={() => onDeleteCase(item.id)}
-                      className="flex items-center gap-1 text-[11px] px-3 py-1.5 text-zinc-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 bg-zinc-50 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-zinc-200 dark:border-slate-700 rounded-lg transition cursor-pointer"
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1.5 text-zinc-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 bg-zinc-50 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-zinc-200 dark:border-slate-700 rounded-lg transition cursor-pointer"
                       title="删除个案记录"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>删除个案</span>
                     </button>
                   </div>
                 </div>
+
+                {/* 咨询节次可视化进展分析图表 (D3 / Recharts) */}
+                {showChartsCaseId === item.id && (
+                  <div className="mb-4">
+                    <CaseProgressCharts record={item} />
+                  </div>
+                )}
 
                 {/* 咨询进程进度百分比视觉条 */}
                 <div className="mb-4 bg-rose-50/50 dark:bg-slate-800/80 border border-rose-100 dark:border-slate-700/80 rounded-xl p-3 transition-colors">
@@ -791,6 +864,16 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
           sessionNum={exportingTranscriptSession.sessionNum}
           sessionData={exportingTranscriptSession.sessionData}
           onClose={() => setExportingTranscriptSession(null)}
+        />
+      )}
+
+      {/* Gemini AI 咨询进度摘要 Modal */}
+      {summaryModalCase && (
+        <AiCaseSummaryModal
+          caseRecord={summaryModalCase}
+          mentors={mentors}
+          onClose={() => setSummaryModalCase(null)}
+          onSaveToThinkingNotes={onSaveToThinkingNotes}
         />
       )}
     </div>
