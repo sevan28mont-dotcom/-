@@ -320,24 +320,48 @@ export default function App() {
     }));
   };
 
-  const handleAddSchedule = (newItem: ScheduleItem) => {
+  const handleAddSchedule = (newItemData: Omit<ScheduleItem, 'id'> | ScheduleItem) => {
+    const newItem: ScheduleItem = {
+      ...newItemData,
+      id: ('id' in newItemData && newItemData.id) ? newItemData.id : `sch_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    };
     setSystemData((prev) => ({
       ...prev,
-      schedules: [newItem, ...prev.schedules],
+      schedules: [newItem, ...(prev.schedules || [])],
     }));
   };
 
-  const handleUpdateSchedule = (updatedItem: ScheduleItem) => {
+  const handleUpdateSchedule = (idOrItem: string | ScheduleItem, updatedData?: Omit<ScheduleItem, 'id'>) => {
+    let targetId: string = '';
+    let patchObj: Partial<ScheduleItem> = {};
+
+    if (typeof idOrItem === 'string') {
+      targetId = idOrItem;
+      patchObj = updatedData || {};
+    } else if (idOrItem && typeof idOrItem === 'object') {
+      targetId = idOrItem.id || '';
+      patchObj = idOrItem;
+    }
+
+    if (!targetId) return;
+
     setSystemData((prev) => ({
       ...prev,
-      schedules: prev.schedules.map((s) => (s.id === updatedItem.id ? updatedItem : s)),
+      schedules: (prev.schedules || []).map((s) => {
+        if (!s || typeof s !== 'object') return s;
+        if (s.id === targetId) {
+          return { ...s, ...patchObj, id: targetId };
+        }
+        return s;
+      }),
     }));
   };
 
   const handleDeleteSchedule = (id: string) => {
+    if (!id) return;
     setSystemData((prev) => ({
       ...prev,
-      schedules: prev.schedules.filter((s) => s.id !== id),
+      schedules: (prev.schedules || []).filter((s) => s && typeof s === 'object' && s.id && s.id !== id),
     }));
   };
 

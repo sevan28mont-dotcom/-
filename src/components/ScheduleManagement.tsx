@@ -688,8 +688,10 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
 
   const handleDeleteCurrentModalSchedule = () => {
     if (selectedScheduleId) {
-      onDeleteSchedule(selectedScheduleId);
-      setModalOpen(false);
+      if (window.confirm('确定要删除选中的此条日程安排吗？')) {
+        onDeleteSchedule(selectedScheduleId);
+        setModalOpen(false);
+      }
     }
   };
 
@@ -1333,22 +1335,24 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
 
       {/* Schedule Edit / Create Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-rose-200 rounded-2xl p-6 max-w-lg w-full shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-rose-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-2xl max-w-xl w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden">
+            {/* 顶部固定 Header */}
+            <div className="shrink-0 p-4 pb-3 border-b border-rose-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 rounded-t-2xl">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
                 <CalendarIcon className="w-5 h-5 text-rose-600" />
-                <span>{selectedScheduleId ? '编辑日程安排' : '添加日程安排'}</span>
+                <span>{selectedScheduleId ? '编辑 / 修改日程安排' : '添加新日程安排'}</span>
               </h3>
               <button
                 onClick={() => setModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
+            {/* 可向上/向下平滑滑动表单区域 Body */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
               {/* 日期与灵活精准时间设置 */}
               <div className="bg-rose-50/50 dark:bg-slate-800/50 p-3 rounded-xl border border-rose-200 dark:border-slate-700 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -1979,11 +1983,13 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-rose-100">
+            {/* 底部固定 Footer 操作区 (保证保存与取消按钮永不脱离视口) */}
+            <div className="shrink-0 p-4 pt-3 border-t border-rose-100 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-b-2xl flex items-center justify-between z-10 shadow-lg">
               {selectedScheduleId ? (
                 <button
+                  type="button"
                   onClick={handleDeleteCurrentModalSchedule}
-                  className="px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 rounded-lg border border-rose-200 transition flex items-center gap-1 cursor-pointer"
+                  className="px-3.5 py-2 text-xs font-bold text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl border border-rose-200 dark:border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>删除日程</span>
@@ -1994,16 +2000,18 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
 
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
                 >
                   取消
                 </button>
                 <button
+                  type="button"
                   onClick={handleSaveModal}
-                  className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition shadow-2xs cursor-pointer"
+                  className="px-5 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition shadow-md cursor-pointer flex items-center gap-1.5"
                 >
-                  保存日程
+                  <span>保存日程</span>
                 </button>
               </div>
             </div>
