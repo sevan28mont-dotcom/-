@@ -19,10 +19,12 @@ interface CaseManagementProps {
   records: CaseRecord[];
   mentors?: Supervisor[];
   thinkingNotes?: ThinkingNote[];
+  totalHoursOverrides?: any;
+  onUpdateTotalHoursOverrides?: (newOverrides: any) => void;
   onAddCase: (newCase: Omit<CaseRecord, 'id' | 'sessions'>) => void;
   onDeleteCase: (id: string) => void;
   onUpdateSessionNote: (caseId: string, sessionNum: number, sessionData: SessionData) => void;
-  onUpdateParentSessionNote?: (caseId: string, parentSessionNum: number, parentSessionData: ParentSessionData) => void;
+  onUpdateParentSessionNote?: (caseId: string, parentSessionNum: number, parentSessionData: ParentSessionData | null) => void;
   onBatchUpdateSessions?: (caseId: string, updates: { sessionNum: number; sessionData: Partial<SessionData> }[]) => void;
   onBatchUpdateCases?: (updates: { id: string; status?: 'active' | 'ended'; totalSessions?: number }[]) => void;
   onBatchDeleteCases?: (ids: string[]) => void;
@@ -38,6 +40,8 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   records,
   mentors = [],
   thinkingNotes = [],
+  totalHoursOverrides,
+  onUpdateTotalHoursOverrides,
   onAddCase,
   onDeleteCase,
   onUpdateSessionNote,
@@ -53,6 +57,10 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   const [internalStatusFilter, setInternalStatusFilter] = useState<'all' | 'active' | 'ended'>(statusFilter);
   const [summaryModalCase, setSummaryModalCase] = useState<CaseRecord | null>(null);
   const [showChartsCaseId, setShowChartsCaseId] = useState<string | null>(null);
+
+  // 个案模块时数修改 Modal
+  const [isEditHoursModalOpen, setIsEditHoursModalOpen] = useState(false);
+  const [hoursInputValue, setHoursInputValue] = useState('');
 
   // 个案列表批量编辑状态
   const [batchCaseMode, setBatchCaseMode] = useState(false);
@@ -1176,11 +1184,29 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   };
 
   const currentCase = records.find((r) => r.id === selectedCaseId);
-  let titleText = category === 'longTerm' ? '长程心理咨询个案库' : '单次心理咨询个案库';
+
+  // 计算当前模块 (长程或短程) 自动累计的时数
+  const autoCompletedHours = categoryRecords.reduce((acc, rec) => {
+    const completedCount = Object.values(rec.sessions || {}).filter((s) => s.completed).length;
+    const parentCount = Object.values(rec.parentSessions || {}).filter((p) => p.completed !== false && Boolean(p.date)).length;
+    return acc + completedCount + parentCount;
+  }, 0);
+
+  const currentCategoryOverrideHours = category === 'longTerm'
+    ? totalHoursOverrides?.longTermCaseHours
+    : totalHoursOverrides?.shortTermCaseHours;
+
+  const displayHours = currentCategoryOverrideHours !== undefined ? currentCategoryOverrideHours : autoCompletedHours;
+
+  let titleText = category === 'longTerm' ? '长程个案' : '短程咨询';
   if (category === 'longTerm') {
-    if (internalStatusFilter === 'active') titleText = '长程心理咨询个案库 · 正在进行';
-    else if (internalStatusFilter === 'ended') titleText = '长程心理咨询个案库 · 终止和暂停';
-    else titleText = '长程心理咨询个案库 · 全部档案';
+    if (internalStatusFilter === 'active') titleText = '长程个案 · 正在进行';
+    else if (internalStatusFilter === 'ended') titleText = '长程个案 · 终止和暂停';
+    else titleText = '长程个案 · 全部档案';
+  } else {
+    if (shortTermSubtypeFilter === 'personal') titleText = '短程咨询 · 个人短程案例';
+    else if (shortTermSubtypeFilter === 'agency') titleText = '短程咨询 · 医院或机构短程案例';
+    else titleText = '短程咨询';
   }
 
   return (
@@ -1192,6 +1218,21 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
         </h2>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* 可编辑时数按钮 */}
+          <button
+            type="button"
+            onClick={() => {
+              setHoursInputValue(String(displayHours));
+              setIsEditHoursModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 rounded-full text-xs font-bold transition shadow-2xs cursor-pointer"
+            title="点击手动编辑/修改当前模块的累计时数"
+          >
+            <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>{category === 'longTerm' ? '长程个案累计' : '短程咨询累计'}: <strong>{displayHours}</strong> 小时</span>
+            <Pencil className="w-3 h-3 text-amber-600 dark:text-amber-400 opacity-80 shrink-0" />
+          </button>
+
           {category === 'longTerm' && (
             <div className="flex items-center bg-rose-100/70 dark:bg-slate-800 p-1 rounded-xl border border-rose-200/80 dark:border-slate-700 text-xs">
               <button
@@ -1511,48 +1552,56 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             </div>
 
             {/* 小标题 1: 正在进行中 */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 px-4 py-2.5 rounded-xl shadow-2xs">
-                <div className="flex items-center gap-2.5 font-bold text-emerald-900 dark:text-emerald-300 text-sm">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                  <h3>1. 正在进行中</h3>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-200/60 dark:bg-emerald-900/80 text-emerald-950 dark:text-emerald-200 font-bold border border-emerald-300 dark:border-emerald-700">
-                    {activeRecords.length} 项
-                  </span>
-                </div>
+            {(internalStatusFilter === 'active' || internalStatusFilter === 'all') && (
+              <div className="space-y-3">
+                {internalStatusFilter === 'all' && (
+                  <div className="flex items-center justify-between bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 px-4 py-2.5 rounded-xl shadow-2xs">
+                    <div className="flex items-center gap-2.5 font-bold text-emerald-900 dark:text-emerald-300 text-sm">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                      <h3>1. 正在进行中</h3>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-200/60 dark:bg-emerald-900/80 text-emerald-950 dark:text-emerald-200 font-bold border border-emerald-300 dark:border-emerald-700">
+                        {activeRecords.length} 项
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {activeRecords.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-400 bg-white/60 dark:bg-slate-900/60 rounded-xl border border-dashed border-rose-200 dark:border-slate-800">
+                    暂无进行中的个案记录
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {activeRecords.map((item) => renderCaseCard(item))}
+                  </div>
+                )}
               </div>
-              {activeRecords.length === 0 ? (
-                <div className="p-4 text-center text-xs text-slate-400 bg-white/60 dark:bg-slate-900/60 rounded-xl border border-dashed border-rose-200 dark:border-slate-800">
-                  暂无进行中的个案记录
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {activeRecords.map((item) => renderCaseCard(item))}
-                </div>
-              )}
-            </div>
+            )}
 
             {/* 小标题 2: 暂停或终止的长程个案 */}
-            <div className="space-y-3 pt-3">
-              <div className="flex items-center justify-between bg-zinc-100/80 dark:bg-slate-800/80 border border-zinc-200 dark:border-slate-700 px-4 py-2.5 rounded-xl shadow-2xs">
-                <div className="flex items-center gap-2.5 font-bold text-zinc-800 dark:text-slate-200 text-sm">
-                  <span className="w-2.5 h-2.5 rounded-full bg-zinc-400 shrink-0" />
-                  <h3>2. {category === 'longTerm' ? '暂停或终止的长程个案' : '暂停或终止的短程个案'}</h3>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-zinc-200 dark:bg-slate-700 text-zinc-700 dark:text-slate-300 font-bold border border-zinc-300 dark:border-slate-600">
-                    {endedRecords.length} 项
-                  </span>
-                </div>
+            {(internalStatusFilter === 'ended' || internalStatusFilter === 'all') && (
+              <div className="space-y-3 pt-3">
+                {internalStatusFilter === 'all' && (
+                  <div className="flex items-center justify-between bg-zinc-100/80 dark:bg-slate-800/80 border border-zinc-200 dark:border-slate-700 px-4 py-2.5 rounded-xl shadow-2xs">
+                    <div className="flex items-center gap-2.5 font-bold text-zinc-800 dark:text-slate-200 text-sm">
+                      <span className="w-2.5 h-2.5 rounded-full bg-zinc-400 shrink-0" />
+                      <h3>2. {category === 'longTerm' ? '暂停或终止的长程个案' : '暂停或终止的短程个案'}</h3>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-zinc-200 dark:bg-slate-700 text-zinc-700 dark:text-slate-300 font-bold border border-zinc-300 dark:border-slate-600">
+                        {endedRecords.length} 项
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {endedRecords.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-400 bg-white/60 dark:bg-slate-900/60 rounded-xl border border-dashed border-rose-200 dark:border-slate-800">
+                    暂无暂停或终止的个案记录
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {endedRecords.map((item) => renderCaseCard(item))}
+                  </div>
+                )}
               </div>
-              {endedRecords.length === 0 ? (
-                <div className="p-4 text-center text-xs text-slate-400 bg-white/60 dark:bg-slate-900/60 rounded-xl border border-dashed border-rose-200 dark:border-slate-800">
-                  暂无暂停或终止的个案记录
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {endedRecords.map((item) => renderCaseCard(item))}
-                </div>
-              )}
-            </div>
+            )}
           </>
         )}
       </div>
@@ -1971,20 +2020,128 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 border-t border-indigo-100 dark:border-indigo-800 pt-3 mt-3">
+            <div className="flex items-center justify-between border-t border-indigo-100 dark:border-indigo-800 pt-3 mt-3">
               <button
                 type="button"
-                onClick={closeParentSessionModal}
-                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
+                onClick={() => {
+                  if (confirm(`确认要删除第 ${selectedParentSessionNum} 次父母访谈档案记录吗？`)) {
+                    if (onUpdateParentSessionNote && selectedParentCaseId && selectedParentSessionNum !== null) {
+                      onUpdateParentSessionNote(selectedParentCaseId, selectedParentSessionNum, null);
+                    }
+                    closeParentSessionModal();
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl cursor-pointer flex items-center gap-1 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>删除此父母访谈</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={closeParentSessionModal}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveParentSession}
+                  className="px-5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-md transition active:scale-95 cursor-pointer"
+                >
+                  保存父母访谈档案
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 模块累计时数快捷修改 Modal */}
+      {isEditHoursModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 max-w-sm w-full shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-amber-100 dark:border-slate-800 pb-2">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-500" />
+                <span>编辑 {category === 'longTerm' ? '长程个案' : '短程咨询'} 累计时数</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditHoursModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  设置累计时数 (小时):
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={hoursInputValue}
+                  onChange={(e) => setHoursInputValue(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="输入时数"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setHoursInputValue(String((Number(hoursInputValue) || 0) + 1))}
+                  className="flex-1 py-1 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 rounded-lg text-xs font-bold cursor-pointer hover:bg-amber-100"
+                >
+                  +1 小时
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHoursInputValue(String((Number(hoursInputValue) || 0) + 5))}
+                  className="flex-1 py-1 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 rounded-lg text-xs font-bold cursor-pointer hover:bg-amber-100"
+                >
+                  +5 小时
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHoursInputValue(String(autoCompletedHours))}
+                  className="flex-1 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold cursor-pointer hover:bg-slate-200"
+                  title="重置为根据实际录入档案自动统计的时数"
+                >
+                  自动重置 ({autoCompletedHours}h)
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-amber-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsEditHoursModalOpen(false)}
+                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
               >
                 取消
               </button>
               <button
                 type="button"
-                onClick={handleSaveParentSession}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition active:scale-95 cursor-pointer"
+                onClick={() => {
+                  const val = Number(hoursInputValue);
+                  const num = isNaN(val) ? 0 : Math.max(0, val);
+                  if (onUpdateTotalHoursOverrides) {
+                    if (category === 'longTerm') {
+                      onUpdateTotalHoursOverrides({ ...totalHoursOverrides, longTermCaseHours: num });
+                    } else {
+                      onUpdateTotalHoursOverrides({ ...totalHoursOverrides, shortTermCaseHours: num });
+                    }
+                  }
+                  setIsEditHoursModalOpen(false);
+                }}
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-2xs"
               >
-                保存父母访谈档案
+                保存时数
               </button>
             </div>
           </div>

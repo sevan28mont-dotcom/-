@@ -211,24 +211,25 @@ export default function App() {
   const handleUpdateParentSessionNote = (
     caseId: string,
     parentSessionNum: number,
-    parentSessionData: Partial<ParentSessionData>
+    parentSessionData: Partial<ParentSessionData> | null
   ) => {
     setSystemData((prev) => ({
       ...prev,
       records: (prev.records || []).map((r) => {
         if (r.id !== caseId) return r;
-        const currentParentSessions = r.parentSessions || {};
-        const currentParentSession = currentParentSessions[parentSessionNum] || { completed: true, note: '' };
-        const updatedParentSession: ParentSessionData = {
-          ...currentParentSession,
-          ...parentSessionData,
-        };
+        const currentParentSessions = { ...(r.parentSessions || {}) };
+        if (parentSessionData === null) {
+          delete currentParentSessions[parentSessionNum];
+        } else {
+          const currentParentSession = currentParentSessions[parentSessionNum] || { completed: true, note: '' };
+          currentParentSessions[parentSessionNum] = {
+            ...currentParentSession,
+            ...parentSessionData,
+          };
+        }
         return {
           ...r,
-          parentSessions: {
-            ...currentParentSessions,
-            [parentSessionNum]: updatedParentSession,
-          },
+          parentSessions: currentParentSessions,
         };
       }),
     }));
@@ -582,6 +583,8 @@ export default function App() {
                 records={systemData.records}
                 mentors={systemData.mentors}
                 thinkingNotes={systemData.thinking}
+                totalHoursOverrides={systemData.totalHoursOverrides}
+                onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
                 onAddCase={handleAddCase}
                 onDeleteCase={handleDeleteCase}
                 onUpdateSessionNote={handleUpdateSessionNote}
@@ -602,6 +605,8 @@ export default function App() {
                 records={systemData.records}
                 mentors={systemData.mentors}
                 thinkingNotes={systemData.thinking}
+                totalHoursOverrides={systemData.totalHoursOverrides}
+                onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
                 onAddCase={handleAddCase}
                 onDeleteCase={handleDeleteCase}
                 onUpdateSessionNote={handleUpdateSessionNote}
@@ -622,6 +627,8 @@ export default function App() {
                 records={systemData.records}
                 mentors={systemData.mentors}
                 thinkingNotes={systemData.thinking}
+                totalHoursOverrides={systemData.totalHoursOverrides}
+                onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
                 onAddCase={handleAddCase}
                 onDeleteCase={handleDeleteCase}
                 onUpdateSessionNote={handleUpdateSessionNote}
@@ -639,6 +646,8 @@ export default function App() {
               <SupervisorManagement
                 mentors={systemData.mentors}
                 cases={systemData.records}
+                totalHoursOverrides={systemData.totalHoursOverrides}
+                onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
                 onAddMentor={handleAddMentor}
                 onDeleteMentor={handleDeleteMentor}
                 onUpdateMentorCaseBinding={handleUpdateMentorCaseBinding}
@@ -654,6 +663,8 @@ export default function App() {
             {activeTab === 'personalExperience' && (
               <PersonalExperienceManagement
                 experienceData={systemData.personalExperience}
+                totalHoursOverrides={systemData.totalHoursOverrides}
+                onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
                 onUpdateExperienceData={(updated) =>
                   setSystemData((prev) => ({
                     ...prev,

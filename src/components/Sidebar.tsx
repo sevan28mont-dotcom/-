@@ -21,12 +21,28 @@ import {
   User,
   Users,
   Feather,
+  GraduationCap,
   X,
 } from 'lucide-react';
 import { SystemData } from '../types';
 import { WorkspaceLayoutConfig, DEFAULT_WORKSPACE_LAYOUT } from '../services/layout';
 
-export type ActiveTab = 'longTerm' | 'longTermActive' | 'longTermEnded' | 'shortTerm' | 'shortTermPersonal' | 'shortTermAgency' | 'mentor' | 'personalExperience' | 'thinking' | 'schedule';
+export type ActiveTab =
+  | 'longTerm'
+  | 'longTermActive'
+  | 'longTermEnded'
+  | 'shortTerm'
+  | 'shortTermPersonal'
+  | 'shortTermAgency'
+  | 'mentor'
+  | 'personalExperience'
+  | 'training'
+  | 'trainingPsychodynamics'
+  | 'trainingLongShort'
+  | 'trainingOtherSchools'
+  | 'trainingEthicsCrisis'
+  | 'thinking'
+  | 'schedule';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -35,6 +51,8 @@ interface SidebarProps {
   onSelectSupervisionFilter?: (filter: 'all' | 'individual' | 'group') => void;
   personalExperienceFilter?: 'all' | 'individual' | 'group';
   onSelectPersonalExperienceFilter?: (filter: 'all' | 'individual' | 'group') => void;
+  trainingTypeFilter?: 'all' | 'psychodynamics' | 'longShort' | 'otherSchools' | 'ethicsCrisis';
+  onSelectTrainingFilter?: (filter: 'all' | 'psychodynamics' | 'longShort' | 'otherSchools' | 'ethicsCrisis') => void;
   systemData: SystemData;
   onOpenPrivacyModal: (initialTab?: 'privacy' | 'backup' | 'clear' | 'layout') => void;
   onOpenReminderModal: () => void;
@@ -65,6 +83,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectSupervisionFilter,
   personalExperienceFilter = 'all',
   onSelectPersonalExperienceFilter,
+  trainingTypeFilter = 'all',
+  onSelectTrainingFilter,
   systemData,
   onOpenPrivacyModal,
   onOpenReminderModal,
@@ -85,6 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isShortTermSubOpen, setIsShortTermSubOpen] = useState(true);
   const [isMentorDropdownOpen, setIsMentorDropdownOpen] = useState(true);
   const [isPersonalExpDropdownOpen, setIsPersonalExpDropdownOpen] = useState(true);
+  const [isTrainingDropdownOpen, setIsTrainingDropdownOpen] = useState(true);
 
   const pendingRemindersCount = (systemData.reminders || []).filter((r) => !r.completed).length;
 
@@ -209,7 +230,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           transition={{ duration: 0.2, ease: 'easeInOut' }}
                           className="overflow-hidden p-1.5 space-y-2 bg-white/80 dark:bg-slate-900/80 border-t border-rose-100/80 dark:border-slate-800"
                         >
-                          {/* 第一级菜单 1: 长程管理 */}
+                          {/* 第一级菜单 1: 长程个案 */}
                           {longTermItem && (
                             <div className="rounded-lg border border-emerald-100 dark:border-slate-800 bg-emerald-50/30 dark:bg-slate-800/30 overflow-hidden">
                               <button
@@ -219,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               >
                                 <div className="flex items-center gap-1.5">
                                   <FolderOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                                  <span>长程管理</span>
+                                  <span>长程个案</span>
                                 </div>
                                 {isLongTermSubOpen ? (
                                   <ChevronDown className="w-3.5 h-3.5 text-emerald-600" />
@@ -228,7 +249,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 )}
                               </button>
 
-                              {/* 长程管理下设的二级下拉项 */}
+                              {/* 长程个案下设的二级下拉项 */}
                               <AnimatePresence initial={false}>
                                 {isLongTermSubOpen && (
                                   <motion.div
@@ -284,7 +305,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               >
                                 <div className="flex items-center gap-1.5">
                                   <Folder className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                                  <span>短程咨询</span>
+                                  <span>短程个案</span>
                                 </div>
                                 {isShortTermSubOpen ? (
                                   <ChevronDown className="w-3.5 h-3.5 text-rose-600" />
@@ -519,6 +540,134 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <Users className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'personalExperience' && personalExperienceFilter === 'group' ? 'text-white' : 'text-rose-500'}`} />
                           <div className="flex flex-col text-left leading-tight">
                             <span className="font-bold">2. 团体体验</span>
+                          </div>
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* 4. 学习培训 (大栏: 学习培训) */}
+                <div className="rounded-xl border border-indigo-200/80 dark:border-slate-800 bg-indigo-50/40 dark:bg-slate-800/40 overflow-hidden transition-all shadow-2xs">
+                  {/* 下拉总标题: 学习培训 */}
+                  <button
+                    onClick={() => {
+                      setIsTrainingDropdownOpen((prev) => !prev);
+                      if (activeTab !== 'training' && activeTab !== 'trainingPsychodynamics' && activeTab !== 'trainingLongShort' && activeTab !== 'trainingOtherSchools' && activeTab !== 'trainingEthicsCrisis') {
+                        handleItemSelect(() => {
+                          setActiveTab('training');
+                          onSelectTrainingFilter?.('all');
+                        });
+                      }
+                    }}
+                    className={`w-full flex items-center justify-between px-3.5 py-3 text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === 'training' || activeTab === 'trainingPsychodynamics' || activeTab === 'trainingLongShort' || activeTab === 'trainingOtherSchools' || activeTab === 'trainingEthicsCrisis'
+                        ? 'bg-indigo-100/90 dark:bg-slate-800 text-indigo-900 dark:text-indigo-300 border-b border-indigo-200/80 dark:border-slate-700/80'
+                        : 'text-zinc-700 dark:text-slate-200 hover:bg-indigo-100/60 dark:hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-indigo-200/70 dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shrink-0">
+                        <GraduationCap className="w-4 h-4" />
+                      </div>
+                      <span className="text-base sm:text-lg font-black tracking-wide text-zinc-900 dark:text-slate-100">学习培训</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-indigo-500 dark:text-slate-400">
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-indigo-200/60 dark:bg-slate-700 text-indigo-700 dark:text-indigo-300">
+                        专业培训
+                      </span>
+                      {isTrainingDropdownOpen ? (
+                        <ChevronDown className="w-4 h-4 transition-transform duration-200" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 transition-transform duration-200" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* 下拉展开子菜单: 1. 长程动力学培训 2. 长程短程培训 3. 其他流派培训 4. 伦理及危机干预培训 */}
+                  <AnimatePresence initial={false}>
+                    {isTrainingDropdownOpen && (
+                      <motion.div
+                        key="training-dropdown"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2, ease: 'easeInOut' }}
+                        className="overflow-hidden p-1.5 space-y-1 bg-white/80 dark:bg-slate-900/80 border-t border-indigo-100/80 dark:border-slate-800"
+                      >
+                        <button
+                          onClick={() => {
+                            handleItemSelect(() => {
+                              setActiveTab('trainingPsychodynamics');
+                              onSelectTrainingFilter?.('psychodynamics');
+                            });
+                          }}
+                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            activeTab === 'trainingPsychodynamics' || (activeTab === 'training' && trainingTypeFilter === 'psychodynamics')
+                              ? 'bg-indigo-600 text-white font-bold shadow-xs'
+                              : 'text-zinc-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800 hover:text-indigo-800 dark:hover:text-indigo-300'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTab === 'trainingPsychodynamics' ? 'bg-white' : 'bg-indigo-500'}`} />
+                          <div className="flex flex-col text-left leading-tight">
+                            <span className="font-bold">1. 长程动力学培训</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            handleItemSelect(() => {
+                              setActiveTab('trainingLongShort');
+                              onSelectTrainingFilter?.('longShort');
+                            });
+                          }}
+                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            activeTab === 'trainingLongShort' || (activeTab === 'training' && trainingTypeFilter === 'longShort')
+                              ? 'bg-sky-600 text-white font-bold shadow-xs'
+                              : 'text-zinc-600 dark:text-slate-300 hover:bg-sky-50 dark:hover:bg-slate-800 hover:text-sky-800 dark:hover:text-sky-300'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTab === 'trainingLongShort' ? 'bg-white' : 'bg-sky-500'}`} />
+                          <div className="flex flex-col text-left leading-tight">
+                            <span className="font-bold">2. 长程短程培训</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            handleItemSelect(() => {
+                              setActiveTab('trainingOtherSchools');
+                              onSelectTrainingFilter?.('otherSchools');
+                            });
+                          }}
+                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            activeTab === 'trainingOtherSchools' || (activeTab === 'training' && trainingTypeFilter === 'otherSchools')
+                              ? 'bg-purple-600 text-white font-bold shadow-xs'
+                              : 'text-zinc-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-slate-800 hover:text-purple-800 dark:hover:text-purple-300'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTab === 'trainingOtherSchools' ? 'bg-white' : 'bg-purple-500'}`} />
+                          <div className="flex flex-col text-left leading-tight">
+                            <span className="font-bold">3. 其他流派培训</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            handleItemSelect(() => {
+                              setActiveTab('trainingEthicsCrisis');
+                              onSelectTrainingFilter?.('ethicsCrisis');
+                            });
+                          }}
+                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            activeTab === 'trainingEthicsCrisis' || (activeTab === 'training' && trainingTypeFilter === 'ethicsCrisis')
+                              ? 'bg-rose-600 text-white font-bold shadow-xs'
+                              : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800 hover:text-rose-800 dark:hover:text-rose-300'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTab === 'trainingEthicsCrisis' ? 'bg-white' : 'bg-rose-500'}`} />
+                          <div className="flex flex-col text-left leading-tight">
+                            <span className="font-bold">4. 伦理及危机干预培训</span>
                           </div>
                         </button>
                       </motion.div>

@@ -11,6 +11,8 @@ import { ExportSupervisionPdfModal } from './ExportSupervisionPdfModal';
 interface SupervisorManagementProps {
   mentors: Supervisor[];
   cases: CaseRecord[];
+  totalHoursOverrides?: any;
+  onUpdateTotalHoursOverrides?: (newOverrides: any) => void;
   onAddMentor: (newMentor: Omit<Supervisor, 'id' | 'records' | 'boundCaseIds'>) => void;
   onDeleteMentor: (id: string) => void;
   onUpdateMentorCaseBinding: (mentorId: string, caseId: string, bind: boolean) => void;
@@ -25,6 +27,8 @@ interface SupervisorManagementProps {
 export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   mentors,
   cases,
+  totalHoursOverrides,
+  onUpdateTotalHoursOverrides,
   onAddMentor,
   onDeleteMentor,
   onUpdateMentorCaseBinding,
@@ -35,6 +39,10 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   supervisionTypeFilter: propSupervisionTypeFilter,
   onTypeFilterChange,
 }) => {
+  // 时数修改 Modal State
+  const [isEditHoursModalOpen, setIsEditHoursModalOpen] = useState(false);
+  const [editingHoursType, setEditingHoursType] = useState<'individual' | 'group'>('individual');
+  const [hoursInputValue, setHoursInputValue] = useState('');
   // New Supervisor Form State
   const [name, setName] = useState('');
   const [gender, setGender] = useState('👨‍🏫 男导师');
@@ -246,6 +254,29 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     setBatchSupSelectedNums([]);
   };
 
+  // 计算个体与团体督导自动统计时数
+  let autoIndividualSupervisionHours = 0;
+  let autoGroupSupervisionHours = 0;
+
+  mentors.forEach((m) => {
+    (m.records || []).forEach((r) => {
+      const dur = Number(r.durationHours) || 1;
+      if (r.type === 'group') {
+        autoGroupSupervisionHours += dur;
+      } else {
+        autoIndividualSupervisionHours += dur;
+      }
+    });
+  });
+
+  const displayIndivHours = totalHoursOverrides?.individualSupervisionHours !== undefined
+    ? totalHoursOverrides.individualSupervisionHours
+    : autoIndividualSupervisionHours;
+
+  const displayGroupHours = totalHoursOverrides?.groupSupervisionHours !== undefined
+    ? totalHoursOverrides.groupSupervisionHours
+    : autoGroupSupervisionHours;
+
   return (
     <div className="space-y-6">
       {/* 顶部大标题 */}
@@ -266,7 +297,42 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* 可编辑督导时数按钮 */}
+            {(activeTypeFilter === 'individual' || activeTypeFilter === 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingHoursType('individual');
+                  setHoursInputValue(String(displayIndivHours));
+                  setIsEditHoursModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-900 dark:text-indigo-200 border border-indigo-300 dark:border-indigo-700 rounded-full text-xs font-bold transition shadow-2xs cursor-pointer"
+                title="点击编辑/修改个体督导累计时数"
+              >
+                <Clock className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>个体督导: <strong>{displayIndivHours}</strong> 小时</span>
+                <Pencil className="w-3 h-3 text-indigo-600 dark:text-indigo-400 opacity-80" />
+              </button>
+            )}
+
+            {(activeTypeFilter === 'group' || activeTypeFilter === 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingHoursType('group');
+                  setHoursInputValue(String(displayGroupHours));
+                  setIsEditHoursModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/80 text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-700 rounded-full text-xs font-bold transition shadow-2xs cursor-pointer"
+                title="点击编辑/修改团体督导累计时数"
+              >
+                <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <span>团体督导: <strong>{displayGroupHours}</strong> 小时</span>
+                <Pencil className="w-3 h-3 text-purple-600 dark:text-purple-400 opacity-80" />
+              </button>
+            )}
+
             <span className="text-xs font-semibold px-3 py-1.5 bg-rose-50 dark:bg-slate-800 text-rose-800 dark:text-rose-300 rounded-xl border border-rose-200 dark:border-slate-700">
               {activeTypeFilter === 'individual' ? '当前范围: 个体督导' : activeTypeFilter === 'group' ? '当前范围: 团体督导' : `共 ${mentors.length} 位督导师`}
             </span>
@@ -1514,6 +1580,96 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
           </div>
         );
       })()}
+
+      {/* 督导累计时数快捷修改 Modal */}
+      {isEditHoursModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-2xl p-5 max-w-sm w-full shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-indigo-100 dark:border-slate-800 pb-2">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
+                <Clock className="w-4 h-4 text-indigo-500" />
+                <span>编辑 {editingHoursType === 'individual' ? '个体督导' : '团体督导'} 累计时数</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditHoursModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  设置 {editingHoursType === 'individual' ? '个体督导' : '团体督导'} 累计时数 (小时):
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={hoursInputValue}
+                  onChange={(e) => setHoursInputValue(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="输入时数"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setHoursInputValue(String((Number(hoursInputValue) || 0) + 1))}
+                  className="flex-1 py-1 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 rounded-lg text-xs font-bold cursor-pointer hover:bg-indigo-100"
+                >
+                  +1 小时
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHoursInputValue(String((Number(hoursInputValue) || 0) + 5))}
+                  className="flex-1 py-1 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 rounded-lg text-xs font-bold cursor-pointer hover:bg-indigo-100"
+                >
+                  +5 小时
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHoursInputValue(String(editingHoursType === 'individual' ? autoIndividualSupervisionHours : autoGroupSupervisionHours))}
+                  className="flex-1 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold cursor-pointer hover:bg-slate-200"
+                  title="重置为根据实际录入数据自动统计的时数"
+                >
+                  自动重置 ({editingHoursType === 'individual' ? autoIndividualSupervisionHours : autoGroupSupervisionHours}h)
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-indigo-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsEditHoursModalOpen(false)}
+                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const val = Number(hoursInputValue);
+                  const num = isNaN(val) ? 0 : Math.max(0, val);
+                  if (onUpdateTotalHoursOverrides) {
+                    if (editingHoursType === 'individual') {
+                      onUpdateTotalHoursOverrides({ ...totalHoursOverrides, individualSupervisionHours: num });
+                    } else {
+                      onUpdateTotalHoursOverrides({ ...totalHoursOverrides, groupSupervisionHours: num });
+                    }
+                  }
+                  setIsEditHoursModalOpen(false);
+                }}
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-2xs"
+              >
+                保存时数
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

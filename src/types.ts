@@ -138,6 +138,32 @@ export interface PersonalExperienceSetting {
   records: PersonalExperienceRecord[];
 }
 
+export type TrainingCategory = 'psychodynamics' | 'longShort' | 'otherSchools' | 'ethicsCrisis';
+
+export interface TrainingSessionRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  title: string;
+  hours: number;
+  note?: string;
+  resources?: ResourceLink[];
+  completed?: boolean;
+}
+
+export interface TrainingCourse {
+  id: string;
+  category: TrainingCategory;
+  name: string; // 培训名称
+  startDate: string; // 培训起始时间 YYYY-MM-DD
+  endDate?: string; // 培训结束时间 YYYY-MM-DD
+  totalHours: number; // 培训总时数 (小时)
+  status: 'ongoing' | 'completed'; // 'ongoing' -> 正在持续当中 | 'completed' -> 已结业
+  organization?: string; // 培训机构/主办方
+  instructor?: string; // 主讲导师
+  description?: string; // 培训简介/感想
+  sessions?: TrainingSessionRecord[]; // 学习/出勤/讲座明细
+}
+
 export interface SystemData {
   records: CaseRecord[];
   mentors: Supervisor[];
@@ -145,9 +171,16 @@ export interface SystemData {
   schedules: ScheduleItem[];
   reminders: ReminderItem[];
   personalExperience?: PersonalExperienceSetting;
+  trainings?: TrainingCourse[];
   totalHoursOverrides?: {
     caseHours?: number;
     supervisionHours?: number;
     personalExperienceHours?: number;
+    longTermCaseHours?: number;
+    shortTermCaseHours?: number;
+    individualSupervisionHours?: number;
+    groupSupervisionHours?: number;
+    individualExperienceHours?: number;
+    groupExperienceHours?: number;
   };
 }

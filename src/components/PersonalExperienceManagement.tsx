@@ -29,6 +29,8 @@ import { ResourceLinkSection } from './ResourceLinkSection';
 
 interface PersonalExperienceManagementProps {
   experienceData?: PersonalExperienceSetting;
+  totalHoursOverrides?: any;
+  onUpdateTotalHoursOverrides?: (newOverrides: any) => void;
   onUpdateExperienceData: (updated: PersonalExperienceSetting) => void;
   experienceTypeFilter?: 'all' | 'individual' | 'group';
   onTypeFilterChange?: (filter: 'all' | 'individual' | 'group') => void;
@@ -36,12 +38,19 @@ interface PersonalExperienceManagementProps {
 
 export const PersonalExperienceManagement: React.FC<PersonalExperienceManagementProps> = ({
   experienceData = { totalIndividualHours: 20, totalGroupHours: 30, records: [] },
+  totalHoursOverrides,
+  onUpdateTotalHoursOverrides,
   onUpdateExperienceData,
   experienceTypeFilter: propTypeFilter,
   onTypeFilterChange,
 }) => {
   const [localTypeFilter, setLocalTypeFilter] = useState<'all' | 'individual' | 'group'>('all');
   const activeTypeFilter = propTypeFilter ?? localTypeFilter;
+
+  // 时数编辑 Modal State
+  const [isEditHoursModalOpen, setIsEditHoursModalOpen] = useState(false);
+  const [editingHoursType, setEditingHoursType] = useState<'individual' | 'group'>('individual');
+  const [hoursInputValue, setHoursInputValue] = useState('');
 
   const setFilter = (filter: 'all' | 'individual' | 'group') => {
     setLocalTypeFilter(filter);
@@ -306,6 +315,14 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
     setBatchSelectedNums([]);
   };
 
+  const displayIndivExpHours = totalHoursOverrides?.individualExperienceHours !== undefined
+    ? totalHoursOverrides.individualExperienceHours
+    : completedIndividualCount;
+
+  const displayGroupExpHours = totalHoursOverrides?.groupExperienceHours !== undefined
+    ? totalHoursOverrides.groupExperienceHours
+    : completedGroupCount;
+
   return (
     <div className="space-y-6">
       {/* 1. 顶部大标题卡片 */}
@@ -326,7 +343,42 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* 可编辑个人体验时数按钮 */}
+            {(activeTypeFilter === 'individual' || activeTypeFilter === 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingHoursType('individual');
+                  setHoursInputValue(String(displayIndivExpHours));
+                  setIsEditHoursModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/80 text-sky-900 dark:text-sky-200 border border-sky-300 dark:border-sky-700 rounded-full text-xs font-bold transition shadow-2xs cursor-pointer"
+                title="点击编辑/修改个体体验累计时数"
+              >
+                <Clock className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                <span>个体体验: <strong>{displayIndivExpHours}</strong> 小时</span>
+                <Pencil className="w-3 h-3 text-sky-600 dark:text-sky-400 opacity-80" />
+              </button>
+            )}
+
+            {(activeTypeFilter === 'group' || activeTypeFilter === 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingHoursType('group');
+                  setHoursInputValue(String(displayGroupExpHours));
+                  setIsEditHoursModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 rounded-full text-xs font-bold transition shadow-2xs cursor-pointer"
+                title="点击编辑/修改团体体验累计时数"
+              >
+                <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>团体体验: <strong>{displayGroupExpHours}</strong> 小时</span>
+                <Pencil className="w-3 h-3 text-emerald-600 dark:text-emerald-400 opacity-80" />
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setIsBatchModalOpen(true)}
@@ -1228,6 +1280,96 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                   一键批量生成排程
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 体验累计时数快捷修改 Modal */}
+      {isEditHoursModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800 rounded-2xl p-5 max-w-sm w-full shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-purple-100 dark:border-slate-800 pb-2">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
+                <Clock className="w-4 h-4 text-purple-500" />
+                <span>编辑 {editingHoursType === 'individual' ? '个体体验' : '团体体验'} 累计时数</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditHoursModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  设置 {editingHoursType === 'individual' ? '个体体验' : '团体体验'} 累计时数 (小时):
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={hoursInputValue}
+                  onChange={(e) => setHoursInputValue(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="输入时数"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setHoursInputValue(String((Number(hoursInputValue) || 0) + 1))}
+                  className="flex-1 py-1 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-200 rounded-lg text-xs font-bold cursor-pointer hover:bg-purple-100"
+                >
+                  +1 小时
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHoursInputValue(String((Number(hoursInputValue) || 0) + 5))}
+                  className="flex-1 py-1 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-200 rounded-lg text-xs font-bold cursor-pointer hover:bg-purple-100"
+                >
+                  +5 小时
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHoursInputValue(String(editingHoursType === 'individual' ? completedIndividualCount : completedGroupCount))}
+                  className="flex-1 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold cursor-pointer hover:bg-slate-200"
+                  title="重置为根据实际完成的体验记录自动统计的时数"
+                >
+                  自动重置 ({editingHoursType === 'individual' ? completedIndividualCount : completedGroupCount}h)
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-purple-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsEditHoursModalOpen(false)}
+                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const val = Number(hoursInputValue);
+                  const num = isNaN(val) ? 0 : Math.max(0, val);
+                  if (onUpdateTotalHoursOverrides) {
+                    if (editingHoursType === 'individual') {
+                      onUpdateTotalHoursOverrides({ ...totalHoursOverrides, individualExperienceHours: num });
+                    } else {
+                      onUpdateTotalHoursOverrides({ ...totalHoursOverrides, groupExperienceHours: num });
+                    }
+                  }
+                  setIsEditHoursModalOpen(false);
+                }}
+                className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-2xs"
+              >
+                保存时数
+              </button>
             </div>
           </div>
         </div>

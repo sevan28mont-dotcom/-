@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   THINKING: 'psy_thinking_v8',
   SCHEDULES: 'psy_schedules_v8',
   REMINDERS: 'psy_reminders_v8',
+  TRAININGS: 'psy_trainings_v8',
 };
 
 // Initial default seed data for demonstration and instant rich UX
@@ -164,12 +165,77 @@ const DEFAULT_REMINDERS: ReminderItem[] = [
   },
 ];
 
+export const DEFAULT_TRAININGS = [
+  {
+    id: 'tr_psychodynamics_1',
+    category: 'psychodynamics',
+    name: '经典长程动力学心理咨询连续培训项目',
+    startDate: '2024-03-01',
+    endDate: '2026-03-01',
+    totalHours: 120,
+    status: 'ongoing',
+    organization: '中国心理学会 / 动力学专业委员会',
+    instructor: '国内外资深精神分析专家',
+    description: '系统学习客体关系理论、自我心理学及依恋理论，掌握长程动力学评估与治疗实操。',
+    sessions: [
+      { id: 'ts_1', date: '2024-03-15', title: '第一讲：精神分析发展史与潜意识理论', hours: 6, note: '重点掌握经典潜意识理论与防卫机制分类', completed: true },
+      { id: 'ts_2', date: '2024-04-20', title: '第二讲：移情、反移情与阻抗处理', hours: 6, note: '临床会谈中的反移情觉察与反思', completed: true },
+    ]
+  },
+  {
+    id: 'tr_longShort_1',
+    category: 'longShort',
+    name: '长程评估与短程焦点解决(SFBT)整合连续培训',
+    startDate: '2024-05-10',
+    endDate: '2024-12-31',
+    totalHours: 60,
+    status: 'ongoing',
+    organization: '心理咨询与治疗专业培训中心',
+    instructor: '短程焦点与整合取向导师',
+    description: '掌握短程焦点解决技术的奇迹提问、例外提问，以及长短程个案转化评估策略。',
+    sessions: [
+      { id: 'ts_3', date: '2024-05-20', title: '短程焦点基本假设与赞赏技术', hours: 4, note: '如何在第一次会谈中建立合作同盟', completed: true },
+    ]
+  },
+  {
+    id: 'tr_otherSchools_1',
+    category: 'otherSchools',
+    name: '认知行为疗法(CBT)与人本流派整合实操培训',
+    startDate: '2024-06-01',
+    endDate: '2024-11-30',
+    totalHours: 48,
+    status: 'ongoing',
+    organization: '认知行为取向研究院',
+    instructor: 'CBT 资深督导师',
+    description: '学习自动思维识别、思维日记记录以及无条件积极关注的技术整合。',
+    sessions: [
+      { id: 'ts_4', date: '2024-06-10', title: '自动想法与核心信念评估', hours: 4, note: '三栏表与五栏表在临床中的应用', completed: true },
+    ]
+  },
+  {
+    id: 'tr_ethicsCrisis_1',
+    category: 'ethicsCrisis',
+    name: '心理咨询伦理守则与高危危机干预实操培训',
+    startDate: '2024-01-15',
+    endDate: '2024-06-30',
+    totalHours: 30,
+    status: 'ongoing',
+    organization: '心理健康促进协会',
+    instructor: '心理伦理委员会专家',
+    description: '深入研读《临床与咨询心理学工作伦理守则》，掌握自杀风险评估、知情同意与突破保密流程。',
+    sessions: [
+      { id: 'ts_5', date: '2024-02-01', title: '知情同意、双重关系与保密例外', hours: 6, note: '熟记高危评估红线及转介告知规范', completed: true },
+    ]
+  }
+];
+
 export const EMPTY_SYSTEM_DATA: SystemData = {
   records: [],
   mentors: [],
   thinking: [],
   schedules: [],
   reminders: [],
+  trainings: [],
 };
 
 export function getDefaultSampleSystemData(): SystemData {
@@ -179,6 +245,7 @@ export function getDefaultSampleSystemData(): SystemData {
     thinking: JSON.parse(JSON.stringify(DEFAULT_THINKING)),
     schedules: JSON.parse(JSON.stringify(DEFAULT_SCHEDULES)),
     reminders: JSON.parse(JSON.stringify(DEFAULT_REMINDERS)),
+    trainings: JSON.parse(JSON.stringify(DEFAULT_TRAININGS)),
   };
 }
 
@@ -195,6 +262,7 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
       thinking: userId ? `${userPrefix}thinking` : STORAGE_KEYS.THINKING,
       schedules: userId ? `${userPrefix}schedules` : STORAGE_KEYS.SCHEDULES,
       reminders: userId ? `${userPrefix}reminders` : STORAGE_KEYS.REMINDERS,
+      trainings: userId ? `${userPrefix}trainings` : STORAGE_KEYS.TRAININGS,
     };
 
     // Helper to read from primary key or search legacy fallback keys
@@ -225,14 +293,16 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
     const legacyThinkingKeys = [STORAGE_KEYS.THINKING, 'psy_thinking_v8', 'psy_thinking_v7', 'psy_thinking_v6', 'psy_thinking_v5', 'psy_thinking', 'psy_master_backup_thinking'];
     const legacySchedulesKeys = [STORAGE_KEYS.SCHEDULES, 'psy_schedules_v8', 'psy_schedules_v7', 'psy_schedules_v6', 'psy_schedules_v5', 'psy_schedules', 'psy_master_backup_schedules'];
     const legacyRemindersKeys = [STORAGE_KEYS.REMINDERS, 'psy_reminders_v8', 'psy_reminders_v7', 'psy_reminders_v6', 'psy_reminders_v5', 'psy_reminders', 'psy_master_backup_reminders'];
+    const legacyTrainingsKeys = [STORAGE_KEYS.TRAININGS, 'psy_trainings_v8', 'psy_master_backup_trainings'];
 
     const records = readWithFallback(primaryKeys.records, legacyRecordsKeys, DEFAULT_RECORDS);
     const mentors = readWithFallback(primaryKeys.mentors, legacyMentorsKeys, DEFAULT_MENTORS);
     const thinking = readWithFallback(primaryKeys.thinking, legacyThinkingKeys, DEFAULT_THINKING);
     const schedules = readWithFallback(primaryKeys.schedules, legacySchedulesKeys, DEFAULT_SCHEDULES);
     const reminders = readWithFallback(primaryKeys.reminders, legacyRemindersKeys, DEFAULT_REMINDERS);
+    const trainings = readWithFallback(primaryKeys.trainings, legacyTrainingsKeys, DEFAULT_TRAININGS);
 
-    return { records, mentors, thinking, schedules, reminders };
+    return { records, mentors, thinking, schedules, reminders, trainings };
   } catch (err) {
     console.error('Failed to load from localStorage:', err);
     return {
@@ -254,6 +324,7 @@ export function saveDataToLocalStorage(data: SystemData, userId?: string): void 
       thinking: userId ? `${userPrefix}thinking` : STORAGE_KEYS.THINKING,
       schedules: userId ? `${userPrefix}schedules` : STORAGE_KEYS.SCHEDULES,
       reminders: userId ? `${userPrefix}reminders` : STORAGE_KEYS.REMINDERS,
+      trainings: userId ? `${userPrefix}trainings` : STORAGE_KEYS.TRAININGS,
     };
 
     const recordsStr = JSON.stringify(data.records);
@@ -261,6 +332,7 @@ export function saveDataToLocalStorage(data: SystemData, userId?: string): void 
     const thinkingStr = JSON.stringify(data.thinking);
     const schedulesStr = JSON.stringify(data.schedules);
     const remindersStr = JSON.stringify(data.reminders || []);
+    const trainingsStr = JSON.stringify(data.trainings || []);
 
     // Save to user / current key
     localStorage.setItem(keys.records, recordsStr);
@@ -268,6 +340,7 @@ export function saveDataToLocalStorage(data: SystemData, userId?: string): void 
     localStorage.setItem(keys.thinking, thinkingStr);
     localStorage.setItem(keys.schedules, schedulesStr);
     localStorage.setItem(keys.reminders, remindersStr);
+    localStorage.setItem(keys.trainings, trainingsStr);
 
     // Save mirror copies to master backup keys for version update durability
     localStorage.setItem('psy_master_backup_records', recordsStr);
@@ -275,6 +348,7 @@ export function saveDataToLocalStorage(data: SystemData, userId?: string): void 
     localStorage.setItem('psy_master_backup_thinking', thinkingStr);
     localStorage.setItem('psy_master_backup_schedules', schedulesStr);
     localStorage.setItem('psy_master_backup_reminders', remindersStr);
+    localStorage.setItem('psy_master_backup_trainings', trainingsStr);
 
     if (userId) {
       localStorage.setItem(STORAGE_KEYS.RECORDS, recordsStr);
@@ -282,6 +356,7 @@ export function saveDataToLocalStorage(data: SystemData, userId?: string): void 
       localStorage.setItem(STORAGE_KEYS.THINKING, thinkingStr);
       localStorage.setItem(STORAGE_KEYS.SCHEDULES, schedulesStr);
       localStorage.setItem(STORAGE_KEYS.REMINDERS, remindersStr);
+      localStorage.setItem(STORAGE_KEYS.TRAININGS, trainingsStr);
     }
   } catch (err) {
     console.error('Failed to save to localStorage:', err);
