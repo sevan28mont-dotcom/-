@@ -37,7 +37,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   const [gender, setGender] = useState('👨‍🏫 男导师');
   const [startDate, setStartDate] = useState('2026-01-01');
   const [endDate, setEndDate] = useState('2026-12-31');
-  const [totalSupervisions, setTotalSupervisions] = useState<number>(20);
+  const [totalSupervisions, setTotalSupervisions] = useState<number | string>(20);
 
   // Manage Case Selection Modal for a Supervisor
   const [activeManageMentorId, setActiveManageMentorId] = useState<string | null>(null);
@@ -48,7 +48,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     caseId: string;
   } | null>(null);
 
-  const [supSessionNum, setSupSessionNum] = useState<number>(1);
+  const [supSessionNum, setSupSessionNum] = useState<number | string>(1);
   const [supDate, setSupDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [supType, setSupType] = useState<'individual' | 'group'>('individual');
   const [supStartTime, setSupStartTime] = useState('14:00');
@@ -154,7 +154,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     if (!supervisionModal) return;
     onAddSupervisionRecord(supervisionModal.mentorId, {
       caseId: supervisionModal.caseId,
-      sessionNum: supSessionNum,
+      sessionNum: Number(supSessionNum) || 1,
       date: supDate,
       timeRange: `${supStartTime}-${supEndTime}`,
       type: supType,
@@ -274,8 +274,18 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
             <input
               type="number"
               min={1}
+              max={1000}
               value={totalSupervisions}
-              onChange={(e) => setTotalSupervisions(Number(e.target.value))}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '') {
+                  setTotalSupervisions('');
+                } else {
+                  const num = parseInt(val, 10);
+                  setTotalSupervisions(isNaN(num) ? '' : num);
+                }
+              }}
+              onFocus={(e) => e.target.select()}
               className="w-full text-xs p-2.5 bg-white border border-rose-200 rounded-xl text-zinc-800 focus:outline-none focus:ring-1 focus:ring-rose-400"
             />
           </div>
@@ -701,8 +711,18 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                 <input
                   type="number"
                   min={1}
+                  max={1000}
                   value={supSessionNum}
-                  onChange={(e) => setSupSessionNum(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setSupSessionNum('');
+                    } else {
+                      const num = parseInt(val, 10);
+                      setSupSessionNum(isNaN(num) ? '' : num);
+                    }
+                  }}
+                  onFocus={(e) => e.target.select()}
                   className="w-full p-2 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-400"
                 />
               </div>

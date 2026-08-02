@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { ScheduleItem, ScheduleType, CaseRecord, Supervisor, ScheduleCategory } from '../types';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Clock, X, Search, Tag, Settings, Sparkles, Palette } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ScheduleItem, ScheduleType, CaseRecord, Supervisor, ScheduleCategory, SessionData } from '../types';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Clock, X, Search, Tag, Settings, Sparkles, Palette, Users, UserCheck, ChevronDown, Layers, Bookmark, CheckCircle2 } from 'lucide-react';
 import { COLOR_GROUPS, parseColorToStyle, getHexColor } from '../data/colorPalette';
 import { VoiceInputButton } from './VoiceInputButton';
 
@@ -16,6 +16,22 @@ interface ScheduleManagementProps {
 type Dimension = 'day' | 'week' | 'month' | 'year';
 
 const DAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+const PRESET_TIME_SLOTS = [
+  { label: '09:00 - 10:00', start: '09:00', end: '10:00' },
+  { label: '09:30 - 10:30', start: '09:30', end: '10:30' },
+  { label: '10:00 - 11:00', start: '10:00', end: '11:00' },
+  { label: '10:30 - 11:30', start: '10:30', end: '11:30' },
+  { label: '11:00 - 12:00', start: '11:00', end: '12:00' },
+  { label: '14:00 - 15:00', start: '14:00', end: '15:00' },
+  { label: '14:30 - 15:30', start: '14:30', end: '15:30' },
+  { label: '15:00 - 16:00', start: '15:00', end: '16:00' },
+  { label: '16:00 - 17:00', start: '16:00', end: '17:00' },
+  { label: '16:30 - 17:30', start: '16:30', end: '17:30' },
+  { label: '19:00 - 20:00', start: '19:00', end: '20:00' },
+  { label: '19:30 - 20:30', start: '19:30', end: '20:30' },
+  { label: '20:00 - 21:00', start: '20:00', end: '21:00' },
+];
 
 const DEFAULT_CATEGORIES: ScheduleCategory[] = [
   { id: 'consult', name: '个体咨询', color: '#f43f5e', isSystem: true },
@@ -191,9 +207,31 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [formDateStr, setFormDateStr] = useState(() => new Date().toISOString().split('T')[0]);
   const [formHour, setFormHour] = useState<number>(10);
+
+  // 灵活时间与精确时段状态
+  const [formStartTime, setFormStartTime] = useState<string>('10:00');
+  const [formEndTime, setFormEndTime] = useState<string>('11:00');
+  const [formTimeStr, setFormTimeStr] = useState<string>('10:00 - 11:00');
+
+  // 日程类型与关联对象
   const [formType, setFormType] = useState<ScheduleType>('consult');
   const [formClientName, setFormClientName] = useState('');
   const [formDetail, setFormDetail] = useState('');
+
+  // 关联对象下拉选择器状态
+  const [showObjectPicker, setShowObjectPicker] = useState<boolean>(false);
+  const objectPickerRef = useRef<HTMLDivElement>(null);
+
+  // 点击组件外部自动关闭关联对象选择弹层
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (objectPickerRef.current && !objectPickerRef.current.contains(e.target as Node)) {
+        setShowObjectPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const formatDateKey = (d: Date): string => {
     const y = d.getFullYear();
@@ -223,6 +261,10 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
   const handleOpenModal = (dateStr: string, hour: number, scheduleId?: string) => {
     setFormDateStr(dateStr);
     setFormHour(hour);
+    setShowObjectPicker(false);
+
+    const startH = hour < 10 ? `0${hour}:00` : `${hour}:00`;
+    const endH = (hour + 1) < 10 ? `0${hour + 1}:00` : `${hour + 1}:00`;
 
     if (scheduleId) {
       const existing = schedules.find((s) => s.id === scheduleId);
@@ -231,15 +273,59 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
         setFormType(existing.type);
         setFormClientName(existing.clientName || '');
         setFormDetail(existing.detail || '');
+
+        const timeVal = existing.timeStr || `${startH} - ${endH}`;
+        setFormTimeStr(timeVal);
+
+        // 尝试解析开始与结束时间
+        const parts = timeVal.split('-').map((p) => p.trim());
+        if (parts[0] && /^([01]?\d|2[0-3]):[0-5]\d$/.test(parts[0])) {
+          setFormStartTime(parts[0].padStart(5, '0'));
+        } else {
+          setFormStartTime(startH);
+        }
+        if (parts[1] && /^([01]?\d|2[0-3]):[0-5]\d$/.test(parts[1])) {
+          setFormEndTime(parts[1].padStart(5, '0'));
+        } else {
+          setFormEndTime(endH);
+        }
       }
     } else {
       setSelectedScheduleId(null);
       setFormType('consult');
       setFormClientName(cases[0] ? `${cases[0].caseNum} ${cases[0].name}` : '');
       setFormDetail('');
+      setFormStartTime(startH);
+      setFormEndTime(endH);
+      setFormTimeStr(`${startH} - ${endH}`);
     }
 
     setModalOpen(true);
+  };
+
+  // 一键应用快捷预设时间
+  const handleApplyPresetTimeSlot = (start: string, end: string) => {
+    setFormStartTime(start);
+    setFormEndTime(end);
+    setFormTimeStr(`${start} - ${end}`);
+
+    // 同步计算对应的基准整点卡槽
+    const parsed = parseInt(start.split(':')[0], 10);
+    if (!isNaN(parsed)) {
+      setFormHour(parsed);
+    }
+  };
+
+  // 修改开始/结束时间时自动刷新时间段字符串
+  const handleTimePickerChange = (newStart: string, newEnd: string) => {
+    setFormStartTime(newStart);
+    setFormEndTime(newEnd);
+    setFormTimeStr(`${newStart} - ${newEnd}`);
+
+    const parsed = parseInt(newStart.split(':')[0], 10);
+    if (!isNaN(parsed)) {
+      setFormHour(parsed);
+    }
   };
 
   const handleSaveModal = () => {
@@ -248,11 +334,25 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
       return;
     }
 
-    const itemData = {
+    // 从开始时间或时间文本解析准确的小时位作为网格槽位基准
+    let computedHour = formHour;
+    if (formStartTime && formStartTime.includes(':')) {
+      const parsed = parseInt(formStartTime.split(':')[0], 10);
+      if (!isNaN(parsed)) computedHour = parsed;
+    } else if (formTimeStr && formTimeStr.includes(':')) {
+      const match = formTimeStr.match(/(\d{1,2}):/);
+      if (match && match[1]) {
+        const parsed = parseInt(match[1], 10);
+        if (!isNaN(parsed)) computedHour = parsed;
+      }
+    }
+
+    const itemData: Omit<ScheduleItem, 'id'> = {
       dateStr: formDateStr,
-      hour: formHour,
+      hour: computedHour,
+      timeStr: formTimeStr.trim() || `${computedHour < 10 ? '0' + computedHour : computedHour}:00`,
       type: formType,
-      clientName: formType === 'consult' ? formClientName : formClientName,
+      clientName: formClientName,
       detail: formDetail,
     };
 
@@ -302,6 +402,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                       <div className="space-y-1.5">
                         {hourItems.map((item) => {
                           const { style, label } = getTypeStyleAndLabel(item.type);
+                          const displayTime = item.timeStr || (item.hour < 10 ? `0${item.hour}:00` : `${item.hour}:00`);
                           return (
                             <div
                               key={item.id}
@@ -310,12 +411,19 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                                 handleOpenModal(dateStr, hour, item.id);
                               }}
                               style={style}
-                              className="p-2 rounded-lg text-xs shadow-2xs font-medium cursor-pointer hover:opacity-90 transition"
+                              className="p-2.5 rounded-xl text-xs shadow-2xs font-medium cursor-pointer hover:opacity-95 transition border border-black/5"
                             >
-                              <div className="font-bold">
-                                [{label}] {item.clientName || '自定对象'}
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <div className="font-bold flex items-center gap-1.5 text-xs">
+                                  <span>[{label}]</span>
+                                  <span>{item.clientName || '自定对象'}</span>
+                                </div>
+                                <div className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-lg bg-white/80 dark:bg-black/40 backdrop-blur-xs flex items-center gap-1 shrink-0 border border-black/10 shadow-2xs">
+                                  <Clock className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                                  <span>{displayTime}</span>
+                                </div>
                               </div>
-                              {item.detail && <div className="text-[11px] opacity-80 mt-0.5">{item.detail}</div>}
+                              {item.detail && <div className="text-[11px] opacity-85 mt-1 border-t border-black/5 pt-1">{item.detail}</div>}
                             </div>
                           );
                         })}
@@ -382,6 +490,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                           <div className="space-y-1">
                             {items.map((item) => {
                               const { style, label } = getTypeStyleAndLabel(item.type);
+                              const displayTime = item.timeStr || (item.hour < 10 ? `0${item.hour}:00` : `${item.hour}:00`);
                               return (
                                 <div
                                   key={item.id}
@@ -390,10 +499,13 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                                     handleOpenModal(dateStr, hour, item.id);
                                   }}
                                   style={style}
-                                  className="p-1.5 rounded text-[11px] text-left leading-tight shadow-2xs font-semibold cursor-pointer hover:opacity-90"
+                                  className="p-1.5 rounded-lg text-[11px] text-left leading-tight shadow-2xs font-semibold cursor-pointer hover:opacity-95 transition border border-black/5"
                                 >
-                                  <div>[{label}]</div>
-                                  <div className="truncate">{item.clientName || item.detail || '已安排'}</div>
+                                  <div className="flex items-center justify-between text-[10px] font-mono opacity-90 mb-0.5 border-b border-black/5 pb-0.5">
+                                    <span className="truncate font-bold">[{label}]</span>
+                                    <span className="shrink-0 font-bold ml-1">{displayTime}</span>
+                                  </div>
+                                  <div className="truncate font-bold mt-0.5">{item.clientName || item.detail || '已安排'}</div>
                                 </div>
                               );
                             })}
@@ -448,6 +560,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                   <div className="space-y-1">
                     {dayItems.slice(0, 3).map((item) => {
                       const { style, label } = getTypeStyleAndLabel(item.type);
+                      const displayTime = item.timeStr || (item.hour < 10 ? `0${item.hour}:00` : `${item.hour}:00`);
                       return (
                         <div
                           key={item.id}
@@ -456,9 +569,10 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                             handleOpenModal(dateStr, item.hour, item.id);
                           }}
                           style={style}
-                          className="p-1 rounded text-[10px] font-bold truncate"
+                          className="p-1 rounded-md text-[10px] font-bold truncate flex items-center justify-between gap-1 shadow-2xs border border-black/5"
                         >
-                          {item.hour}:00 [{label}]
+                          <span className="truncate">[{label}] {item.clientName || '已安排'}</span>
+                          <span className="font-mono opacity-85 shrink-0 text-[9px] font-bold">{displayTime}</span>
                         </div>
                       );
                     })}
@@ -751,43 +865,101 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
             </div>
 
             <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">日期 (YYYY-MM-DD)</label>
-                  <input
-                    type="date"
-                    value={formDateStr}
-                    onChange={(e) => setFormDateStr(e.target.value)}
-                    className="w-full p-2 border border-rose-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-400"
-                  />
+              {/* 日期与灵活精准时间设置 */}
+              <div className="bg-rose-50/50 dark:bg-slate-800/50 p-3 rounded-xl border border-rose-200 dark:border-slate-700 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="sm:col-span-1">
+                    <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1">
+                      <CalendarIcon className="w-3.5 h-3.5 text-rose-600" />
+                      <span>日期 (YYYY-MM-DD)*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formDateStr}
+                      onChange={(e) => setFormDateStr(e.target.value)}
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-rose-400"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-1">
+                    <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-rose-600" />
+                      <span>开始时间</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={formStartTime}
+                      onChange={(e) => handleTimePickerChange(e.target.value, formEndTime)}
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-rose-400"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-1">
+                    <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-rose-600" />
+                      <span>结束时间</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={formEndTime}
+                      onChange={(e) => handleTimePickerChange(formStartTime, e.target.value)}
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-rose-400"
+                    />
+                  </div>
                 </div>
 
+                {/* 快捷推荐常用时段 */}
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">整点小时</label>
-                  <select
-                    value={formHour}
-                    onChange={(e) => setFormHour(Number(e.target.value))}
-                    className="w-full p-2 border border-rose-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-400 font-bold"
-                  >
-                    {Array.from({ length: 14 }, (_, i) => i + 8).map((h) => (
-                      <option key={h} value={h}>
-                        {h < 10 ? `0${h}:00` : `${h}:00`}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="text-[11px] font-bold text-rose-900 dark:text-rose-300 mb-1.5 flex items-center justify-between">
+                    <span>⚡ 常用推荐时间段快捷点击：</span>
+                    <span className="text-[10px] font-normal text-slate-500">（点击一键填入）</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-white dark:bg-slate-900 rounded-lg border border-rose-200/80 dark:border-slate-700">
+                    {PRESET_TIME_SLOTS.map((slot) => {
+                      const isSelected = formTimeStr === slot.label;
+                      return (
+                        <button
+                          key={slot.label}
+                          type="button"
+                          onClick={() => handleApplyPresetTimeSlot(slot.start, slot.end)}
+                          className={`px-2 py-1 rounded text-[11px] font-mono font-bold transition cursor-pointer ${
+                            isSelected
+                              ? 'bg-rose-600 text-white shadow-2xs'
+                              : 'bg-rose-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-rose-100 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          {slot.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 精准/自定义时间描述文本 */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    显示时间格式 / 自定义手填时间描述（将精准体现在日程表上）
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="例如: 09:30 - 10:30 或 14:15 - 15:00 或 全天"
+                    value={formTimeStr}
+                    onChange={(e) => setFormTimeStr(e.target.value)}
+                    className="w-full p-2 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-rose-400"
+                  />
                 </div>
               </div>
 
               {/* 日程类型：自主添加与快捷选框 */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block font-bold text-slate-800">
+                  <label className="block font-bold text-slate-800 dark:text-slate-200">
                     选择日程类型（支持自主选择与新增分类）*
                   </label>
                   <button
                     type="button"
                     onClick={() => setCategoryModalOpen(true)}
-                    className="text-[11px] text-rose-700 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+                    className="text-[11px] text-rose-700 dark:text-rose-400 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
                   >
                     <Settings className="w-3 h-3" />
                     <span>管理分类类型</span>
@@ -795,7 +967,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                 </div>
 
                 {/* 快捷选分类按钮组 */}
-                <div className="flex flex-wrap gap-2 p-2.5 bg-rose-50/50 border border-rose-200 rounded-xl">
+                <div className="flex flex-wrap gap-2 p-2.5 bg-rose-50/50 dark:bg-slate-800/50 border border-rose-200 dark:border-slate-700 rounded-xl">
                   {categories.map((cat) => {
                     const isSelected = formType === cat.id || formType === cat.name;
                     const { style } = parseColorToStyle(cat.color);
@@ -808,7 +980,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                         className={`px-3 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 cursor-pointer ${
                           isSelected
                             ? 'shadow-xs ring-2 ring-rose-400 scale-105'
-                            : 'bg-white text-zinc-700 border border-rose-200 hover:bg-rose-100/70'
+                            : 'bg-white dark:bg-slate-800 text-zinc-700 dark:text-slate-200 border border-rose-200 dark:border-slate-700 hover:bg-rose-100/70'
                         }`}
                       >
                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getHexColor(cat.color) }} />
@@ -820,7 +992,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                   <button
                     type="button"
                     onClick={() => setCategoryModalOpen(true)}
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-100 hover:bg-rose-200 text-rose-900 border border-dashed border-rose-300 flex items-center gap-1 transition cursor-pointer"
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-100 dark:bg-slate-700 hover:bg-rose-200 text-rose-900 dark:text-slate-100 border border-dashed border-rose-300 dark:border-slate-600 flex items-center gap-1 transition cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>自主添加类型...</span>
@@ -828,15 +1000,193 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">关联对象 / 个案 / 督导师 / 参与者</label>
-                <input
-                  type="text"
-                  placeholder="例如: C001 李先生 / 张督导 / 动力团体成员A组"
-                  value={formClientName}
-                  onChange={(e) => setFormClientName(e.target.value)}
-                  className="w-full p-2 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-400"
-                />
+              {/* 关联对象组：多维选择（个体咨询/个体督导/团体督导）+ 自定义自由手填 */}
+              <div className="relative" ref={objectPickerRef}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-rose-600" />
+                    <span>关联对象 / 个案 / 督导师 / 参与者*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowObjectPicker((prev) => !prev)}
+                    className="text-[11px] font-bold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-slate-700 px-2 py-1 rounded-lg border border-rose-200 dark:border-slate-700 flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>快捷选择对象</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showObjectPicker ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    placeholder="可直接手动输入，或右侧点击快捷选取个案/督导对象"
+                    value={formClientName}
+                    onChange={(e) => setFormClientName(e.target.value)}
+                    className="w-full p-2.5 pr-24 border border-rose-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-400 font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowObjectPicker((prev) => !prev)}
+                    className="absolute right-1.5 px-2.5 py-1 text-[11px] font-bold bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition cursor-pointer flex items-center gap-1"
+                  >
+                    <span>选择对象</span>
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                  💡 支持直接手动打字手填，也可一键下拉选择前面的“个体咨询个案”、“个体督导”或“团体督导”对象。
+                </div>
+
+                {/* 多维快捷对象下拉选框 Floating Dropdown */}
+                {showObjectPicker && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 p-3 max-h-72 overflow-y-auto space-y-3 divide-y divide-rose-100 dark:divide-slate-700">
+                    {/* 1. 个体咨询对象组 */}
+                    <div>
+                      <div className="text-[11px] font-bold text-rose-800 dark:text-rose-300 mb-1.5 flex items-center gap-1.5 px-1">
+                        <Users className="w-3.5 h-3.5 text-rose-600" />
+                        <span>👥 选择个体咨询对象 (当前案例库)</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {cases.length > 0 ? (
+                          cases.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                setFormClientName(`${c.caseNum} ${c.name}`);
+                                setFormType('consult');
+                                setShowObjectPicker(false);
+                              }}
+                              className="p-2 text-left bg-rose-50/60 dark:bg-slate-700/60 hover:bg-rose-100 dark:hover:bg-slate-700 rounded-xl border border-rose-100 dark:border-slate-600 transition flex items-center justify-between cursor-pointer"
+                            >
+                              <div>
+                                <div className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                                  {c.caseNum} {c.name}
+                                </div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  {c.category === 'longTerm' ? '长程个案' : '短程个案'} · 已做{(Object.values(c.sessions || {}) as SessionData[]).filter((s) => s.completed).length}次
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold text-rose-600 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-rose-200 dark:border-slate-600">
+                                咨询
+                              </span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="text-[11px] text-slate-400 p-2 col-span-2">暂无个案数据</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. 个体督导导师与对象组 */}
+                    <div className="pt-2">
+                      <div className="text-[11px] font-bold text-sky-800 dark:text-sky-300 mb-1.5 flex items-center gap-1.5 px-1">
+                        <UserCheck className="w-3.5 h-3.5 text-sky-600" />
+                        <span>👨‍🏫 选择个体督导导师 / 案主</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {mentors.length > 0 ? (
+                          mentors.map((m) => (
+                            <button
+                              key={`ind_${m.id}`}
+                              type="button"
+                              onClick={() => {
+                                setFormClientName(`${m.name} (个体督导)`);
+                                setFormType('individual_supervision');
+                                setShowObjectPicker(false);
+                              }}
+                              className="p-2 text-left bg-sky-50/60 dark:bg-slate-700/60 hover:bg-sky-100 dark:hover:bg-slate-700 rounded-xl border border-sky-100 dark:border-slate-600 transition flex items-center justify-between cursor-pointer"
+                            >
+                              <div>
+                                <div className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                                  {m.name} {m.gender}
+                                </div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  个体督导 · 包含{m.records?.filter((r) => r.type === 'individual').length || 0}条记录
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold text-sky-600 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-sky-200 dark:border-slate-600">
+                                个体督导
+                              </span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="text-[11px] text-slate-400 p-2 col-span-2">暂无督导师数据</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 3. 团体督导小组组 */}
+                    <div className="pt-2">
+                      <div className="text-[11px] font-bold text-indigo-800 dark:text-indigo-300 mb-1.5 flex items-center gap-1.5 px-1">
+                        <Users className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>👥 选择团体督导小组 / 导师</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {mentors.length > 0 ? (
+                          mentors.map((m) => (
+                            <button
+                              key={`grp_${m.id}`}
+                              type="button"
+                              onClick={() => {
+                                setFormClientName(`${m.name} 团体督导小组`);
+                                setFormType('group_supervision');
+                                setShowObjectPicker(false);
+                              }}
+                              className="p-2 text-left bg-indigo-50/60 dark:bg-slate-700/60 hover:bg-indigo-100 dark:hover:bg-slate-700 rounded-xl border border-indigo-100 dark:border-slate-600 transition flex items-center justify-between cursor-pointer"
+                            >
+                              <div>
+                                <div className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                                  {m.name} 团体督导小组
+                                </div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  团体督导 · 包含{m.records?.filter((r) => r.type === 'group').length || 0}条记录
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold text-indigo-600 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-slate-600">
+                                团督小组
+                              </span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="text-[11px] text-slate-400 p-2 col-span-2">暂无督导师数据</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 4. 常见通用对象 / 活动组 */}
+                    <div className="pt-2">
+                      <div className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 mb-1.5 flex items-center gap-1.5 px-1">
+                        <Bookmark className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>🎯 常见快捷通用主题</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { name: '动力团体小组', type: 'dynamic_group' },
+                          { name: '心理学术读书会', type: 'course' },
+                          { name: '案例督导研讨会', type: 'individual_supervision' },
+                          { name: '个人体验咨询', type: 'consult' },
+                          { name: '伦理与督导研讨', type: 'group_supervision' },
+                        ].map((item, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setFormClientName(item.name);
+                              setFormType(item.type);
+                              setShowObjectPicker(false);
+                            }}
+                            className="px-2.5 py-1 text-xs font-bold bg-emerald-50 dark:bg-slate-700 hover:bg-emerald-100 dark:hover:bg-slate-600 text-emerald-900 dark:text-emerald-200 border border-emerald-200 dark:border-slate-600 rounded-lg transition cursor-pointer"
+                          >
+                            + {item.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

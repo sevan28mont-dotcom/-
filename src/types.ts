@@ -71,10 +71,13 @@ export interface ScheduleCategory {
 export interface ScheduleItem {
   id: string;
   dateStr: string; // YYYY-MM-DD
-  hour: number; // 8-21
+  hour: number; // 8-21 所在卡槽/基准小时
+  timeStr?: string; // 精准灵活时间或时间段，如 "09:30", "09:30 - 10:45", "14:15"
   type: ScheduleType;
   clientName?: string;
   detail?: string;
+  relatedId?: string; // 关联的对象ID (个案ID或督导ID)
+  relatedType?: 'case' | 'supervisor' | 'custom'; // 关联类型
 }
 
 export interface ThinkingNote {

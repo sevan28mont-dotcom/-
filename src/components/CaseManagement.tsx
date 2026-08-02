@@ -70,7 +70,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [status, setStatus] = useState<'active' | 'ended'>('active');
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [totalSessions, setTotalSessions] = useState<number>(30);
+  const [totalSessions, setTotalSessions] = useState<number | string>(30);
 
   // Session Modal State
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -98,7 +98,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
   // Inline Total Sessions Editor State
   const [editingTotalCaseId, setEditingTotalCaseId] = useState<string | null>(null);
-  const [editingTotalValue, setEditingTotalValue] = useState<number>(30);
+  const [editingTotalValue, setEditingTotalValue] = useState<number | string>(30);
 
   const titleText = category === 'longTerm' ? '长程案例记录' : '短程案例记录';
 
@@ -262,9 +262,18 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             <input
               type="number"
               min={1}
-              max={100}
+              max={1000}
               value={totalSessions}
-              onChange={(e) => setTotalSessions(Number(e.target.value))}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '') {
+                  setTotalSessions('');
+                } else {
+                  const num = parseInt(val, 10);
+                  setTotalSessions(isNaN(num) ? '' : num);
+                }
+              }}
+              onFocus={(e) => e.target.select()}
               className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400"
             />
           </div>
@@ -386,13 +395,23 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                             <input
                               type="number"
                               min={1}
-                              max={200}
+                              max={1000}
                               value={editingTotalValue}
-                              onChange={(e) => setEditingTotalValue(Number(e.target.value))}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === '') {
+                                  setEditingTotalValue('');
+                                } else {
+                                  const num = parseInt(val, 10);
+                                  setEditingTotalValue(isNaN(num) ? '' : num);
+                                }
+                              }}
+                              onFocus={(e) => e.target.select()}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
-                                  if (editingTotalValue > 0) {
-                                    onUpdateCaseTotalSessions?.(item.id, editingTotalValue);
+                                  const num = Number(editingTotalValue);
+                                  if (num > 0) {
+                                    onUpdateCaseTotalSessions?.(item.id, num);
                                   }
                                   setEditingTotalCaseId(null);
                                 } else if (e.key === 'Escape') {
@@ -403,11 +422,12 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                               autoFocus
                             />
                             <span className="text-xs font-bold text-zinc-600 dark:text-slate-300">次</span>
-                            <button
+                             <button
                               type="button"
                               onClick={() => {
-                                if (editingTotalValue > 0) {
-                                  onUpdateCaseTotalSessions?.(item.id, editingTotalValue);
+                                const num = Number(editingTotalValue);
+                                if (num > 0) {
+                                  onUpdateCaseTotalSessions?.(item.id, num);
                                 }
                                 setEditingTotalCaseId(null);
                               }}
