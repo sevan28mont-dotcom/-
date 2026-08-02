@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { PersonalExperienceSetting, PersonalExperienceRecord, ResourceLink } from '../types';
 import {
   Sparkles,
@@ -66,6 +67,10 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
   } | null>(null);
 
   const [modalTab, setModalTab] = useState<'note' | 'transcript' | 'ideas' | 'resources'>('note');
+
+  // 折叠管理状态 (个体体验板块 vs 团体体验板块)
+  const [isIndividualCollapsed, setIsIndividualCollapsed] = useState(false);
+  const [isGroupCollapsed, setIsGroupCollapsed] = useState(false);
 
   // Batch Management Modal
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
@@ -220,6 +225,12 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
     }
   };
 
+  const handleOpenBatchModalForType = (type: 'individual' | 'group') => {
+    setBatchTargetType(type);
+    setBatchSelectedNums([]);
+    setIsBatchModalOpen(true);
+  };
+
   // Batch fill operations
   const handleApplyBatchFill = () => {
     if (batchSelectedNums.length === 0) {
@@ -271,6 +282,30 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
     setBatchSelectedNums([]);
   };
 
+  const handleApplyBatchDelete = () => {
+    if (batchSelectedNums.length === 0) {
+      alert('请至少勾选选择一个需要批量清空/删除的体验次数！');
+      return;
+    }
+    if (!window.confirm(`确定要批量清空已勾选的 ${batchSelectedNums.length} 项【${batchTargetType === 'individual' ? '个体体验' : '团体体验'}】记录吗？`)) {
+      return;
+    }
+
+    const setNums = new Set(batchSelectedNums);
+    const updatedRecords = records.filter(
+      (r) => !(r.type === batchTargetType && setNums.has(r.sessionNum))
+    );
+
+    onUpdateExperienceData({
+      ...experienceData,
+      records: updatedRecords,
+    });
+
+    alert(`已彻底批量清空 ${batchSelectedNums.length} 项【${batchTargetType === 'individual' ? '个体体验' : '团体体验'}】记录！`);
+    setIsBatchModalOpen(false);
+    setBatchSelectedNums([]);
+  };
+
   return (
     <div className="space-y-6">
       {/* 1. 顶部大标题卡片 */}
@@ -280,7 +315,7 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
             <div className="flex items-center gap-2.5">
               <span className="text-2xl">🧘</span>
               <h2 className="text-2xl font-black text-zinc-800 dark:text-slate-100 tracking-tight">
-                个人体验
+                自我成长
               </h2>
               <span className="text-xs font-bold px-2.5 py-0.5 bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 rounded-full border border-purple-200 dark:border-purple-800">
                 自我体验与分析档案
@@ -304,10 +339,11 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
         </div>
       </div>
 
-      {/* 2. 板块统计与核心额度控制卡片 (两大板块: 1. 个体体验 2. 团体体验) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* 2. 板块统计与核心额度控制卡片 (根据选中的类型单独展示或合并展示) */}
+      <div className="flex flex-col gap-6">
         {/* 板块 1: 个体体验 */}
-        <div className="bg-white dark:bg-slate-900 border border-sky-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
+        {(activeTypeFilter === 'all' || activeTypeFilter === 'individual') && (
+        <div className="bg-white dark:bg-slate-900 border border-sky-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3 animate-fadeIn">
           <div className="flex items-center justify-between border-b border-sky-100 dark:border-slate-800 pb-2.5">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-300 rounded-lg">
@@ -317,7 +353,7 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                 <h3 className="font-black text-sm text-zinc-800 dark:text-slate-100 flex items-center gap-1.5">
                   <span>1. 个体体验板块</span>
                   <span className="text-[10px] px-2 py-0.2 bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-bold rounded border border-sky-200 dark:border-sky-800">
-                    一针对一体验
+                    一对一体验
                   </span>
                 </h3>
                 <p className="text-[11px] text-zinc-500 dark:text-slate-400">
@@ -329,12 +365,31 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => handleOpenBatchModalForType('individual')}
+                className="px-2.5 py-1 text-[11px] font-bold bg-sky-600 hover:bg-sky-700 text-white rounded-lg transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                title="打开个体体验的批量管理与排程窗口"
+              >
+                <Sliders className="w-3 h-3" />
+                <span>⚡ 批量管理</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => handleUpdateTotalHours('individual')}
                 className="px-2 py-1 text-[11px] font-bold bg-sky-50 dark:bg-slate-800 hover:bg-sky-100 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-slate-700 rounded-lg transition cursor-pointer flex items-center gap-1"
                 title="修改个体体验的目标总次数/额度"
               >
                 <Pencil className="w-2.5 h-2.5" />
                 <span>额度: {totalIndividualCount} 次</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsIndividualCollapsed(!isIndividualCollapsed)}
+                className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-lg transition cursor-pointer"
+                title={isIndividualCollapsed ? '展开个体体验次数网格' : '折叠收起个体体验次数网格'}
+              >
+                {isIndividualCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -343,45 +398,60 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
             <span className="font-bold text-zinc-700 dark:text-slate-300">
               已录入完成: <strong className="text-sky-600 dark:text-sky-400 font-black text-sm">{individualRecords.length}</strong> / {totalIndividualCount} 次
             </span>
-            <button
-              type="button"
-              onClick={() => handleOpenAddModal('individual')}
-              className="px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ 录入个体体验</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleOpenAddModal('individual')}
+                className="px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ 录入个体体验</span>
+              </button>
+            </div>
           </div>
 
-          {/* 个体体验可视化次数按钮 */}
-          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1.5 pt-1">
-            {Array.from({ length: totalIndividualCount }, (_, idx) => {
-              const num = idx + 1;
-              const rec = individualRecords.find((r) => r.sessionNum === num);
-              const hasRec = Boolean(rec);
+          {/* 个体体验可视化次数按钮 (支持折叠收起) */}
+          <AnimatePresence initial={false}>
+            {!isIndividualCollapsed && (
+              <motion.div
+                key="indiv-grid"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.22, ease: 'easeInOut' }}
+                className="overflow-hidden grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1.5 pt-1"
+              >
+                {Array.from({ length: totalIndividualCount }, (_, idx) => {
+                  const num = idx + 1;
+                  const rec = individualRecords.find((r) => r.sessionNum === num);
+                  const hasRec = Boolean(rec);
 
-              return (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => handleOpenAddModal('individual', num)}
-                  className={`p-1 min-h-9 border rounded-xl text-[11px] font-bold transition flex flex-col items-center justify-center cursor-pointer shadow-2xs ${
-                    hasRec
-                      ? 'bg-sky-600 text-white border-sky-700 dark:bg-sky-600 dark:border-sky-500'
-                      : 'bg-white dark:bg-slate-900 border-sky-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-sky-50 dark:hover:bg-slate-800'
-                  }`}
-                  title={hasRec ? `第 ${num} 次个体体验已记录 (点击查看/编辑)` : `第 ${num} 次个体体验未录入 (点击新增记录)`}
-                >
-                  <span>{num}次</span>
-                  {hasRec && <span className="text-[9px] opacity-90 scale-90">已录入</span>}
-                </button>
-              );
-            })}
-          </div>
+                  return (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => handleOpenAddModal('individual', num)}
+                      className={`p-1 min-h-9 border rounded-xl text-[11px] font-bold transition flex flex-col items-center justify-center cursor-pointer shadow-2xs ${
+                        hasRec
+                          ? 'bg-sky-600 text-white border-sky-700 dark:bg-sky-600 dark:border-sky-500'
+                          : 'bg-white dark:bg-slate-900 border-sky-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-sky-50 dark:hover:bg-slate-800'
+                      }`}
+                      title={hasRec ? `第 ${num} 次个体体验已记录 (点击查看/编辑)` : `第 ${num} 次个体体验未录入 (点击新增记录)`}
+                    >
+                      <span>{num}次</span>
+                      {hasRec && <span className="text-[9px] opacity-90 scale-90">已录入</span>}
+                    </button>
+                  );
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
+        )}
 
         {/* 板块 2: 团体体验 */}
-        <div className="bg-white dark:bg-slate-900 border border-purple-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
+        {(activeTypeFilter === 'all' || activeTypeFilter === 'group') && (
+        <div className="bg-white dark:bg-slate-900 border border-purple-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3 animate-fadeIn">
           <div className="flex items-center justify-between border-b border-purple-100 dark:border-slate-800 pb-2.5">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-300 rounded-lg">
@@ -403,12 +473,31 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => handleOpenBatchModalForType('group')}
+                className="px-2.5 py-1 text-[11px] font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                title="打开团体体验的批量管理与排程窗口"
+              >
+                <Sliders className="w-3 h-3" />
+                <span>⚡ 批量管理</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => handleUpdateTotalHours('group')}
                 className="px-2 py-1 text-[11px] font-bold bg-purple-50 dark:bg-slate-800 hover:bg-purple-100 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-slate-700 rounded-lg transition cursor-pointer flex items-center gap-1"
                 title="修改团体体验的目标总次数/额度"
               >
                 <Pencil className="w-2.5 h-2.5" />
                 <span>额度: {totalGroupCount} 次</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsGroupCollapsed(!isGroupCollapsed)}
+                className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-lg transition cursor-pointer"
+                title={isGroupCollapsed ? '展开团体体验次数网格' : '折叠收起团体体验次数网格'}
+              >
+                {isGroupCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -417,42 +506,56 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
             <span className="font-bold text-zinc-700 dark:text-slate-300">
               已录入完成: <strong className="text-purple-600 dark:text-purple-400 font-black text-sm">{groupRecords.length}</strong> / {totalGroupCount} 次
             </span>
-            <button
-              type="button"
-              onClick={() => handleOpenAddModal('group')}
-              className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ 录入团体体验</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleOpenAddModal('group')}
+                className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ 录入团体体验</span>
+              </button>
+            </div>
           </div>
 
-          {/* 团体体验可视化次数按钮 */}
-          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1.5 pt-1">
-            {Array.from({ length: totalGroupCount }, (_, idx) => {
-              const num = idx + 1;
-              const rec = groupRecords.find((r) => r.sessionNum === num);
-              const hasRec = Boolean(rec);
+          {/* 团体体验可视化次数按钮 (支持折叠收起) */}
+          <AnimatePresence initial={false}>
+            {!isGroupCollapsed && (
+              <motion.div
+                key="group-grid"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.22, ease: 'easeInOut' }}
+                className="overflow-hidden grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1.5 pt-1"
+              >
+                {Array.from({ length: totalGroupCount }, (_, idx) => {
+                  const num = idx + 1;
+                  const rec = groupRecords.find((r) => r.sessionNum === num);
+                  const hasRec = Boolean(rec);
 
-              return (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => handleOpenAddModal('group', num)}
-                  className={`p-1 min-h-9 border rounded-xl text-[11px] font-bold transition flex flex-col items-center justify-center cursor-pointer shadow-2xs ${
-                    hasRec
-                      ? 'bg-purple-600 text-white border-purple-700 dark:bg-purple-600 dark:border-purple-500'
-                      : 'bg-white dark:bg-slate-900 border-purple-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-slate-800'
-                  }`}
-                  title={hasRec ? `第 ${num} 次团体体验已记录 (点击查看/编辑)` : `第 ${num} 次团体体验未录入 (点击新增记录)`}
-                >
-                  <span>{num}次</span>
-                  {hasRec && <span className="text-[9px] opacity-90 scale-90">已录入</span>}
-                </button>
-              );
-            })}
-          </div>
+                  return (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => handleOpenAddModal('group', num)}
+                      className={`p-1 min-h-9 border rounded-xl text-[11px] font-bold transition flex flex-col items-center justify-center cursor-pointer shadow-2xs ${
+                        hasRec
+                          ? 'bg-purple-600 text-white border-purple-700 dark:bg-purple-600 dark:border-purple-500'
+                          : 'bg-white dark:bg-slate-900 border-purple-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-slate-800'
+                      }`}
+                      title={hasRec ? `第 ${num} 次团体体验已记录 (点击查看/编辑)` : `第 ${num} 次团体体验未录入 (点击新增记录)`}
+                    >
+                      <span>{num}次</span>
+                      {hasRec && <span className="text-[9px] opacity-90 scale-90">已录入</span>}
+                    </button>
+                  );
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
+        )}
       </div>
 
       {/* 3. 搜索与板块筛选 Filter Bar */}
@@ -496,23 +599,43 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
           </div>
         </div>
 
-        <div className="relative flex-1 max-w-xs">
-          <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="检索体验记录、分析师/带领者或体会..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full text-xs pl-9 pr-8 py-2 bg-purple-50/30 border border-purple-200 rounded-xl text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-purple-400"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-0.5 rounded-full cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const allKeys = filteredRecords.map((r) => r.id);
+              const isAllExpanded = allKeys.length > 0 && allKeys.every((id) => expandedRecordIds[id] !== false);
+              const nextState: Record<string, boolean> = {};
+              allKeys.forEach((id) => {
+                nextState[id] = !isAllExpanded;
+              });
+              setExpandedRecordIds(nextState);
+            }}
+            className="px-3 py-2 bg-purple-50 dark:bg-slate-800 text-purple-900 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-slate-700 border border-purple-200 dark:border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs shrink-0"
+            title="一键展开或折叠所有个人与团体体验记录下的悟道与逐字稿文本"
+          >
+            <ChevronDown className="w-3.5 h-3.5" />
+            <span>一键折叠/展开所有体验文本</span>
+          </button>
+
+          <div className="relative flex-1 max-w-xs">
+            <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="检索体验记录、分析师/带领者或体会..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full text-xs pl-9 pr-8 py-2 bg-purple-50/30 border border-purple-200 rounded-xl text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-purple-400"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-0.5 rounded-full cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -953,7 +1076,7 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">勾选需要填报的次数:</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-300">勾选需要填报/删减的次数:</label>
                   <div className="flex gap-2 text-[10px]">
                     <button
                       type="button"
@@ -967,10 +1090,33 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                     </button>
                     <button
                       type="button"
+                      onClick={() => {
+                        const total = batchTargetType === 'individual' ? totalIndividualCount : totalGroupCount;
+                        const targetRecords = batchTargetType === 'individual' ? individualRecords : groupRecords;
+                        const recSet = new Set(targetRecords.map((r) => r.sessionNum));
+                        const unrecorded = Array.from({ length: total }, (_, i) => i + 1).filter((num) => !recSet.has(num));
+                        setBatchSelectedNums(unrecorded);
+                      }}
+                      className="text-sky-600 font-bold hover:underline cursor-pointer"
+                    >
+                      选未录入
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetRecords = batchTargetType === 'individual' ? individualRecords : groupRecords;
+                        setBatchSelectedNums(targetRecords.map((r) => r.sessionNum).sort((a, b) => a - b));
+                      }}
+                      className="text-emerald-600 font-bold hover:underline cursor-pointer"
+                    >
+                      选已录入
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setBatchSelectedNums([])}
                       className="text-slate-400 hover:underline cursor-pointer"
                     >
-                      清空
+                      清空选择
                     </button>
                   </div>
                 </div>
@@ -1054,21 +1200,34 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-purple-100">
+            <div className="flex items-center justify-between pt-2 border-t border-purple-100 dark:border-slate-800">
               <button
                 type="button"
-                onClick={() => setIsBatchModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 cursor-pointer"
+                onClick={handleApplyBatchDelete}
+                disabled={batchSelectedNums.length === 0}
+                className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs"
+                title="彻底删除并清空选中的体验记录"
               >
-                取消
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>批量清空/删除已选</span>
               </button>
-              <button
-                type="button"
-                onClick={handleApplyBatchFill}
-                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
-              >
-                一键批量生成排程
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBatchModalOpen(false)}
+                  className="px-3.5 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-800 cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyBatchFill}
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition active:scale-95"
+                >
+                  一键批量生成排程
+                </button>
+              </div>
             </div>
           </div>
         </div>

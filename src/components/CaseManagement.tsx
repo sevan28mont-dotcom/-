@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { CaseCategory, CaseRecord, SessionData, ParentSessionData, ResourceLink, Supervisor, ThinkingNote } from '../types';
-import { Plus, Minus, Pencil, Trash2, Calendar as CalendarIcon, CheckCircle, Clock, FileText, X, Search, Link as LinkIcon, Lightbulb, Mic, Eye, Download, Printer, Sparkles, Pin, PinOff, BarChart2, CheckSquare, Square, Layers, ListChecks, Zap, ChevronUp, ChevronDown, Users, HeartHandshake } from 'lucide-react';
+import { Plus, Minus, Pencil, Trash2, Calendar as CalendarIcon, CheckCircle, Clock, FileText, X, Search, Link as LinkIcon, Lightbulb, Mic, Eye, Download, Printer, Sparkles, Pin, PinOff, BarChart2, CheckSquare, Square, Layers, ListChecks, Zap, ChevronUp, ChevronDown, Users, HeartHandshake, GripVertical, FolderOpen } from 'lucide-react';
 import { VoiceInputButton } from './VoiceInputButton';
 import { ResourceLinkSection } from './ResourceLinkSection';
 import { IdeasSection } from './IdeasSection';
@@ -14,6 +15,7 @@ import { CaseProgressCharts } from './CaseProgressCharts';
 interface CaseManagementProps {
   category: CaseCategory;
   statusFilter?: 'all' | 'active' | 'ended';
+  shortTermSubtypeFilter?: 'all' | 'personal' | 'agency';
   records: CaseRecord[];
   mentors?: Supervisor[];
   thinkingNotes?: ThinkingNote[];
@@ -32,6 +34,7 @@ interface CaseManagementProps {
 export const CaseManagement: React.FC<CaseManagementProps> = ({
   category,
   statusFilter = 'all',
+  shortTermSubtypeFilter = 'all',
   records,
   mentors = [],
   thinkingNotes = [],
@@ -187,7 +190,18 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
     }
   }, [statusFilter]);
 
-  const categoryRecords = records.filter((r) => r.category === category);
+  const categoryRecords = records.filter((r) => {
+    if (r.category !== category) return false;
+    if (category === 'shortTerm' && shortTermSubtypeFilter !== 'all') {
+      if (shortTermSubtypeFilter === 'personal') {
+        return !r.shortTermType || r.shortTermType === 'personal';
+      }
+      if (shortTermSubtypeFilter === 'agency') {
+        return r.shortTermType === 'agency';
+      }
+    }
+    return true;
+  });
 
   const statusFilteredRecords = categoryRecords.filter((item) => {
     if (internalStatusFilter === 'active') {
@@ -239,10 +253,12 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   const [parentModalTranscript, setParentModalTranscript] = useState('');
   const [parentModalIdeas, setParentModalIdeas] = useState<string[]>([]);
   const [parentModalResources, setParentModalResources] = useState<ResourceLink[]>([]);
+  const [parentModalAfterSessionNum, setParentModalAfterSessionNum] = useState<number>(4);
   const [parentModalTab, setParentModalTab] = useState<'note' | 'transcript' | 'ideas' | 'resources'>('note');
 
   // Toggle Parent Section Expansion per case
   const [expandedParentSection, setExpandedParentSection] = useState<Record<string, boolean>>({});
+  const [expandedCaseIds, setExpandedCaseIds] = useState<Record<string, boolean>>({});
 
   const openParentSessionModal = (caseRecord: CaseRecord, pNum: number) => {
     const parentSessions = caseRecord.parentSessions || {};
@@ -255,6 +271,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
     setParentModalTranscript(pData.transcript || '');
     setParentModalIdeas(pData.ideas || []);
     setParentModalResources(pData.resources || []);
+    setParentModalAfterSessionNum(pData.afterSessionNum ?? (pNum * 4));
     setParentModalTab('note');
   };
 
@@ -272,6 +289,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
         transcript: parentModalTranscript,
         ideas: parentModalIdeas,
         resources: parentModalResources,
+        afterSessionNum: parentModalAfterSessionNum,
       });
       closeParentSessionModal();
     }
@@ -583,8 +601,43 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setExpandedCaseIds((prev) => ({
+                  ...prev,
+                  [item.id]: prev[item.id] === false ? true : false,
+                }))
+              }
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1.5 text-zinc-700 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 bg-rose-50/80 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-lg transition cursor-pointer font-bold shadow-2xs"
+              title={expandedCaseIds[item.id] === false ? '点击展开个案细节' : '点击折叠收起个案细节'}
+            >
+              {expandedCaseIds[item.id] === false ? (
+                <>
+                  <ChevronDown className="w-3.5 h-3.5 text-rose-600" />
+                  <span>展开详情</span>
+                </>
+              ) : (
+                <>
+                  <ChevronUp className="w-3.5 h-3.5 text-rose-600" />
+                  <span>折叠详情</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
+
+        <AnimatePresence initial={false}>
+          {expandedCaseIds[item.id] !== false && (
+            <motion.div
+              key={`case-detail-${item.id}`}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.28, ease: 'easeInOut' }}
+              className="overflow-hidden pt-2"
+            >
 
         {/* 咨询节次可视化进展分析图表 (D3 / Recharts) */}
         {showChartsCaseId === item.id && (
@@ -856,6 +909,14 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
           const isLongList = item.totalSessions > displayLimit;
           const parentSessions = item.parentSessions || {};
 
+          // 收集所有父母访谈序号，计算穿插位置
+          const allParentNums = Array.from(
+            new Set([
+              ...Array.from({ length: Math.max(1, Math.floor(item.totalSessions / 4)) }, (_, i) => i + 1),
+              ...Object.keys(parentSessions).map(Number),
+            ])
+          ).sort((a, b) => a - b);
+
           return (
             <div>
               <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-15 gap-2">
@@ -879,16 +940,37 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                   const currentSelectedSessions = selectedSessionsMap[item.id] || [];
                   const isSelected = currentSelectedSessions.includes(sessionNum);
 
-                  // 检查是否需要在第 4, 8, 12... 次个体咨询后穿插父母访谈按钮
-                  const isFourthStep = sessionNum % 4 === 0;
-                  const pNum = sessionNum / 4;
-                  const pData = parentSessions[pNum];
-                  const hasParentData = Boolean(pData);
-                  const isPCompleted = pData?.completed !== false && Boolean(pData?.date);
+                  // 找出放置在当前 sessionNum 之后的父母访谈列表 (可自由拖拽改变 afterSessionNum)
+                  const parentSessionsAfterThis = allParentNums.filter((pNum) => {
+                    const pData = parentSessions[pNum];
+                    const targetAfter = pData?.afterSessionNum ?? (pNum * 4);
+                    return targetAfter === sessionNum;
+                  });
 
                   return (
                     <React.Fragment key={sessionNum}>
-                      <div className="relative group">
+                      <div
+                        className="relative group transition-all"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          try {
+                            const raw = e.dataTransfer.getData('text/plain');
+                            if (!raw) return;
+                            const parsed = JSON.parse(raw);
+                            if (parsed && parsed.caseId === item.id && parsed.parentNum) {
+                              onUpdateParentSessionNote?.(item.id, parsed.parentNum, {
+                                afterSessionNum: sessionNum,
+                              });
+                            }
+                          } catch (err) {
+                            console.error('Drag drop error:', err);
+                          }
+                        }}
+                      >
                         <button
                           type="button"
                           onClick={() => {
@@ -958,31 +1040,49 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                         )}
                       </div>
 
-                      {/* 每4次个体咨询后穿插父母访谈专属按钮 */}
-                      {isFourthStep && (
-                        <div className="relative group">
-                          <button
-                            type="button"
-                            onClick={() => openParentSessionModal(item, pNum)}
-                            className={`w-full min-h-12 border rounded-xl flex flex-col items-center justify-center p-1 text-xs transition cursor-pointer relative shadow-2xs ${
-                              isPCompleted
-                                ? 'bg-indigo-600 dark:bg-indigo-700 text-white border-indigo-700 font-bold'
-                                : hasParentData
-                                ? 'bg-indigo-100 dark:bg-indigo-950/80 border-indigo-300 dark:border-indigo-700 text-indigo-900 dark:text-indigo-200 hover:bg-indigo-200'
-                                : 'bg-indigo-50/80 dark:bg-slate-800 border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300 hover:bg-indigo-100'
-                            }`}
-                            title={`第 ${pNum} 次父母访谈 (点击编辑穿插记录)`}
+                      {/* 动态穿插于此次个体咨询后的父母访谈按钮 (可拖拽自由放置) */}
+                      {parentSessionsAfterThis.map((pNum) => {
+                        const pData = parentSessions[pNum];
+                        const hasParentData = Boolean(pData);
+                        const isPCompleted = pData?.completed !== false && Boolean(pData?.date);
+
+                        return (
+                          <div
+                            key={`parent_${pNum}`}
+                            className="relative group cursor-grab active:cursor-grabbing"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData(
+                                'text/plain',
+                                JSON.stringify({ caseId: item.id, parentNum: pNum })
+                              );
+                              e.dataTransfer.effectAllowed = 'move';
+                            }}
                           >
-                            <span className="text-[10px] font-black flex items-center gap-0.5">
-                              <Users className="w-3 h-3 text-indigo-500 dark:text-indigo-300 shrink-0" />
-                              <span>👪 父母{pNum}</span>
-                            </span>
-                            <span className="text-[9px] opacity-90 scale-90 mt-0.5 font-bold">
-                              {isPCompleted ? '已完成' : '穿插访谈'}
-                            </span>
-                          </button>
-                        </div>
-                      )}
+                            <button
+                              type="button"
+                              onClick={() => openParentSessionModal(item, pNum)}
+                              className={`w-full min-h-12 border rounded-xl flex flex-col items-center justify-center p-1 text-xs transition relative shadow-2xs ${
+                                isPCompleted
+                                  ? 'bg-indigo-600 dark:bg-indigo-700 text-white border-indigo-700 font-bold'
+                                  : hasParentData
+                                  ? 'bg-indigo-100 dark:bg-indigo-950/80 border-indigo-300 dark:border-indigo-700 text-indigo-900 dark:text-indigo-200 hover:bg-indigo-200'
+                                  : 'bg-indigo-50/80 dark:bg-slate-800 border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300 hover:bg-indigo-100'
+                              }`}
+                              title={`第 ${pNum} 次父母访谈 (🖐️ 按住拖拽可任意放置到第N次个体咨询后)`}
+                            >
+                              <span className="text-[10px] font-black flex items-center gap-0.5">
+                                <GripVertical className="w-2.5 h-2.5 opacity-60 shrink-0" />
+                                <Users className="w-3 h-3 text-indigo-500 dark:text-indigo-300 shrink-0" />
+                                <span>👪 父母{pNum}</span>
+                              </span>
+                              <span className="text-[9px] opacity-90 scale-90 mt-0.5 font-bold">
+                                {isPCompleted ? '已完成' : '可拖拽穿插'}
+                              </span>
+                            </button>
+                          </div>
+                        );
+                      })}
                     </React.Fragment>
                   );
                 })}
@@ -1013,6 +1113,9 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             </div>
           );
         })()}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   };
@@ -1383,6 +1486,30 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
           </div>
         ) : (
           <>
+            <div className="flex items-center justify-between bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 p-2.5 rounded-xl shadow-2xs">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <FolderOpen className="w-4 h-4 text-rose-600" />
+                <span>个案列表折叠管理 (包含 {sortedRecords.length} 个个案档案):</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const allKeys = sortedRecords.map((r) => r.id);
+                  const isAllExpanded = allKeys.length > 0 && allKeys.every((id) => expandedCaseIds[id] !== false);
+                  const nextState: Record<string, boolean> = {};
+                  allKeys.forEach((id) => {
+                    nextState[id] = !isAllExpanded;
+                  });
+                  setExpandedCaseIds(nextState);
+                }}
+                className="px-3 py-1 bg-rose-50 dark:bg-slate-800 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-slate-700 border border-rose-200 dark:border-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                title="一键展开或折叠页面中所有的个案卡片与会谈记录"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+                <span>一键展开/折叠所有个案档案</span>
+              </button>
+            </div>
+
             {/* 小标题 1: 正在进行中 */}
             <div className="space-y-3">
               <div className="flex items-center justify-between bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 px-4 py-2.5 rounded-xl shadow-2xs">
@@ -1685,7 +1812,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
             {/* Modal Meta Bar */}
             <div className="flex flex-wrap items-center justify-between gap-3 bg-indigo-50/70 dark:bg-indigo-950/60 p-3 rounded-xl border border-indigo-200 dark:border-indigo-800 mb-4 text-xs">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-1.5 font-bold text-indigo-900 dark:text-indigo-200">
                   <CalendarIcon className="w-4 h-4 text-indigo-600" />
                   <span>访谈日期:</span>
@@ -1695,6 +1822,22 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                     onChange={(e) => setParentModalDate(e.target.value)}
                     className="px-2 py-1 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 rounded-lg text-slate-800 dark:text-slate-100 font-normal focus:outline-none focus:ring-1 focus:ring-indigo-400"
                   />
+                </label>
+
+                <label className="flex items-center gap-1.5 font-bold text-indigo-900 dark:text-indigo-200" title="可按住拖拽图标或在此指定穿插于第几次个体咨询之后">
+                  <GripVertical className="w-4 h-4 text-indigo-500" />
+                  <span>穿插位置:</span>
+                  <select
+                    value={parentModalAfterSessionNum}
+                    onChange={(e) => setParentModalAfterSessionNum(Number(e.target.value))}
+                    className="px-2 py-1 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 rounded-lg text-slate-800 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  >
+                    {Array.from({ length: 60 }, (_, i) => i + 1).map((sNum) => (
+                      <option key={sNum} value={sNum}>
+                        第 {sNum} 次个体咨询后
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
 

@@ -63,7 +63,7 @@ async function startServer() {
 ${text}`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.6-flash",
         contents: prompt,
       });
 
@@ -104,7 +104,7 @@ ${text}`;
 ${text}`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.6-flash",
         contents: prompt,
       });
 
@@ -113,6 +113,66 @@ ${text}`;
     } catch (error) {
       console.error("WeChat speech structuring error:", error);
       return res.json({ structuredText: req.body?.text || "" });
+    }
+  });
+
+  // API Route: Gemini Pro AI Thinking Note Summarizer & Polish
+  app.post("/api/gemini/summarize-note", async (req, res) => {
+    try {
+      const { title, content } = req.body;
+      if (!content || typeof content !== "string" || !content.trim()) {
+        return res.status(400).json({ error: "笔记内容不能为空" });
+      }
+
+      const ai = getGeminiClient();
+      if (!ai) {
+        const localSummary = `🎯 【核心反思与主题概括】：${title || "随笔感悟"} - 本条笔记记录了临床实践中的重要体验。
+🧠 【心理动力与专业觉察】：涉及自我情绪重构与共情联想。
+📌 【分点结构化要点提炼】：
+1. 观察到了沟通中的关键情绪变化。
+2. 梳理了反移情与界限觉察。
+3. 建立了更清晰的后续临床假设。
+🚀 【下一步临床/督导延伸建议】：建议在下一次督导中针对此议题展开深入探讨。`;
+        return res.json({ summary: localSummary });
+      }
+
+      const prompt = `你是一位高水平的心理学与临床心理咨询反思笔记 Gemini AI 导师。
+请对以下心理咨询师/督导者记录的【随笔反思笔记/口述笔记】进行【智能深度理解、高级专业润色、分点结构化梳理与摘要提炼】：
+
+【笔记标题】：${title || "未命名反思笔记"}
+【笔记原文】：
+${content}
+
+请以极其精炼、规范、严谨的精神分析/心理学专业术语输出以下 4 个结构化模块（用 Markdown 格式）：
+
+🎯 【核心反思与主题概括】：用 1-2 句精炼深刻地概括该篇笔记的技术与情感核心。
+🧠 【心理动力与专业觉察】：剖析其中涉及的移情/反移情、防御机制、心理结构或关系模式。
+📌 【分点条目与智能润色】：
+1. 要点一：...
+2. 要点二：...
+3. 要点三：...
+🚀 【下一步临床/督导延伸建议】：针对该反思提出 1-2 条具体的临床技术实践或督导探讨建议。`;
+
+      let summary = "";
+      try {
+        const response = await ai.models.generateContent({
+          model: "gemini-3.6-flash",
+          contents: prompt,
+        });
+        summary = response.text ? response.text.trim() : "";
+      } catch (e) {
+        console.warn("Gemini 3.6 flash note summarize failed, trying 3.1 pro preview...", e);
+        const response = await ai.models.generateContent({
+          model: "gemini-3.1-pro-preview",
+          contents: prompt,
+        });
+        summary = response.text ? response.text.trim() : "";
+      }
+
+      return res.json({ summary: summary || "未能成功提炼摘要" });
+    } catch (err) {
+      console.error("Gemini note summarize error:", err);
+      return res.status(500).json({ error: "AI 摘要生成异常" });
     }
   });
 
@@ -449,7 +509,7 @@ ${sessionsArray || "暂无具体会谈细节记录，仅有建档基本信息。
       }
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.6-flash",
         contents: promptText,
       });
 

@@ -27,6 +27,7 @@ export interface ParentSessionData {
   ideas?: string[];
   resources?: ResourceLink[];
   durationMinutes?: number;
+  afterSessionNum?: number; // 自由穿插放置于第几次个体咨询之后 (支持拖拽调整)
 }
 
 export interface CaseRecord {
@@ -43,6 +44,8 @@ export interface CaseRecord {
   pinned?: boolean; // 是否重要置顶
   isTeenager?: boolean; // 是否属于青少年个案 (启用父母访谈功能)
   parentSessions?: Record<number, ParentSessionData>; // 父母访谈记录 (独立统计，不占用个体访谈总次数)
+  shortTermType?: 'personal' | 'agency'; // 1. 个人短程案例 2. 医院或机构短程案例
+  agencyName?: string; // 医院或机构名称
 }
 
 export interface SupervisionRecord {

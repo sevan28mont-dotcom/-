@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   UserCheck,
   Calendar,
@@ -25,7 +26,7 @@ import {
 import { SystemData } from '../types';
 import { WorkspaceLayoutConfig, DEFAULT_WORKSPACE_LAYOUT } from '../services/layout';
 
-export type ActiveTab = 'longTerm' | 'longTermActive' | 'longTermEnded' | 'shortTerm' | 'mentor' | 'personalExperience' | 'thinking' | 'schedule';
+export type ActiveTab = 'longTerm' | 'longTermActive' | 'longTermEnded' | 'shortTerm' | 'shortTermPersonal' | 'shortTermAgency' | 'mentor' | 'personalExperience' | 'thinking' | 'schedule';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -80,6 +81,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isCasesDropdownOpen, setIsCasesDropdownOpen] = useState(true);
+  const [isLongTermSubOpen, setIsLongTermSubOpen] = useState(true);
+  const [isShortTermSubOpen, setIsShortTermSubOpen] = useState(true);
   const [isMentorDropdownOpen, setIsMentorDropdownOpen] = useState(true);
   const [isPersonalExpDropdownOpen, setIsPersonalExpDropdownOpen] = useState(true);
 
@@ -94,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const longTermItem = visibleNavItems.find((i) => i.id === 'longTerm');
   const shortTermItem = visibleNavItems.find((i) => i.id === 'shortTerm');
   const hasCasesGroup = Boolean(longTermItem || shortTermItem);
-  const isCasesActive = activeTab === 'longTerm' || activeTab === 'longTermActive' || activeTab === 'longTermEnded' || activeTab === 'shortTerm';
+  const isCasesActive = activeTab === 'longTerm' || activeTab === 'longTermActive' || activeTab === 'longTermEnded' || activeTab === 'shortTerm' || activeTab === 'shortTermPersonal' || activeTab === 'shortTermAgency';
 
   const mentorItem = visibleNavItems.find((i) => i.id === 'mentor');
 
@@ -196,61 +199,148 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </button>
 
                     {/* 下拉展开子菜单 */}
-                    {isCasesDropdownOpen && (
-                      <div className="p-1.5 space-y-1 bg-white/80 dark:bg-slate-900/80 border-t border-rose-100/80 dark:border-slate-800">
-                        {longTermItem && (
-                          <div className="space-y-1">
-                            {/* 1. 正在进行 */}
-                            <button
-                              onClick={() => handleItemSelect(() => setActiveTab('longTermActive'))}
-                              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                                activeTab === 'longTermActive' || activeTab === 'longTerm'
-                                  ? 'bg-emerald-600 text-white dark:bg-emerald-600 font-bold shadow-xs'
-                                  : 'text-zinc-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-emerald-800 dark:hover:text-emerald-300'
-                              }`}
-                            >
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${activeTab === 'longTermActive' || activeTab === 'longTerm' ? 'bg-white' : 'bg-emerald-500'}`} />
-                              <div className="flex flex-col text-left">
-                                <span className="font-bold">1. 长程 · 正在进行</span>
-                                <span className="text-[10px] opacity-80 font-normal">活跃咨询中个案</span>
-                              </div>
-                            </button>
+                    <AnimatePresence initial={false}>
+                      {isCasesDropdownOpen && (
+                        <motion.div
+                          key="cases-dropdown"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2, ease: 'easeInOut' }}
+                          className="overflow-hidden p-1.5 space-y-2 bg-white/80 dark:bg-slate-900/80 border-t border-rose-100/80 dark:border-slate-800"
+                        >
+                          {/* 第一级菜单 1: 长程管理 */}
+                          {longTermItem && (
+                            <div className="rounded-lg border border-emerald-100 dark:border-slate-800 bg-emerald-50/30 dark:bg-slate-800/30 overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => setIsLongTermSubOpen((prev) => !prev)}
+                                className="w-full flex items-center justify-between px-2.5 py-2 text-xs font-bold text-emerald-950 dark:text-emerald-300 hover:bg-emerald-100/50 dark:hover:bg-slate-800 transition cursor-pointer"
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <FolderOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                  <span>长程管理</span>
+                                </div>
+                                {isLongTermSubOpen ? (
+                                  <ChevronDown className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <ChevronRight className="w-3.5 h-3.5 text-emerald-600" />
+                                )}
+                              </button>
 
-                            {/* 2. 终止和暂停 */}
-                            <button
-                              onClick={() => handleItemSelect(() => setActiveTab('longTermEnded'))}
-                              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                                activeTab === 'longTermEnded'
-                                  ? 'bg-amber-600 text-white dark:bg-amber-600 font-bold shadow-xs'
-                                  : 'text-zinc-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-slate-800 hover:text-amber-800 dark:hover:text-amber-300'
-                              }`}
-                            >
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${activeTab === 'longTermEnded' ? 'bg-white' : 'bg-amber-500'}`} />
-                              <div className="flex flex-col text-left">
-                                <span className="font-bold">2. 长程 · 终止和暂停</span>
-                                <span className="text-[10px] opacity-80 font-normal">已结案/暂告一段落</span>
-                              </div>
-                            </button>
-                          </div>
-                        )}
+                              {/* 长程管理下设的二级下拉项 */}
+                              <AnimatePresence initial={false}>
+                                {isLongTermSubOpen && (
+                                  <motion.div
+                                    key="longterm-sub"
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.18, ease: 'easeInOut' }}
+                                    className="overflow-hidden p-1 space-y-1 bg-white/90 dark:bg-slate-900/90 border-t border-emerald-100/60 dark:border-slate-800"
+                                  >
+                                    <button
+                                      onClick={() => handleItemSelect(() => setActiveTab('longTermActive'))}
+                                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                        activeTab === 'longTermActive' || activeTab === 'longTerm'
+                                          ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                                          : 'text-zinc-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-800'
+                                      }`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTab === 'longTermActive' || activeTab === 'longTerm' ? 'bg-white' : 'bg-emerald-500'}`} />
+                                      <div className="flex flex-col text-left leading-tight">
+                                        <span className="font-bold">1. 正在进行中</span>
+                                        <span className="text-[9px] opacity-80 font-normal">长程活跃咨询中个案</span>
+                                      </div>
+                                    </button>
 
-                        {shortTermItem && (
-                          <button
-                            onClick={() => handleItemSelect(() => setActiveTab('shortTerm'))}
-                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                              activeTab === 'shortTerm'
-                                ? 'bg-rose-500 text-white dark:bg-rose-600 font-bold shadow-xs'
-                                : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800 hover:text-rose-800 dark:hover:text-rose-300'
-                            }`}
-                          >
-                            <Folder className={`w-3.5 h-3.5 ${activeTab === 'shortTerm' ? 'text-white' : 'text-pink-400'}`} />
-                            <div className="flex flex-col text-left">
-                              <span className="font-bold">{shortTermItem.label || '短程（拜拜了）'}</span>
+                                    <button
+                                      onClick={() => handleItemSelect(() => setActiveTab('longTermEnded'))}
+                                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                        activeTab === 'longTermEnded'
+                                          ? 'bg-amber-600 text-white font-bold shadow-xs'
+                                          : 'text-zinc-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-slate-800'
+                                      }`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTab === 'longTermEnded' ? 'bg-white' : 'bg-amber-500'}`} />
+                                      <div className="flex flex-col text-left leading-tight">
+                                        <span className="font-bold">2. 终止，暂停</span>
+                                        <span className="text-[9px] opacity-80 font-normal">结案/暂告一段落个案</span>
+                                      </div>
+                                    </button>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </div>
-                          </button>
-                        )}
-                      </div>
-                    )}
+                          )}
+
+                          {/* 第一级菜单 2: 短程咨询 */}
+                          {shortTermItem && (
+                            <div className="rounded-lg border border-rose-100 dark:border-slate-800 bg-rose-50/30 dark:bg-slate-800/30 overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => setIsShortTermSubOpen((prev) => !prev)}
+                                className="w-full flex items-center justify-between px-2.5 py-2 text-xs font-bold text-rose-950 dark:text-rose-300 hover:bg-rose-100/50 dark:hover:bg-slate-800 transition cursor-pointer"
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <Folder className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                                  <span>短程咨询</span>
+                                </div>
+                                {isShortTermSubOpen ? (
+                                  <ChevronDown className="w-3.5 h-3.5 text-rose-600" />
+                                ) : (
+                                  <ChevronRight className="w-3.5 h-3.5 text-rose-600" />
+                                )}
+                              </button>
+
+                              {/* 短程咨询下设的二级下拉项 */}
+                              <AnimatePresence initial={false}>
+                                {isShortTermSubOpen && (
+                                  <motion.div
+                                    key="shortterm-sub"
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.18, ease: 'easeInOut' }}
+                                    className="overflow-hidden p-1 space-y-1 bg-white/90 dark:bg-slate-900/90 border-t border-rose-100/60 dark:border-slate-800"
+                                  >
+                                    <button
+                                      onClick={() => handleItemSelect(() => setActiveTab('shortTermPersonal'))}
+                                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                        activeTab === 'shortTermPersonal' || activeTab === 'shortTerm'
+                                          ? 'bg-rose-600 text-white font-bold shadow-xs'
+                                          : 'text-zinc-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800'
+                                      }`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTab === 'shortTermPersonal' || activeTab === 'shortTerm' ? 'bg-white' : 'bg-rose-500'}`} />
+                                      <div className="flex flex-col text-left leading-tight">
+                                        <span className="font-bold">1. 个人短程案例</span>
+                                        <span className="text-[9px] opacity-80 font-normal">独立接诊/私行单次个案</span>
+                                      </div>
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleItemSelect(() => setActiveTab('shortTermAgency'))}
+                                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                        activeTab === 'shortTermAgency'
+                                          ? 'bg-purple-600 text-white font-bold shadow-xs'
+                                          : 'text-zinc-700 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-slate-800'
+                                      }`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTab === 'shortTermAgency' ? 'bg-white' : 'bg-purple-500'}`} />
+                                      <div className="flex flex-col text-left leading-tight">
+                                        <span className="font-bold">2. 医院或机构短程案例</span>
+                                        <span className="text-[9px] opacity-80 font-normal">医院门诊/平台/机构派单</span>
+                                      </div>
+                                    </button>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 )}
 
@@ -293,53 +383,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </button>
 
                     {/* 下拉展开子菜单 */}
-                    {isMentorDropdownOpen && (
-                      <div className="p-1.5 space-y-1 bg-white/80 dark:bg-slate-900/80 border-t border-rose-100/80 dark:border-slate-800">
-                        <button
-                          onClick={() => {
-                            handleItemSelect(() => {
-                              setActiveTab('mentor');
-                              onSelectSupervisionFilter?.('individual');
-                            });
-                          }}
-                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                            activeTab === 'mentor' && supervisionTypeFilter === 'individual'
-                              ? 'bg-rose-500 text-white dark:bg-rose-600 font-bold shadow-xs'
-                              : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800 hover:text-rose-800 dark:hover:text-rose-300'
-                          }`}
+                    <AnimatePresence initial={false}>
+                      {isMentorDropdownOpen && (
+                        <motion.div
+                          key="mentor-dropdown"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2, ease: 'easeInOut' }}
+                          className="overflow-hidden p-1.5 space-y-1 bg-white/80 dark:bg-slate-900/80 border-t border-rose-100/80 dark:border-slate-800"
                         >
-                          <User className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'mentor' && supervisionTypeFilter === 'individual' ? 'text-white' : 'text-rose-500'}`} />
-                          <div className="flex flex-col text-left leading-tight">
-                            <span className="font-bold">个体督导</span>
-                          </div>
-                        </button>
+                          <button
+                            onClick={() => {
+                              handleItemSelect(() => {
+                                setActiveTab('mentor');
+                                onSelectSupervisionFilter?.('individual');
+                              });
+                            }}
+                            className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                              activeTab === 'mentor' && supervisionTypeFilter === 'individual'
+                                ? 'bg-rose-500 text-white dark:bg-rose-600 font-bold shadow-xs'
+                                : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800 hover:text-rose-800 dark:hover:text-rose-300'
+                            }`}
+                          >
+                            <User className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'mentor' && supervisionTypeFilter === 'individual' ? 'text-white' : 'text-rose-500'}`} />
+                            <div className="flex flex-col text-left leading-tight">
+                              <span className="font-bold">个体督导</span>
+                            </div>
+                          </button>
 
-                        <button
-                          onClick={() => {
-                            handleItemSelect(() => {
-                              setActiveTab('mentor');
-                              onSelectSupervisionFilter?.('group');
-                            });
-                          }}
-                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                            activeTab === 'mentor' && supervisionTypeFilter === 'group'
-                              ? 'bg-rose-500 text-white dark:bg-rose-600 font-bold shadow-xs'
-                              : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800 hover:text-rose-800 dark:hover:text-rose-300'
-                          }`}
-                        >
-                          <Users className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'mentor' && supervisionTypeFilter === 'group' ? 'text-white' : 'text-rose-500'}`} />
-                          <div className="flex flex-col text-left leading-tight">
-                            <span className="font-bold">团体督导</span>
-                          </div>
-                        </button>
-                      </div>
-                    )}
+                          <button
+                            onClick={() => {
+                              handleItemSelect(() => {
+                                setActiveTab('mentor');
+                                onSelectSupervisionFilter?.('group');
+                              });
+                            }}
+                            className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                              activeTab === 'mentor' && supervisionTypeFilter === 'group'
+                                ? 'bg-rose-500 text-white dark:bg-rose-600 font-bold shadow-xs'
+                                : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800 hover:text-rose-800 dark:hover:text-rose-300'
+                            }`}
+                          >
+                            <Users className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'mentor' && supervisionTypeFilter === 'group' ? 'text-white' : 'text-rose-500'}`} />
+                            <div className="flex flex-col text-left leading-tight">
+                              <span className="font-bold">团体督导</span>
+                            </div>
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 )}
 
-                {/* 3. 个人体验 (大标题: 个人体验，分两个板块: 团体体验和个人体验，包含次数显示) */}
-                <div className="rounded-xl border border-purple-200/80 dark:border-slate-800 bg-purple-50/40 dark:bg-slate-800/40 overflow-hidden transition-all shadow-2xs">
-                  {/* 下拉总标题: 个人体验 */}
+                {/* 3. 自我成长 (大标题: 自我成长) */}
+                <div className="rounded-xl border border-rose-200/80 dark:border-slate-800 bg-rose-50/40 dark:bg-slate-800/40 overflow-hidden transition-all shadow-2xs">
+                  {/* 下拉总标题: 自我成长 */}
                   <button
                     onClick={() => {
                       setIsPersonalExpDropdownOpen((prev) => !prev);
@@ -352,19 +451,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }}
                     className={`w-full flex items-center justify-between px-3.5 py-3 text-xs font-bold transition-all cursor-pointer ${
                       activeTab === 'personalExperience'
-                        ? 'bg-purple-100/90 dark:bg-slate-800 text-purple-900 dark:text-purple-300 border-b border-purple-200/80 dark:border-slate-700/80'
-                        : 'text-zinc-700 dark:text-slate-200 hover:bg-purple-100/60 dark:hover:bg-slate-800/60'
+                        ? 'bg-rose-100/90 dark:bg-slate-800 text-rose-800 dark:text-rose-300 border-b border-rose-200/80 dark:border-slate-700/80'
+                        : 'text-zinc-700 dark:text-slate-200 hover:bg-rose-100/60 dark:hover:bg-slate-800/60'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 rounded-lg bg-purple-200/70 dark:bg-slate-700 text-purple-700 dark:text-purple-300 shrink-0">
+                      <div className="p-1.5 rounded-lg bg-rose-200/70 dark:bg-slate-700 text-rose-700 dark:text-rose-300 shrink-0">
                         <Feather className="w-4 h-4" />
                       </div>
-                      <span className="text-base sm:text-lg font-black tracking-wide text-zinc-900 dark:text-slate-100">个人体验</span>
+                      <span className="text-base sm:text-lg font-black tracking-wide text-zinc-900 dark:text-slate-100">自我成长</span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-purple-500 dark:text-slate-400">
-                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-purple-200/60 dark:bg-slate-700 text-purple-800 dark:text-purple-300">
-                        自我成长
+                    <div className="flex items-center gap-1.5 text-rose-500 dark:text-slate-400">
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-rose-200/60 dark:bg-slate-700 text-rose-700 dark:text-rose-300">
+                        体验与分析
                       </span>
                       {isPersonalExpDropdownOpen ? (
                         <ChevronDown className="w-4 h-4 transition-transform duration-200" />
@@ -374,48 +473,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   </button>
 
-                  {/* 下拉展开子菜单: 1. 团体体验 2. 个体体验 */}
-                  {isPersonalExpDropdownOpen && (
-                    <div className="p-1.5 space-y-1 bg-white/80 dark:bg-slate-900/80 border-t border-purple-100/80 dark:border-slate-800">
-                      <button
-                        onClick={() => {
-                          handleItemSelect(() => {
-                            setActiveTab('personalExperience');
-                            onSelectPersonalExperienceFilter?.('group');
-                          });
-                        }}
-                        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                          activeTab === 'personalExperience' && personalExperienceFilter === 'group'
-                            ? 'bg-purple-600 text-white font-bold shadow-xs'
-                            : 'text-zinc-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-slate-800 hover:text-purple-800 dark:hover:text-purple-300'
-                        }`}
+                  {/* 下拉展开子菜单: 1. 个人体验 2. 团体体验 */}
+                  <AnimatePresence initial={false}>
+                    {isPersonalExpDropdownOpen && (
+                      <motion.div
+                        key="personalexp-dropdown"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2, ease: 'easeInOut' }}
+                        className="overflow-hidden p-1.5 space-y-1 bg-white/80 dark:bg-slate-900/80 border-t border-rose-100/80 dark:border-slate-800"
                       >
-                        <Users className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'personalExperience' && personalExperienceFilter === 'group' ? 'text-white' : 'text-purple-500'}`} />
-                        <div className="flex flex-col text-left leading-tight">
-                          <span className="font-bold">1. 团体体验</span>
-                        </div>
-                      </button>
+                        <button
+                          onClick={() => {
+                            handleItemSelect(() => {
+                              setActiveTab('personalExperience');
+                              onSelectPersonalExperienceFilter?.('individual');
+                            });
+                          }}
+                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            activeTab === 'personalExperience' && personalExperienceFilter === 'individual'
+                              ? 'bg-rose-600 text-white font-bold shadow-xs'
+                              : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800 hover:text-rose-800 dark:hover:text-rose-300'
+                          }`}
+                        >
+                          <User className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'personalExperience' && personalExperienceFilter === 'individual' ? 'text-white' : 'text-rose-500'}`} />
+                          <div className="flex flex-col text-left leading-tight">
+                            <span className="font-bold">1. 个人体验</span>
+                          </div>
+                        </button>
 
-                      <button
-                        onClick={() => {
-                          handleItemSelect(() => {
-                            setActiveTab('personalExperience');
-                            onSelectPersonalExperienceFilter?.('individual');
-                          });
-                        }}
-                        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                          activeTab === 'personalExperience' && personalExperienceFilter === 'individual'
-                            ? 'bg-purple-600 text-white font-bold shadow-xs'
-                            : 'text-zinc-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-slate-800 hover:text-purple-800 dark:hover:text-purple-300'
-                        }`}
-                      >
-                        <User className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'personalExperience' && personalExperienceFilter === 'individual' ? 'text-white' : 'text-purple-500'}`} />
-                        <div className="flex flex-col text-left leading-tight">
-                          <span className="font-bold">2. 个体体验</span>
-                        </div>
-                      </button>
-                    </div>
-                  )}
+                        <button
+                          onClick={() => {
+                            handleItemSelect(() => {
+                              setActiveTab('personalExperience');
+                              onSelectPersonalExperienceFilter?.('group');
+                            });
+                          }}
+                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            activeTab === 'personalExperience' && personalExperienceFilter === 'group'
+                              ? 'bg-rose-600 text-white font-bold shadow-xs'
+                              : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800 hover:text-rose-800 dark:hover:text-rose-300'
+                          }`}
+                        >
+                          <Users className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'personalExperience' && personalExperienceFilter === 'group' ? 'text-white' : 'text-rose-500'}`} />
+                          <div className="flex flex-col text-left leading-tight">
+                            <span className="font-bold">2. 团体体验</span>
+                          </div>
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* 3 & 4. 其余一级菜单项: 想出来个啥、出了个门儿 */}

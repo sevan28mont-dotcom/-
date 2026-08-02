@@ -615,9 +615,10 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'shortTerm' && (
+            {(activeTab === 'shortTerm' || activeTab === 'shortTermPersonal' || activeTab === 'shortTermAgency') && (
               <CaseManagement
                 category="shortTerm"
+                shortTermSubtypeFilter={activeTab === 'shortTermPersonal' ? 'personal' : activeTab === 'shortTermAgency' ? 'agency' : 'all'}
                 records={systemData.records}
                 mentors={systemData.mentors}
                 thinkingNotes={systemData.thinking}

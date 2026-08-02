@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { ThinkingNote } from '../types';
-import { Plus, Trash2, Pencil, Brain, Sparkles, Tag, Search, X, CheckCircle2, RefreshCw, HardDrive, Maximize2, Minimize2, Save, Type } from 'lucide-react';
+import { Plus, Trash2, Pencil, Brain, Sparkles, Tag, Search, X, CheckCircle2, RefreshCw, HardDrive, Maximize2, Minimize2, Save, Type, Copy, Wand2, ListOrdered, Loader2, Bot } from 'lucide-react';
 import { VoiceInputButton } from './VoiceInputButton';
 import { FontSelectorToggle, FontOption, FONT_LIST } from './FontSelectorToggle';
 
@@ -19,6 +19,12 @@ export const ThinkingNotes: React.FC<ThinkingNotesProps> = ({ notes, onAddNote, 
   const [editorFont, setEditorFont] = useState<FontOption>('kaiti'); // 默认华文楷体
   const activeFontObj = FONT_LIST.find((f) => f.id === editorFont) || FONT_LIST[0];
 
+  // AI 智能自然语言处理状态
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [aiStatusMessage, setAiStatusMessage] = useState<string | null>(null);
+  const [aiSummaryResult, setAiSummaryResult] = useState<string | null>(null);
+  const [savedNoteSummariesMap, setSavedNoteSummariesMap] = useState<Record<string, { summary?: string; loading?: boolean }>>({});
+
   // 编辑现有笔记状态
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 
@@ -30,6 +36,135 @@ export const ThinkingNotes: React.FC<ThinkingNotesProps> = ({ notes, onAddNote, 
     return now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   });
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // AI 功能 1: 微信大模型智能分点提炼 (1. 2. 3.)
+  const handleAiRefineWeChat = async () => {
+    if (!content.trim()) {
+      alert('请先输入或口述笔记正文内容，再进行微信大模型智能分点！');
+      return;
+    }
+    setIsAiProcessing(true);
+    setAiStatusMessage('🤖 Gemini AI 正在对笔记进行微信式智能分点提炼与口语剔除...');
+    try {
+      const res = await fetch('/api/refine-speech-wechat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: content }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.structuredText) {
+          handleContentChange(data.structuredText);
+          setAiStatusMessage('✅ 已完成微信式智能分点重写！');
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      setAiStatusMessage('❌ 智能分点失败，请稍后重试');
+    } finally {
+      setIsAiProcessing(false);
+      setTimeout(() => setAiStatusMessage(null), 3000);
+    }
+  };
+
+  // AI 功能 2: 临床专业表达润色 & 术语纠错
+  const handleAiPolish = async () => {
+    if (!content.trim()) {
+      alert('请先输入或口述笔记正文内容，再进行专业表达润色！');
+      return;
+    }
+    setIsAiProcessing(true);
+    setAiStatusMessage('✨ Gemini Pro 正在规范临床心理学术语并润色表达...');
+    try {
+      const res = await fetch('/api/refine-speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: content }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.refinedText) {
+          handleContentChange(data.refinedText);
+          setAiStatusMessage('✅ 临床表达润色与术语纠错已完成！');
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      setAiStatusMessage('❌ 润色失败，请稍后重试');
+    } finally {
+      setIsAiProcessing(false);
+      setTimeout(() => setAiStatusMessage(null), 3000);
+    }
+  };
+
+  // AI 功能 3: 提炼 Gemini 反思摘要与心理动力觉察
+  const handleAiSummarize = async () => {
+    if (!content.trim()) {
+      alert('请先输入或口述笔记正文，再提炼 Gemini 结构化反思摘要！');
+      return;
+    }
+    setIsAiProcessing(true);
+    setAiStatusMessage('💡 Gemini Pro AI 正在生成反思摘要与心理动力学提炼...');
+    try {
+      const res = await fetch('/api/gemini/summarize-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.summary) {
+          setAiSummaryResult(data.summary);
+          setAiStatusMessage('✅ Gemini 反思摘要已提炼生成！');
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      setAiStatusMessage('❌ 提炼摘要失败');
+    } finally {
+      setIsAiProcessing(false);
+      setTimeout(() => setAiStatusMessage(null), 3000);
+    }
+  };
+
+  // 针对列表中的已存笔记生成 Gemini 摘要
+  const handleSummarizeSavedNote = async (note: ThinkingNote) => {
+    const existing = savedNoteSummariesMap[note.id];
+    if (existing?.summary) {
+      // Toggle display off if already generated
+      setSavedNoteSummariesMap((prev) => ({
+        ...prev,
+        [note.id]: { ...prev[note.id], summary: undefined },
+      }));
+      return;
+    }
+
+    setSavedNoteSummariesMap((prev) => ({
+      ...prev,
+      [note.id]: { loading: true },
+    }));
+
+    try {
+      const res = await fetch('/api/gemini/summarize-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: note.title, content: note.content }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSavedNoteSummariesMap((prev) => ({
+          ...prev,
+          [note.id]: { summary: data.summary, loading: false },
+        }));
+      }
+    } catch (e) {
+      console.error(e);
+      setSavedNoteSummariesMap((prev) => ({
+        ...prev,
+        [note.id]: { loading: false },
+      }));
+    }
+  };
 
   const notifyTextChange = () => {
     setSaveStatus('saving');
@@ -270,6 +405,131 @@ export const ThinkingNotes: React.FC<ThinkingNotesProps> = ({ notes, onAddNote, 
             </div>
           </div>
 
+          {/* Gemini Pro AI 智能助手自然语言理解工具栏 */}
+          <div className="bg-gradient-to-r from-indigo-50/90 via-purple-50/90 to-rose-50/90 dark:from-slate-800 dark:via-slate-800 dark:to-slate-800/80 p-3 rounded-2xl border border-indigo-200/80 dark:border-slate-700 space-y-2 shrink-0 shadow-2xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-indigo-600 dark:bg-indigo-500 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                  <Bot className="w-4 h-4" />
+                </div>
+                <span className="font-bold text-xs text-indigo-950 dark:text-indigo-200 flex items-center gap-1">
+                  Gemini Pro API 自然语言处理
+                  <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950 px-1.5 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">
+                    微信语音大模型级
+                  </span>
+                </span>
+              </div>
+
+              {aiStatusMessage && (
+                <div className="text-[11px] font-bold text-indigo-800 dark:text-indigo-300 bg-white/80 dark:bg-slate-900/80 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-lg flex items-center gap-1.5 animate-fadeIn">
+                  {isAiProcessing && <Loader2 className="w-3.5 h-3.5 text-indigo-600 animate-spin" />}
+                  <span>{aiStatusMessage}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {/* 微信智能分点 */}
+              <button
+                type="button"
+                onClick={handleAiRefineWeChat}
+                disabled={isAiProcessing}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-indigo-100/80 dark:hover:bg-slate-600 border border-indigo-200 dark:border-slate-600 text-indigo-900 dark:text-indigo-200 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 shadow-2xs disabled:opacity-50"
+                title="类似微信语音输入后的自动智能分点 (1. 2. 3.) 并剔除口语语气词"
+              >
+                <ListOrdered className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>微信语音智能分点</span>
+              </button>
+
+              {/* 临床专业润色 */}
+              <button
+                type="button"
+                onClick={handleAiPolish}
+                disabled={isAiProcessing}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-purple-100/80 dark:hover:bg-slate-600 border border-purple-200 dark:border-slate-600 text-purple-900 dark:text-purple-200 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 shadow-2xs disabled:opacity-50"
+                title="校正心理咨询专业术语 (反移情/阻抗/共情等) 与优化标点语序"
+              >
+                <Wand2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <span>专业表达润色 & 术语纠错</span>
+              </button>
+
+              {/* 生成结构化摘要 */}
+              <button
+                type="button"
+                onClick={handleAiSummarize}
+                disabled={isAiProcessing}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-700 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 shadow-2xs disabled:opacity-50"
+                title="提炼 4 维心理学结构化反思摘要 (核心概括, 心理动力觉察, 编号条目, 督导建议)"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                <span>Gemini 提炼反思摘要</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Gemini AI 提炼摘要结果卡片 */}
+          {aiSummaryResult && (
+            <div className="p-4 bg-gradient-to-br from-indigo-50/90 to-purple-50/90 dark:from-slate-800/95 dark:to-indigo-950/90 border border-indigo-300 dark:border-indigo-800 rounded-2xl shadow-sm space-y-3 animate-fadeIn">
+              <div className="flex items-center justify-between border-b border-indigo-200/80 dark:border-indigo-800/80 pb-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-bounce" />
+                  <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                    Gemini Pro 智能摘要与心理动力觉察
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAiSummaryResult(null)}
+                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-slate-300 p-1 rounded-lg cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="text-xs sm:text-sm text-zinc-800 dark:text-slate-100 whitespace-pre-wrap leading-relaxed font-sans">
+                {aiSummaryResult}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-indigo-200/80 dark:border-indigo-900/80">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleContentChange(content ? `${content}\n\n${aiSummaryResult}` : aiSummaryResult);
+                    setAiSummaryResult(null);
+                  }}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>追加到笔记正文末尾</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleContentChange(aiSummaryResult);
+                    setAiSummaryResult(null);
+                  }}
+                  className="px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-indigo-100 dark:hover:bg-slate-600 text-indigo-950 dark:text-indigo-200 border border-indigo-300 dark:border-slate-600 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>替换为结构化摘要</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(aiSummaryResult);
+                    alert('摘要内容已成功复制到剪贴板！');
+                  }}
+                  className="px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-zinc-100 dark:hover:bg-slate-600 text-zinc-700 dark:text-slate-200 border border-zinc-300 dark:border-slate-600 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>复制摘要</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className={isFullscreen ? "flex-1 flex flex-col min-h-0" : ""}>
             <textarea
               rows={isFullscreen ? 12 : 5}
@@ -374,6 +634,21 @@ export const ThinkingNotes: React.FC<ThinkingNotesProps> = ({ notes, onAddNote, 
 
                 <div className="flex items-center gap-1">
                   <button
+                    type="button"
+                    onClick={() => handleSummarizeSavedNote(note)}
+                    disabled={savedNoteSummariesMap[note.id]?.loading}
+                    className="px-2 py-1 bg-indigo-50 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-slate-700 rounded-lg transition cursor-pointer flex items-center gap-1 text-xs font-bold shadow-2xs"
+                    title="使用 Gemini Pro 提炼本条笔记的结构化反思与心理动力要点"
+                  >
+                    {savedNoteSummariesMap[note.id]?.loading ? (
+                      <Loader2 className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    )}
+                    <span>{savedNoteSummariesMap[note.id]?.summary ? '收起 AI 摘要' : '✨ Gemini 提炼'}</span>
+                  </button>
+
+                  <button
                     onClick={() => handleStartEdit(note)}
                     className="p-1.5 text-zinc-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer flex items-center gap-1 text-xs font-semibold"
                     title="编辑修改此反思笔记"
@@ -395,6 +670,19 @@ export const ThinkingNotes: React.FC<ThinkingNotesProps> = ({ notes, onAddNote, 
               <div className="text-xs sm:text-sm text-zinc-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed font-kaiti">
                 {note.content}
               </div>
+
+              {/* Gemini AI 提炼摘要展示 */}
+              {savedNoteSummariesMap[note.id]?.summary && (
+                <div className="p-3.5 bg-indigo-50/80 dark:bg-slate-800/90 border border-indigo-200 dark:border-indigo-800/80 rounded-xl space-y-2 text-xs text-zinc-800 dark:text-slate-100 animate-fadeIn">
+                  <div className="flex items-center gap-1.5 font-bold text-indigo-900 dark:text-indigo-300 border-b border-indigo-200/60 dark:border-indigo-800/60 pb-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>Gemini Pro AI 提炼总结</span>
+                  </div>
+                  <div className="whitespace-pre-wrap leading-relaxed font-sans">
+                    {savedNoteSummariesMap[note.id].summary}
+                  </div>
+                </div>
+              )}
 
               {note.tags && note.tags.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-rose-50 dark:border-slate-800">

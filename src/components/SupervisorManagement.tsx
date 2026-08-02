@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Supervisor, CaseRecord, SupervisionRecord, ResourceLink } from '../types';
 import { Plus, Trash2, Calendar as CalendarIcon, CheckSquare, Square, Unlink, FileText, X, ChevronDown, ChevronUp, Search, Pencil, Link as LinkIcon, Lightbulb, Mic, Printer, User, Users, Sparkles } from 'lucide-react';
 import { VoiceInputButton } from './VoiceInputButton';
@@ -386,7 +387,25 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
           )}
         </div>
 
-        <div className="text-xs text-zinc-500 font-medium">
+        <div className="flex items-center gap-3 text-xs text-zinc-500 font-medium">
+          <button
+            type="button"
+            onClick={() => {
+              const allKeys = filteredMentors.flatMap((m) => m.records.map((r) => r.id));
+              const isAllExpanded = allKeys.length > 0 && allKeys.every((id) => expandedReflectionIds[id] !== false);
+              const nextState: Record<string, boolean> = {};
+              allKeys.forEach((id) => {
+                nextState[id] = !isAllExpanded;
+              });
+              setExpandedReflectionIds(nextState);
+            }}
+            className="px-3 py-1.5 bg-rose-50 dark:bg-slate-800 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-slate-700 border border-rose-200 dark:border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+            title="一键展开或折叠所有关联个案下的督导反思与逐字稿文本"
+          >
+            <ChevronDown className="w-3.5 h-3.5" />
+            <span>一键展开/折叠所有反思</span>
+          </button>
+
           {searchQuery ? (
             <span>检索结果: <strong className="text-rose-600 font-bold">{filteredMentors.length}</strong> / {mentors.length} 位</span>
           ) : (
@@ -714,9 +733,17 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                                     </div>
 
                                     {/* 展开的主体内容 */}
-                                    {isExpanded && (
-                                      <div className="space-y-2.5 pt-1">
-                                        {/* 💡 反思要点 */}
+                                    <AnimatePresence initial={false}>
+                                      {isExpanded && (
+                                        <motion.div
+                                          key={`sup-detail-${sup.id}`}
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: 'auto' }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          transition={{ duration: 0.22, ease: 'easeInOut' }}
+                                          className="overflow-hidden space-y-2.5 pt-1"
+                                        >
+                                          {/* 💡 反思要点 */}
                                         {sup.reflection ? (
                                           <div className="bg-rose-50/80 dark:bg-slate-800/70 border-l-3 border-rose-400 dark:border-rose-500 p-2.5 text-zinc-800 dark:text-slate-200 rounded-r-xl text-xs leading-relaxed">
                                             <strong className="text-rose-900 dark:text-rose-300 block font-bold mb-1">
@@ -788,8 +815,9 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                                             }}
                                           />
                                         )}
-                                      </div>
-                                    )}
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
                                   </div>
                                 );
                               })}
