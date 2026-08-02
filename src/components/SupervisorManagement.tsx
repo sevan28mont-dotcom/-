@@ -13,6 +13,7 @@ interface SupervisorManagementProps {
   onAddMentor: (newMentor: Omit<Supervisor, 'id' | 'records' | 'boundCaseIds'>) => void;
   onDeleteMentor: (id: string) => void;
   onUpdateMentorCaseBinding: (mentorId: string, caseId: string, bind: boolean) => void;
+  onUpdateMentorTotalSupervisions?: (mentorId: string, newTotal: number) => void;
   onAddSupervisionRecord: (mentorId: string, recordData: Omit<SupervisionRecord, 'id'>) => void;
   onDeleteSupervisionRecord: (mentorId: string, recordId: string) => void;
   onUpdateSupervisionRecord?: (mentorId: string, recordId: string, updatedData: Partial<SupervisionRecord>) => void;
@@ -26,6 +27,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   onAddMentor,
   onDeleteMentor,
   onUpdateMentorCaseBinding,
+  onUpdateMentorTotalSupervisions,
   onAddSupervisionRecord,
   onDeleteSupervisionRecord,
   onUpdateSupervisionRecord,
@@ -69,6 +71,11 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   // Expandable Reflection state for each record
   const [expandedReflectionIds, setExpandedReflectionIds] = useState<Record<string, boolean>>({});
 
+  // 督导次数按钮多于15次时的折叠/展开状态
+  const [expandedMentorSessions, setExpandedMentorSessions] = useState<Record<string, boolean>>({});
+  // 个案下督导记录较多时的折叠/展开状态
+  const [expandedCaseRecordLists, setExpandedCaseRecordLists] = useState<Record<string, boolean>>({});
+
   // Export PDF state for Supervisor Records
   const [exportingPdfSupervisorModal, setExportingPdfSupervisorModal] = useState<{
     supervisor: Supervisor;
@@ -79,6 +86,15 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   // Local Supervision Type Filter state
   const [localSupervisionTypeFilter, setLocalSupervisionTypeFilter] = useState<'all' | 'individual' | 'group'>('all');
+
+  // 督导次数批量编辑管理 Modal 状态
+  const [batchSupervisionMentorId, setBatchSupervisionMentorId] = useState<string | null>(null);
+  const [batchSupSelectedNums, setBatchSupSelectedNums] = useState<number[]>([]);
+  const [batchSupCaseId, setBatchSupCaseId] = useState<string>('');
+  const [batchSupType, setBatchSupType] = useState<'individual' | 'group'>('individual');
+  const [batchSupStartDate, setBatchSupStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [batchSupIntervalDays, setBatchSupIntervalDays] = useState<number>(7);
+  const [batchSupNote, setBatchSupNote] = useState<string>('');
 
   const activeTypeFilter = propSupervisionTypeFilter ?? localSupervisionTypeFilter;
   const setTypeFilter = (filter: 'all' | 'individual' | 'group') => {
@@ -179,6 +195,54 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
       editingRecordModal.record
     );
     setEditingRecordModal(null);
+  };
+
+  const handleApplyBatchSupervision = () => {
+    if (!batchSupervisionMentorId) return;
+    if (batchSupSelectedNums.length === 0) {
+      alert('请至少勾选选择一个需要批量填报的督导次数！');
+      return;
+    }
+
+    const mentor = mentors.find((m) => m.id === batchSupervisionMentorId);
+    if (!mentor) return;
+
+    const baseDate = new Date(batchSupStartDate);
+
+    batchSupSelectedNums.forEach((num, index) => {
+      const targetDate = new Date(baseDate);
+      targetDate.setDate(baseDate.getDate() + index * batchSupIntervalDays);
+      const dateStr = targetDate.toISOString().split('T')[0];
+
+      const existingRecord = mentor.records.find((r) => r.sessionNum === num);
+
+      if (existingRecord) {
+        if (onUpdateSupervisionRecord) {
+          onUpdateSupervisionRecord(mentor.id, existingRecord.id, {
+            caseId: batchSupCaseId || existingRecord.caseId,
+            date: dateStr,
+            type: batchSupType,
+            reflection: batchSupNote ? `${existingRecord.reflection || ''}\n${batchSupNote}`.trim() : existingRecord.reflection,
+          });
+        }
+      } else {
+        onAddSupervisionRecord(mentor.id, {
+          caseId: batchSupCaseId || (mentor.boundCaseIds[0] || ''),
+          sessionNum: num,
+          date: dateStr,
+          timeRange: '14:00-15:00',
+          type: batchSupType,
+          reflection: batchSupNote || `第 ${num} 次督导记录`,
+          transcript: '',
+          ideas: [],
+          resources: [],
+        });
+      }
+    });
+
+    alert(`已为导师【${mentor.name}】成功批量操作 ${batchSupSelectedNums.length} 次督导记录！`);
+    setBatchSupervisionMentorId(null);
+    setBatchSupSelectedNums([]);
   };
 
   return (
@@ -362,13 +426,48 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                         督导周期 (YYYY-MM-DD): <strong className="text-zinc-800">{mentor.startDate}</strong> 至{' '}
                         <strong className="text-zinc-800">{mentor.endDate}</strong>
                       </span>
-                      <span>
-                        督导总额度: <strong className="text-rose-600">{mentor.totalSupervisions} 次</strong>
+                      <span className="flex items-center gap-1.5 font-medium">
+                        <span>督导总额度: <strong className="text-rose-600 font-bold">{mentor.totalSupervisions || 20} 次</strong></span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const input = window.prompt(`请输入导师【${mentor.name}】的最新督导总额度次数:`, String(mentor.totalSupervisions || 20));
+                            if (input) {
+                              const num = parseInt(input, 10);
+                              if (!isNaN(num) && num > 0 && onUpdateMentorTotalSupervisions) {
+                                onUpdateMentorTotalSupervisions(mentor.id, num);
+                              }
+                            }
+                          }}
+                          className="px-2 py-0.5 text-[11px] font-bold bg-white dark:bg-slate-800 hover:bg-rose-100 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-slate-700 rounded-md transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                          title="重新设置此导师的督导总额度次数"
+                        >
+                          <Pencil className="w-2.5 h-2.5" />
+                          <span>设置额度</span>
+                        </button>
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBatchSupervisionMentorId(mentor.id);
+                        setBatchSupSelectedNums([]);
+                        setBatchSupCaseId(boundCases[0]?.id || '');
+                        setBatchSupType('individual');
+                        setBatchSupStartDate(new Date().toISOString().split('T')[0]);
+                        setBatchSupIntervalDays(7);
+                        setBatchSupNote('');
+                      }}
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl transition cursor-pointer shadow-2xs active:scale-95"
+                      title="批量选择、批量排程或批量编辑此导师的督导次数与反思记录"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-rose-200" />
+                      <span>⚡ 批量管理督导次数</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setExportingPdfSupervisorModal({ supervisor: mentor })}
@@ -397,6 +496,82 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                   </div>
                 </div>
 
+                {/* 督导次数 (1~N次) 可视化网格与折叠控制 */}
+                {(() => {
+                  const totalSup = mentor.totalSupervisions || 20;
+                  const isExpanded = Boolean(expandedMentorSessions[mentor.id]);
+                  const displayLimit = 15;
+                  const isLongList = totalSup > displayLimit;
+
+                  return (
+                    <div className="bg-rose-50/50 dark:bg-slate-800/80 border border-rose-200/80 dark:border-slate-700/80 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-zinc-800 dark:text-slate-100 flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                          <span>督导次数进度 (额度 {totalSup} 次，已记录 {mentor.records.length} 次):</span>
+                        </span>
+                        {isLongList && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedMentorSessions((prev) => ({ ...prev, [mentor.id]: !prev[mentor.id] }))}
+                            className="text-[11px] font-bold text-rose-700 dark:text-rose-300 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            {isExpanded ? (
+                              <>
+                                <span>折叠次数按钮</span>
+                                <ChevronUp className="w-3 h-3" />
+                              </>
+                            ) : (
+                              <>
+                                <span>展开全部 {totalSup} 次 (已折叠 {totalSup - displayLimit} 次)</span>
+                                <ChevronDown className="w-3 h-3" />
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-15 gap-1.5">
+                        {Array.from({ length: totalSup }, (_, idx) => {
+                          const supSessionNum = idx + 1;
+                          const matchedRecord = mentor.records.find((r) => r.sessionNum === supSessionNum);
+                          const hasRecord = Boolean(matchedRecord);
+
+                          if (isLongList && !isExpanded && supSessionNum > displayLimit && !hasRecord) {
+                            return null;
+                          }
+
+                          return (
+                            <button
+                              key={supSessionNum}
+                              type="button"
+                              onClick={() => {
+                                if (matchedRecord) {
+                                  handleOpenEditModal(mentor.id, matchedRecord);
+                                } else if (boundCases.length > 0) {
+                                  handleOpenSupervisionModal(mentor.id, boundCases[0].id);
+                                  setSupSessionNum(supSessionNum);
+                                } else {
+                                  alert('请先勾选关联至少一个个案后再录入督导记录！');
+                                }
+                              }}
+                              className={`p-1 min-h-10 border rounded-xl text-[11px] font-bold transition flex flex-col items-center justify-center cursor-pointer shadow-2xs ${
+                                hasRecord
+                                  ? 'bg-rose-500 text-white border-rose-600 dark:bg-rose-600 dark:border-rose-500'
+                                  : 'bg-white dark:bg-slate-900 border-rose-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800'
+                              }`}
+                              title={hasRecord ? `第 ${supSessionNum} 次督导已记录 (点击查看/编辑)` : `第 ${supSessionNum} 次督导未录入 (点击新增记录)`}
+                            >
+                              <span>{supSessionNum}次</span>
+                              {hasRecord && <span className="text-[9px] opacity-90 scale-90">已录入</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* 仅在对应督导师下显示勾选的个案 */}
                 <div className="space-y-3">
                   <div className="text-xs font-bold text-zinc-800 flex items-center justify-between">
@@ -413,6 +588,13 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                   ) : (
                     boundCases.map((caseItem) => {
                       const caseSupervisions = mentor.records.filter((r) => r.caseId === caseItem.id);
+                      const key = `${mentor.id}_${caseItem.id}`;
+                      const isRecordsExpanded = Boolean(expandedCaseRecordLists[key]);
+                      const recordLimit = 5;
+                      const hasManyRecords = caseSupervisions.length > recordLimit;
+                      const displayedSupervisions = hasManyRecords && !isRecordsExpanded
+                        ? caseSupervisions.slice(0, recordLimit)
+                        : caseSupervisions;
 
                       return (
                         <div
@@ -455,11 +637,12 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                             {caseSupervisions.length === 0 ? (
                               <div className="text-xs text-zinc-400 italic">暂无具体督导会谈记录</div>
                             ) : (
-                              caseSupervisions.map((sup) => {
-                                const isExpanded = expandedReflectionIds[sup.id] ?? true;
-                                const hasTranscript = Boolean(sup.transcript && sup.transcript.trim());
-                                const hasIdeas = Boolean(sup.ideas && sup.ideas.length > 0);
-                                const hasResources = Boolean(sup.resources && sup.resources.length > 0);
+                              <>
+                                {displayedSupervisions.map((sup) => {
+                                  const isExpanded = expandedReflectionIds[sup.id] ?? true;
+                                  const hasTranscript = Boolean(sup.transcript && sup.transcript.trim());
+                                  const hasIdeas = Boolean(sup.ideas && sup.ideas.length > 0);
+                                  const hasResources = Boolean(sup.resources && sup.resources.length > 0);
 
                                 return (
                                   <div
@@ -609,11 +792,39 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                                     )}
                                   </div>
                                 );
-                              })
-                            )}
-                          </div>
+                              })}
+
+                              {hasManyRecords && (
+                                <div className="mt-2 flex justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedCaseRecordLists((prev) => ({
+                                        ...prev,
+                                        [key]: !prev[key],
+                                      }))
+                                    }
+                                    className="px-3 py-1 bg-white dark:bg-slate-800 hover:bg-rose-50 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                                  >
+                                    {isRecordsExpanded ? (
+                                      <>
+                                        <ChevronUp className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                                        <span>折叠督导记录 (已展全 {caseSupervisions.length} 条)</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ChevronDown className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                                        <span>展开剩余 {caseSupervisions.length - recordLimit} 条督导记录 (共 {caseSupervisions.length} 条)</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
-                      );
+                      </div>
+                    );
                     })
                   )}
                 </div>
@@ -1107,6 +1318,174 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
           onClose={() => setExportingPdfSupervisorModal(null)}
         />
       )}
+
+      {/* ⚡ 督导次数批量编辑与填报 Modal */}
+      {batchSupervisionMentorId && (() => {
+        const targetMentor = mentors.find((m) => m.id === batchSupervisionMentorId);
+        if (!targetMentor) return null;
+
+        const totalQuota = targetMentor.totalSupervisions || 20;
+        const boundCases = cases.filter((c) => targetMentor.boundCaseIds.includes(c.id));
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 border border-rose-300 dark:border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-rose-100 dark:border-slate-800 pb-3">
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-rose-600" />
+                  <span>⚡ 批量管理督导次数 ({targetMentor.name})</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setBatchSupervisionMentorId(null)}
+                  className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">勾选需要编辑填报的督导次数:</label>
+                    <div className="flex gap-2 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setBatchSupSelectedNums(Array.from({ length: totalQuota }, (_, i) => i + 1))}
+                        className="text-rose-600 font-bold hover:underline cursor-pointer"
+                      >
+                        全选 ({totalQuota}次)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBatchSupSelectedNums([])}
+                        className="text-slate-400 hover:underline cursor-pointer"
+                      >
+                        清空
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-6 gap-1 max-h-36 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    {Array.from({ length: totalQuota }, (_, i) => i + 1).map((num) => {
+                      const isSelected = batchSupSelectedNums.includes(num);
+                      const hasRec = targetMentor.records.some((r) => r.sessionNum === num);
+
+                      return (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setBatchSupSelectedNums((prev) => prev.filter((n) => n !== num));
+                            } else {
+                              setBatchSupSelectedNums((prev) => [...prev, num].sort((a, b) => a - b));
+                            }
+                          }}
+                          className={`p-1 rounded text-[11px] font-bold border transition flex flex-col items-center justify-center ${
+                            isSelected
+                              ? 'bg-rose-600 text-white border-rose-700'
+                              : hasRec
+                              ? 'bg-rose-100 dark:bg-rose-950/80 border-rose-300 text-rose-900 dark:text-rose-200'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <span>{num}次</span>
+                          {hasRec && !isSelected && <span className="text-[8px] scale-80 opacity-80">已有</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">关联个案:</label>
+                    <select
+                      value={batchSupCaseId}
+                      onChange={(e) => setBatchSupCaseId(e.target.value)}
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 rounded-xl"
+                    >
+                      <option value="">-- 选择关联个案 --</option>
+                      {boundCases.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.code} ({c.type === 'teen' ? '青少年' : '成人'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">督导类型:</label>
+                    <select
+                      value={batchSupType}
+                      onChange={(e) => setBatchSupType(e.target.value as 'individual' | 'group')}
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 rounded-xl"
+                    >
+                      <option value="individual">1. 个体督导</option>
+                      <option value="group">2. 团体督导</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">起始排程日期:</label>
+                    <input
+                      type="date"
+                      value={batchSupStartDate}
+                      onChange={(e) => setBatchSupStartDate(e.target.value)}
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 rounded-xl"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">递增间隔天数:</label>
+                    <select
+                      value={batchSupIntervalDays}
+                      onChange={(e) => setBatchSupIntervalDays(Number(e.target.value))}
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 rounded-xl"
+                    >
+                      <option value={7}>7天 (每周一次)</option>
+                      <option value={14}>14天 (每两周一次)</option>
+                      <option value={1}>1天 (每天连续)</option>
+                      <option value={30}>30天 (每月一次)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">批量补充督导要点 / 模板:</label>
+                  <input
+                    type="text"
+                    placeholder="如: 完成个案概念化与反移情分析督导"
+                    value={batchSupNote}
+                    onChange={(e) => setBatchSupNote(e.target.value)}
+                    className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-rose-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setBatchSupervisionMentorId(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyBatchSupervision}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+                >
+                  一键批量生成排程
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

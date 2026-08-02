@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { ScheduleItem, ScheduleType, ScheduleCategory } from '../types';
-import { Calendar, Clock, ChevronDown, ChevronUp, Plus, ArrowRight, CheckCircle2, Circle, Sparkles, ChevronLeft, ChevronRight, User, Check, Repeat } from 'lucide-react';
+import { Calendar, Clock, ChevronDown, ChevronUp, Plus, ArrowRight, CheckCircle2, Circle, Sparkles, ChevronLeft, ChevronRight, User, Check, Repeat, Umbrella } from 'lucide-react';
 import { parseColorToStyle, getHexColor } from '../data/colorPalette';
 import { ActiveTab } from './Sidebar';
-import { formatRepeatRuleLabel } from './ScheduleManagement';
+import { formatRepeatRuleLabel, getChineseHolidayInfo } from './ScheduleManagement';
 
 interface TodayScheduleOverviewProps {
   schedules: ScheduleItem[];
@@ -111,7 +111,7 @@ export const TodayScheduleOverview: React.FC<TodayScheduleOverviewProps> = ({
           </div>
 
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                 <span>{isToday ? '今日日程概览' : '日程快速查看'}</span>
                 {isToday && (
@@ -120,9 +120,23 @@ export const TodayScheduleOverview: React.FC<TodayScheduleOverviewProps> = ({
                   </span>
                 )}
               </h2>
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 hidden sm:inline-block">
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                 ({getFormattedDateTitle(selectedDateStr)})
               </span>
+
+              {/* 法定节假日显眼标注 */}
+              {(() => {
+                const holiday = getChineseHolidayInfo(selectedDateStr);
+                if (holiday.isHoliday) {
+                  return (
+                    <span className="px-2 py-0.5 text-[11px] font-extrabold bg-gradient-to-r from-rose-600 to-amber-600 text-white rounded-lg shadow-2xs flex items-center gap-1 shrink-0 animate-pulse">
+                      <Umbrella className="w-3 h-3 text-amber-200 shrink-0" />
+                      <span>🎉 放假·【{holiday.name}】</span>
+                    </span>
+                  );
+                }
+                return null;
+              })()}
             </div>
 
             <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">

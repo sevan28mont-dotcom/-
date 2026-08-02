@@ -19,6 +19,16 @@ export interface SessionData {
   durationMinutes?: number; // 咨询时长 (分钟)
 }
 
+export interface ParentSessionData {
+  completed: boolean;
+  date?: string;
+  note: string;
+  transcript?: string;
+  ideas?: string[];
+  resources?: ResourceLink[];
+  durationMinutes?: number;
+}
+
 export interface CaseRecord {
   id: string;
   category: CaseCategory;
@@ -31,6 +41,8 @@ export interface CaseRecord {
   totalSessions: number;
   sessions: Record<number, SessionData>;
   pinned?: boolean; // 是否重要置顶
+  isTeenager?: boolean; // 是否属于青少年个案 (启用父母访谈功能)
+  parentSessions?: Record<number, ParentSessionData>; // 父母访谈记录 (独立统计，不占用个体访谈总次数)
 }
 
 export interface SupervisionRecord {
@@ -102,10 +114,37 @@ export interface ReminderItem {
   createdAt: string;
 }
 
+export interface PersonalExperienceRecord {
+  id: string;
+  sessionNum: number;
+  date: string; // YYYY-MM-DD
+  timeRange?: string; // e.g. "14:00-15:00"
+  type: 'individual' | 'group'; // 1. 个体体验 2. 团体体验
+  facilitator?: string; // 体验分析师/带领者
+  note: string; // 体验感悟与反思
+  transcript?: string; // 逐字稿/口述
+  ideas?: string[]; // 体验想法
+  resources?: ResourceLink[]; // 外链资源
+  completed?: boolean;
+  durationMinutes?: number;
+}
+
+export interface PersonalExperienceSetting {
+  totalIndividualHours: number;
+  totalGroupHours: number;
+  records: PersonalExperienceRecord[];
+}
+
 export interface SystemData {
   records: CaseRecord[];
   mentors: Supervisor[];
   thinking: ThinkingNote[];
   schedules: ScheduleItem[];
   reminders: ReminderItem[];
+  personalExperience?: PersonalExperienceSetting;
+  totalHoursOverrides?: {
+    caseHours?: number;
+    supervisionHours?: number;
+    personalExperienceHours?: number;
+  };
 }

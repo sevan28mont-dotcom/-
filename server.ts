@@ -75,6 +75,47 @@ ${text}`;
     }
   });
 
+  // API Route: WeChat Voice Big Model - Intelligent Structuring & Outline Refinement
+  app.post("/api/refine-speech-wechat", async (req, res) => {
+    try {
+      const { text } = req.body;
+      if (!text || typeof text !== "string" || !text.trim()) {
+        return res.json({ structuredText: text || "" });
+      }
+
+      const ai = getGeminiClient();
+      if (!ai) {
+        let lines = localSmartFormat(text).split("。").filter(Boolean);
+        let structured = lines.map((line, idx) => `${idx + 1}. ${line.trim()}。`).join("\n");
+        return res.json({ structuredText: structured || text });
+      }
+
+      const prompt = `你是一位媲美微信语音大模型的顶级 AI 智能口述整理与理解专家。
+请对以下语音口述或识别出的自然语言/文本进行【智能深度理解、摘要提炼与分点结构化排版】：
+1. 深入理解用户的表达原意，去除重复口语废词（如“那个”、“额”、“嗯”、“然后”、“就是说”等）。
+2. 自动提炼核心要点，整理成层次分明、带编号的分点条目（如：
+1. 【核心情况/要点】：...
+2. 【关键细节/议题】：...
+3. 【下一步安排/思考】：...）
+3. 保持原意与专业表达，语句流畅无语病。
+4. 仅直接输出最终分点整理后的文本，严禁输出任何多余的开场白或解释话术。
+
+待提炼整理的文本：
+${text}`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+      });
+
+      const structuredText = response.text ? response.text.trim() : text;
+      return res.json({ structuredText });
+    } catch (error) {
+      console.error("WeChat speech structuring error:", error);
+      return res.json({ structuredText: req.body?.text || "" });
+    }
+  });
+
   // In-memory cloud sync storage keyed by user ID / username
   const userCloudStore: Record<string, any> = {};
 

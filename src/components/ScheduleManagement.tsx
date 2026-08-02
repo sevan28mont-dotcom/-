@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ScheduleItem, ScheduleType, CaseRecord, Supervisor, ScheduleCategory, SessionData } from '../types';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Clock, X, Search, Tag, Settings, Sparkles, Palette, Users, UserCheck, ChevronDown, Layers, Bookmark, CheckCircle2, Repeat, GripVertical, Pencil, Umbrella, CalendarX, CalendarCheck, Check } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Clock, X, Search, Tag, Settings, Sparkles, Palette, Users, UserCheck, ChevronDown, ChevronUp, Layers, Bookmark, CheckCircle2, Repeat, GripVertical, Pencil, Umbrella, CalendarX, CalendarCheck, Check } from 'lucide-react';
 import { COLOR_GROUPS, parseColorToStyle, getHexColor } from '../data/colorPalette';
 import { VoiceInputButton } from './VoiceInputButton';
 
@@ -494,6 +494,9 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
   const [newCatColor, setNewCatColor] = useState('#f43f5e');
   const [activePaletteTab, setActivePaletteTab] = useState(0);
 
+  // 日历按日折叠/展开状态
+  const [expandedCalendarDays, setExpandedCalendarDays] = useState<Record<string, boolean>>({});
+
   // 添加新日程分类处理
   const handleAddCategory = () => {
     if (!newCatName.trim()) return;
@@ -968,120 +971,134 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
   const renderScheduleGrid = () => {
     if (dimension === 'day') {
       const dateStr = formatDateKey(currentDate);
+      const dayHoliday = getChineseHolidayInfo(dateStr);
+
       return (
-        <div className="bg-white rounded-xl border border-rose-200 overflow-hidden shadow-2xs space-y-0">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-rose-100/80 border-b border-rose-200 text-rose-950 font-bold">
-                <th className="p-3 w-28 text-center border-r border-rose-200">时间段</th>
-                <th className="p-3">日程安排 (点击空白添加，可按住左侧 ⠇图标拖拽调整先后执行顺序)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: 14 }, (_, i) => i + 8).map((hour) => {
-                const hourStr = hour < 10 ? `0${hour}:00` : `${hour}:00`;
-                const hourItems = filteredSchedules.filter((s) => s.dateStr === dateStr && s.hour === hour);
+        <div className="space-y-3">
+          {dayHoliday.isHoliday && (
+            <div className="bg-gradient-to-r from-rose-500 via-rose-600 to-amber-500 text-white p-3 rounded-2xl font-bold text-xs flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2">
+                <Umbrella className="w-4 h-4 shrink-0" />
+                <span>🎉 今日为国家法定节假日：<strong className="text-amber-200 text-sm">【{dayHoliday.name}】</strong>（放假休息）</span>
+              </div>
+              <span className="text-[10px] bg-white/20 px-2.5 py-0.5 rounded-full font-extrabold tracking-wider">休·法定假日</span>
+            </div>
+          )}
 
-                return (
-                  <tr key={hour} className="border-b border-rose-100 hover:bg-rose-50/40 transition">
-                    <td className="p-3 font-bold text-slate-700 bg-rose-50/30 text-center border-r border-rose-200">
-                      {hourStr}
-                    </td>
-                    <td
-                      onClick={() => handleOpenModal(dateStr, hour)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => handleDropToSlot(e, dateStr, hour)}
-                      className="p-2 cursor-pointer min-h-[50px] align-top hover:bg-rose-50/20"
-                    >
-                      <div className="space-y-1.5">
-                        {hourItems.map((item) => {
-                          const { style, label } = getTypeStyleAndLabel(item.type);
-                          const displayTime = item.timeStr || (item.hour < 10 ? `0${item.hour}:00` : `${item.hour}:00`);
-                          const isDragging = draggedScheduleId === item.id;
-                          const isDragOver = dragOverScheduleId === item.id;
+          <div className="bg-white rounded-xl border border-rose-200 overflow-hidden shadow-2xs space-y-0">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-rose-100/80 border-b border-rose-200 text-rose-950 font-bold">
+                  <th className="p-3 w-28 text-center border-r border-rose-200">时间段</th>
+                  <th className="p-3">日程安排 (点击空白添加，可按住左侧 ⠇图标拖拽调整先后执行顺序)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 14 }, (_, i) => i + 8).map((hour) => {
+                  const hourStr = hour < 10 ? `0${hour}:00` : `${hour}:00`;
+                  const hourItems = filteredSchedules.filter((s) => s.dateStr === dateStr && s.hour === hour);
 
-                          return (
-                            <div
-                              key={item.id}
-                              draggable
-                              onDragStart={(e) => handleDragStart(e, item.id)}
-                              onDragOver={(e) => handleDragOver(e, item.id)}
-                              onDrop={(e) => handleDrop(e, item.id)}
-                              onDragEnd={handleDragEnd}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenModal(dateStr, hour, item.id);
-                              }}
-                              style={style}
-                              className={`p-2.5 rounded-xl text-xs shadow-2xs font-medium cursor-pointer transition-all border group relative ${
-                                isDragOver ? 'ring-2 ring-rose-500 border-rose-400 scale-[1.01]' : 'border-black/5 hover:border-black/20'
-                              } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
-                            >
-                              <div className="flex items-center justify-between gap-2 mb-1">
-                                <div className="font-bold flex items-center gap-1.5 text-xs flex-wrap min-w-0 flex-1">
-                                  <span
-                                    className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-800 p-0.5 shrink-0"
-                                    title="按住拖拽可调整排序或移动时间段"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <GripVertical className="w-3.5 h-3.5" />
-                                  </span>
-                                  <span>[{label}]</span>
-                                  <span className="truncate">{item.clientName || '自定对象'}</span>
-                                  {item.repeatRule && item.repeatRule !== 'none' && (
-                                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-200/80 dark:bg-amber-900/60 text-amber-950 dark:text-amber-100 border border-amber-300 dark:border-amber-700 flex items-center gap-0.5 shrink-0" title={`重复规则: ${item.repeatRule}`}>
-                                      <Repeat className="w-2.5 h-2.5" />
-                                      <span>{formatRepeatRuleLabel(item.repeatRule)}</span>
+                  return (
+                    <tr key={hour} className="border-b border-rose-100 hover:bg-rose-50/40 transition">
+                      <td className="p-3 font-bold text-slate-700 bg-rose-50/30 text-center border-r border-rose-200">
+                        {hourStr}
+                      </td>
+                      <td
+                        onClick={() => handleOpenModal(dateStr, hour)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => handleDropToSlot(e, dateStr, hour)}
+                        className="p-2 cursor-pointer min-h-[50px] align-top hover:bg-rose-50/20"
+                      >
+                        <div className="space-y-1.5">
+                          {hourItems.map((item) => {
+                            const { style, label } = getTypeStyleAndLabel(item.type);
+                            const displayTime = item.timeStr || (item.hour < 10 ? `0${item.hour}:00` : `${item.hour}:00`);
+                            const isDragging = draggedScheduleId === item.id;
+                            const isDragOver = dragOverScheduleId === item.id;
+
+                            return (
+                              <div
+                                key={item.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, item.id)}
+                                onDragOver={(e) => handleDragOver(e, item.id)}
+                                onDrop={(e) => handleDrop(e, item.id)}
+                                onDragEnd={handleDragEnd}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenModal(dateStr, hour, item.id);
+                                }}
+                                style={style}
+                                className={`p-2.5 rounded-xl text-xs shadow-2xs font-medium cursor-pointer transition-all border group relative ${
+                                  isDragOver ? 'ring-2 ring-rose-500 border-rose-400 scale-[1.01]' : 'border-black/5 hover:border-black/20'
+                                } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
+                              >
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <div className="font-bold flex items-center gap-1.5 text-xs flex-wrap min-w-0 flex-1">
+                                    <span
+                                      className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-800 p-0.5 shrink-0"
+                                      title="按住拖拽可调整排序或移动时间段"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <GripVertical className="w-3.5 h-3.5" />
                                     </span>
-                                  )}
-                                </div>
-
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <div className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded-lg bg-white/80 dark:bg-black/40 backdrop-blur-xs flex items-center gap-1 border border-black/10 shadow-2xs">
-                                    <Clock className="w-3 h-3 text-rose-600 dark:text-rose-400" />
-                                    <span>{displayTime}</span>
+                                    <span>[{label}]</span>
+                                    <span className="truncate">{item.clientName || '自定对象'}</span>
+                                    {item.repeatRule && item.repeatRule !== 'none' && (
+                                      <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-200/80 dark:bg-amber-900/60 text-amber-950 dark:text-amber-100 border border-amber-300 dark:border-amber-700 flex items-center gap-0.5 shrink-0" title={`重复规则: ${item.repeatRule}`}>
+                                        <Repeat className="w-2.5 h-2.5" />
+                                        <span>{formatRepeatRuleLabel(item.repeatRule)}</span>
+                                      </span>
+                                    )}
                                   </div>
 
-                                  {/* 修改按钮 */}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleOpenModal(dateStr, hour, item.id);
-                                    }}
-                                    className="p-1 rounded-lg bg-white/90 dark:bg-slate-800/90 hover:bg-sky-50 dark:hover:bg-sky-950 text-slate-700 dark:text-slate-200 hover:text-sky-600 border border-black/10 shadow-2xs transition cursor-pointer"
-                                    title="修改/编辑日程"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                  </button>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <div className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded-lg bg-white/80 dark:bg-black/40 backdrop-blur-xs flex items-center gap-1 border border-black/10 shadow-2xs">
+                                      <Clock className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                                      <span>{displayTime}</span>
+                                    </div>
 
-                                  {/* 删除按钮 */}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (window.confirm(`确定要删除日程 “${label}: ${item.clientName || '自定对象'}” 吗？`)) {
-                                        onDeleteSchedule(item.id);
-                                      }
-                                    }}
-                                    className="p-1 rounded-lg bg-white/90 dark:bg-slate-800/90 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-600 hover:text-rose-700 border border-black/10 shadow-2xs transition cursor-pointer"
-                                    title="删除日程"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                    {/* 修改按钮 */}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenModal(dateStr, hour, item.id);
+                                      }}
+                                      className="p-1 rounded-lg bg-white/90 dark:bg-slate-800/90 hover:bg-sky-50 dark:hover:bg-sky-950 text-slate-700 dark:text-slate-200 hover:text-sky-600 border border-black/10 shadow-2xs transition cursor-pointer"
+                                      title="修改/编辑日程"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    {/* 删除按钮 */}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (window.confirm(`确定要删除日程 “${label}: ${item.clientName || '自定对象'}” 吗？`)) {
+                                          onDeleteSchedule(item.id);
+                                        }
+                                      }}
+                                      className="p-1 rounded-lg bg-white/90 dark:bg-slate-800/90 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-600 hover:text-rose-700 border border-black/10 shadow-2xs transition cursor-pointer"
+                                      title="删除日程"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
+                                {item.detail && <div className="text-[11px] opacity-85 mt-1 border-t border-black/5 pt-1 pl-5">{item.detail}</div>}
                               </div>
-                              {item.detail && <div className="text-[11px] opacity-85 mt-1 border-t border-black/5 pt-1 pl-5">{item.detail}</div>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       );
     }
@@ -1105,14 +1122,33 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
             <thead>
               <tr className="bg-rose-100/80 border-b border-rose-200 text-rose-950 font-bold">
                 <th className="p-2.5 w-20 border-r border-rose-200">时间</th>
-                {weekDates.map((d, idx) => (
-                  <th key={idx} className="p-2 border-r border-rose-200 last:border-r-0">
-                    <div>{DAYS[d.getDay()]}</div>
-                    <div className="text-[11px] font-normal text-rose-800">
-                      {d.getMonth() + 1}/{d.getDate()}
-                    </div>
-                  </th>
-                ))}
+                {weekDates.map((d, idx) => {
+                  const dateStr = formatDateKey(d);
+                  const holiday = getChineseHolidayInfo(dateStr);
+                  const isToday = dateStr === formatDateKey(new Date());
+
+                  return (
+                    <th
+                      key={idx}
+                      className={`p-2 border-r border-rose-200 last:border-r-0 ${
+                        holiday.isHoliday ? 'bg-amber-100/90 dark:bg-amber-950/60' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-1 font-bold">
+                        <span>{DAYS[d.getDay()]}</span>
+                        {holiday.isHoliday && (
+                          <span className="px-1.5 py-0.2 text-[10px] bg-rose-600 text-white rounded font-bold shadow-2xs flex items-center gap-0.5" title={`法定节假日: ${holiday.name}`}>
+                            <Umbrella className="w-2.5 h-2.5" />
+                            <span>{holiday.name}</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className={`text-[11px] font-medium ${isToday ? 'text-rose-600 font-extrabold' : 'text-rose-800'}`}>
+                        {d.getMonth() + 1}/{d.getDate()}
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -1244,7 +1280,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
               const day = i + 1;
               const dateObj = new Date(year, month, day);
               const dateStr = formatDateKey(dateObj);
+              const holiday = getChineseHolidayInfo(dateStr);
               const dayItems = filteredSchedules.filter((s) => s.dateStr === dateStr);
+              const isToday = dateStr === formatDateKey(new Date());
+
+              const isDayExpanded = Boolean(expandedCalendarDays[dateStr]);
+              const visibleDayItems = isDayExpanded ? dayItems : dayItems.slice(0, 3);
 
               return (
                 <div
@@ -1252,11 +1293,25 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                   onClick={() => handleOpenModal(dateStr, 9)}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDropToSlot(e, dateStr, 9)}
-                  className="min-h-[85px] p-2 bg-white border border-rose-200 rounded-lg hover:bg-rose-50/40 cursor-pointer transition space-y-1"
+                  className={`min-h-[85px] p-2 border rounded-lg hover:bg-rose-50/40 cursor-pointer transition space-y-1 relative ${
+                    holiday.isHoliday
+                      ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700'
+                      : isToday
+                      ? 'bg-rose-50/60 border-rose-400 ring-2 ring-rose-300'
+                      : 'bg-white border-rose-200'
+                  }`}
                 >
-                  <div className="font-bold text-xs text-slate-800">{day} 日</div>
+                  <div className="flex items-center justify-between">
+                    <span className={`font-bold text-xs ${isToday ? 'text-rose-700 font-extrabold' : 'text-slate-800'}`}>{day} 日</span>
+                    {holiday.isHoliday && (
+                      <span className="text-[10px] font-extrabold px-1.5 py-0.5 bg-rose-600 text-white rounded-md shadow-2xs flex items-center gap-0.5 shrink-0" title={`法定节假日：${holiday.name}`}>
+                        <Umbrella className="w-2.5 h-2.5" />
+                        <span>{holiday.name}</span>
+                      </span>
+                    )}
+                  </div>
                   <div className="space-y-1">
-                    {dayItems.slice(0, 4).map((item) => {
+                    {visibleDayItems.map((item) => {
                       const { style, label } = getTypeStyleAndLabel(item.type);
                       const displayTime = item.timeStr || (item.hour < 10 ? `0${item.hour}:00` : `${item.hour}:00`);
                       const isDragging = draggedScheduleId === item.id;
@@ -1320,8 +1375,27 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                         </div>
                       );
                     })}
-                    {dayItems.length > 4 && (
-                      <div className="text-[10px] font-bold text-rose-700">+{dayItems.length - 4} 更多</div>
+                    {dayItems.length > 3 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedCalendarDays((prev) => ({ ...prev, [dateStr]: !prev[dateStr] }));
+                        }}
+                        className="w-full text-center py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-100/90 dark:bg-rose-950/80 hover:bg-rose-200 border border-rose-300 dark:border-rose-800 rounded cursor-pointer transition flex items-center justify-center gap-0.5 mt-1 shadow-2xs"
+                      >
+                        {isDayExpanded ? (
+                          <>
+                            <span>折叠 ({dayItems.length} 项)</span>
+                            <ChevronUp className="w-2.5 h-2.5" />
+                          </>
+                        ) : (
+                          <>
+                            <span>展开剩余 ({dayItems.length - 3} 项)</span>
+                            <ChevronDown className="w-2.5 h-2.5" />
+                          </>
+                        )}
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1357,6 +1431,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                   {Array.from({ length: monthLength }).map((_, dIdx) => {
                     const dayNum = dIdx + 1;
                     const dateStr = formatDateKey(new Date(year, mIdx, dayNum));
+                    const holiday = getChineseHolidayInfo(dateStr);
                     const hasItem = filteredSchedules.some((s) => s.dateStr === dateStr);
 
                     return (
@@ -1366,9 +1441,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                           setCurrentDate(new Date(year, mIdx, dayNum));
                           setDimension('day');
                         }}
-                        className={`p-1 rounded-full font-medium transition cursor-pointer ${
+                        title={holiday.isHoliday ? `法定节假日: ${holiday.name}` : undefined}
+                        className={`p-1 rounded-full font-medium transition cursor-pointer relative ${
                           hasItem
                             ? 'bg-rose-600 text-white font-bold shadow-xs'
+                            : holiday.isHoliday
+                            ? 'bg-amber-200 text-amber-950 font-extrabold border border-amber-300'
                             : 'hover:bg-rose-100 text-slate-700'
                         }`}
                       >

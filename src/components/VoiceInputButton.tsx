@@ -1,20 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Sparkles, Loader2 } from 'lucide-react';
+import { Mic, Sparkles, Loader2, ListOrdered, CheckCircle2 } from 'lucide-react';
 
 interface VoiceInputButtonProps {
   onTranscript: (textChunk: string) => void;
   className?: string;
   buttonText?: string;
   placeholderText?: string;
+  currentText?: string; // 可选：传入当前输入框文字以进行一键微信大模型整理
 }
 
 export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
   onTranscript,
   className = '',
   buttonText = '语音口述',
+  currentText,
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
+  const [useWeChatModel, setUseWeChatModel] = useState(true); // 默认开启微信语音大模型智能分点提炼
   const [isSupported, setIsSupported] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
@@ -27,15 +30,17 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
     }
   }, []);
 
-  // Helper function to refine text with Gemini AI or local smart format fallback
-  const processTranscriptWithAI = async (rawText: string) => {
+  // Helper function to refine text with Gemini AI / WeChat Voice Big Model
+  const processTranscriptWithAI = async (rawText: string, forceWeChatFormat: boolean = false) => {
     if (!rawText || !rawText.trim()) return;
 
     setIsProcessingAI(true);
-    setStatusMessage('✨ AI 智能断句、校准标点中...');
+    const isWeChat = forceWeChatFormat || useWeChatModel;
+    setStatusMessage(isWeChat ? '✨ 微信语音大模型·智能分点整理中...' : '✨ AI 智能断句、校准标点中...');
 
     try {
-      const response = await fetch('/api/refine-speech', {
+      const endpoint = isWeChat ? '/api/refine-speech-wechat' : '/api/refine-speech';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: rawText }),
@@ -43,9 +48,10 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
 
       if (response.ok) {
         const data = await response.json();
-        if (data.refinedText) {
-          onTranscript(data.refinedText);
-          setStatusMessage(`已智能录入: "${data.refinedText.slice(0, 14)}${data.refinedText.length > 14 ? '...' : ''}"`);
+        const resultText = data.structuredText || data.refinedText;
+        if (resultText) {
+          onTranscript(resultText);
+          setStatusMessage(`已分点整理: "${resultText.slice(0, 16)}${resultText.length > 16 ? '...' : ''}"`);
           return;
         }
       }
@@ -53,7 +59,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
       console.warn('AI speech refinement fetch failed, falling back to local format', e);
     } finally {
       setIsProcessingAI(false);
-      setTimeout(() => setStatusMessage(null), 3000);
+      setTimeout(() => setStatusMessage(null), 3500);
     }
 
     // Local smart formatting fallback
@@ -66,6 +72,16 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
     }
     onTranscript(fallbackText);
     setStatusMessage(`已录入: "${fallbackText.slice(0, 14)}${fallbackText.length > 14 ? '...' : ''}"`);
+  };
+
+  // 一键将现有的输入框文本用“微信语音大模型”智能重写提炼成条目
+  const handleFormatExistingTextWithWeChat = () => {
+    if (!currentText || !currentText.trim()) {
+      setStatusMessage('输入框暂无文字，请先语音口述或输入文本');
+      setTimeout(() => setStatusMessage(null), 2500);
+      return;
+    }
+    processTranscriptWithAI(currentText, true);
   };
 
   const toggleListening = () => {
@@ -101,7 +117,6 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
 
       const resetSilenceTimer = () => {
         if (silenceTimer) clearTimeout(silenceTimer);
-        // VAD 静音监测: 2.5 秒内无有效声音则自动停止录音并交由 AI 处理
         silenceTimer = setTimeout(() => {
           if (recognitionRef.current) {
             try {
@@ -115,7 +130,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
 
       recognition.onstart = () => {
         setIsListening(true);
-        setStatusMessage('正在聆听中，请清晰口述...');
+        setStatusMessage(useWeChatModel ? '正在聆听，稍后将使用【微信语音大模型】自动分点整理...' : '正在聆听中，请清晰口述...');
         resetSilenceTimer();
       };
 
@@ -125,7 +140,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
       };
 
       recognition.onspeechend = () => {
-        setStatusMessage('检测到口述暂停，准备 AI 校准...');
+        setStatusMessage('检测到口述暂停，准备微信大模型智能整理...');
         if (silenceTimer) clearTimeout(silenceTimer);
       };
 
@@ -174,47 +189,77 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
   };
 
   return (
-    <div className="inline-flex items-center gap-2 relative">
+    <div className="inline-flex flex-wrap items-center gap-1.5 relative">
+      {/* 核心录音按钮 */}
       <button
         type="button"
         onClick={toggleListening}
         disabled={isProcessingAI}
         className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-lg border transition cursor-pointer select-none shrink-0 ${
           isListening
-            ? 'bg-rose-600 text-white border-rose-700 animate-pulse shadow-md'
+            ? 'bg-emerald-600 text-white border-emerald-700 animate-pulse shadow-md'
             : isProcessingAI
             ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 cursor-wait'
-            : 'bg-rose-50 dark:bg-slate-800 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-slate-700 hover:bg-rose-100 dark:hover:bg-slate-700'
+            : 'bg-emerald-50 dark:bg-slate-800 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-slate-700 hover:bg-emerald-100 dark:hover:bg-slate-700'
         } ${className}`}
         title={
           !isSupported
             ? '当前浏览器不支持 Web Speech API'
             : isListening
-            ? '点击停止语音录入并进行 AI 断句标点校准'
-            : '点击开始语音口述，支持 AI 自动断句与重构'
+            ? '点击停止语音录入并交由微信语音大模型智能分点整理'
+            : '点击开始语音口述，支持微信语音大模型理解重写与分点提炼'
         }
       >
         {isListening ? (
           <>
             <span className="w-2 h-2 rounded-full bg-white animate-ping shrink-0" />
             <Mic className="w-3.5 h-3.5" />
-            <span>录音中 (点击完成)</span>
+            <span>微信语音录音中...</span>
           </>
         ) : isProcessingAI ? (
           <>
             <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600 dark:text-amber-400" />
-            <span>AI 断句标点中...</span>
+            <span>微信大模型整理中...</span>
           </>
         ) : (
           <>
-            <Mic className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+            <Mic className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             <span>{buttonText}</span>
           </>
         )}
       </button>
 
+      {/* 微信大模型模式 Toggle / 智能提炼现有文字按钮 */}
+      {currentText && currentText.trim() && (
+        <button
+          type="button"
+          onClick={handleFormatExistingTextWithWeChat}
+          disabled={isProcessingAI}
+          className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-950 hover:bg-emerald-200 border border-emerald-300 dark:border-emerald-800 rounded-lg transition cursor-pointer shadow-2xs"
+          title="微信语音大模型：将当前输入框内容重新理解、整理提炼成有条理的分点格式 (1. 2. 3.)"
+        >
+          <Sparkles className="w-3 h-3 text-amber-500" />
+          <span>微信分点整理</span>
+        </button>
+      )}
+
+      {/* 切换整理模式提示 badge */}
+      <button
+        type="button"
+        onClick={() => setUseWeChatModel((prev) => !prev)}
+        className={`px-1.5 py-0.5 text-[10px] font-bold rounded-md border transition cursor-pointer flex items-center gap-0.5 ${
+          useWeChatModel
+            ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+            : 'bg-zinc-100 text-zinc-600 border-zinc-200'
+        }`}
+        title={useWeChatModel ? '已开启【微信语音大模型智能分点】模式 (点击可切换为普通标点断句)' : '当前为普通标点断句 (点击可开启微信语音大模型智能分点)'}
+      >
+        <ListOrdered className="w-2.5 h-2.5" />
+        <span>{useWeChatModel ? '微信大模型' : '标准断句'}</span>
+      </button>
+
       {statusMessage && !isListening && (
-        <span className="text-[11px] font-medium text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 px-2 py-0.5 rounded-md flex items-center gap-1 animate-fadeIn">
+        <span className="text-[11px] font-medium text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-slate-800 border border-emerald-200 dark:border-slate-700 px-2 py-0.5 rounded-md flex items-center gap-1 animate-fadeIn">
           {isProcessingAI && <Sparkles className="w-3 h-3 text-amber-500 animate-spin" />}
           <span>{statusMessage}</span>
         </span>
@@ -222,3 +267,4 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
     </div>
   );
 };
+

@@ -25,13 +25,15 @@ import {
 import { SystemData } from '../types';
 import { WorkspaceLayoutConfig, DEFAULT_WORKSPACE_LAYOUT } from '../services/layout';
 
-export type ActiveTab = 'longTerm' | 'longTermActive' | 'longTermEnded' | 'shortTerm' | 'mentor' | 'thinking' | 'schedule';
+export type ActiveTab = 'longTerm' | 'longTermActive' | 'longTermEnded' | 'shortTerm' | 'mentor' | 'personalExperience' | 'thinking' | 'schedule';
 
 interface SidebarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   supervisionTypeFilter?: 'all' | 'individual' | 'group';
   onSelectSupervisionFilter?: (filter: 'all' | 'individual' | 'group') => void;
+  personalExperienceFilter?: 'all' | 'individual' | 'group';
+  onSelectPersonalExperienceFilter?: (filter: 'all' | 'individual' | 'group') => void;
   systemData: SystemData;
   onOpenPrivacyModal: (initialTab?: 'privacy' | 'backup' | 'clear' | 'layout') => void;
   onOpenReminderModal: () => void;
@@ -60,6 +62,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   supervisionTypeFilter = 'all',
   onSelectSupervisionFilter,
+  personalExperienceFilter = 'all',
+  onSelectPersonalExperienceFilter,
   systemData,
   onOpenPrivacyModal,
   onOpenReminderModal,
@@ -77,6 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isCasesDropdownOpen, setIsCasesDropdownOpen] = useState(true);
   const [isMentorDropdownOpen, setIsMentorDropdownOpen] = useState(true);
+  const [isPersonalExpDropdownOpen, setIsPersonalExpDropdownOpen] = useState(true);
 
   const pendingRemindersCount = (systemData.reminders || []).filter((r) => !r.completed).length;
 
@@ -331,6 +336,87 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
                   </div>
                 )}
+
+                {/* 3. 个人体验 (大标题: 个人体验，分两个板块: 团体体验和个人体验，包含次数显示) */}
+                <div className="rounded-xl border border-purple-200/80 dark:border-slate-800 bg-purple-50/40 dark:bg-slate-800/40 overflow-hidden transition-all shadow-2xs">
+                  {/* 下拉总标题: 个人体验 */}
+                  <button
+                    onClick={() => {
+                      setIsPersonalExpDropdownOpen((prev) => !prev);
+                      if (activeTab !== 'personalExperience') {
+                        handleItemSelect(() => {
+                          setActiveTab('personalExperience');
+                          onSelectPersonalExperienceFilter?.('all');
+                        });
+                      }
+                    }}
+                    className={`w-full flex items-center justify-between px-3.5 py-3 text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === 'personalExperience'
+                        ? 'bg-purple-100/90 dark:bg-slate-800 text-purple-900 dark:text-purple-300 border-b border-purple-200/80 dark:border-slate-700/80'
+                        : 'text-zinc-700 dark:text-slate-200 hover:bg-purple-100/60 dark:hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-purple-200/70 dark:bg-slate-700 text-purple-700 dark:text-purple-300 shrink-0">
+                        <Feather className="w-4 h-4" />
+                      </div>
+                      <span className="text-base sm:text-lg font-black tracking-wide text-zinc-900 dark:text-slate-100">个人体验</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-purple-500 dark:text-slate-400">
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-purple-200/60 dark:bg-slate-700 text-purple-800 dark:text-purple-300">
+                        自我成长
+                      </span>
+                      {isPersonalExpDropdownOpen ? (
+                        <ChevronDown className="w-4 h-4 transition-transform duration-200" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 transition-transform duration-200" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* 下拉展开子菜单: 1. 团体体验 2. 个体体验 */}
+                  {isPersonalExpDropdownOpen && (
+                    <div className="p-1.5 space-y-1 bg-white/80 dark:bg-slate-900/80 border-t border-purple-100/80 dark:border-slate-800">
+                      <button
+                        onClick={() => {
+                          handleItemSelect(() => {
+                            setActiveTab('personalExperience');
+                            onSelectPersonalExperienceFilter?.('group');
+                          });
+                        }}
+                        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          activeTab === 'personalExperience' && personalExperienceFilter === 'group'
+                            ? 'bg-purple-600 text-white font-bold shadow-xs'
+                            : 'text-zinc-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-slate-800 hover:text-purple-800 dark:hover:text-purple-300'
+                        }`}
+                      >
+                        <Users className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'personalExperience' && personalExperienceFilter === 'group' ? 'text-white' : 'text-purple-500'}`} />
+                        <div className="flex flex-col text-left leading-tight">
+                          <span className="font-bold">1. 团体体验</span>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          handleItemSelect(() => {
+                            setActiveTab('personalExperience');
+                            onSelectPersonalExperienceFilter?.('individual');
+                          });
+                        }}
+                        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          activeTab === 'personalExperience' && personalExperienceFilter === 'individual'
+                            ? 'bg-purple-600 text-white font-bold shadow-xs'
+                            : 'text-zinc-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-slate-800 hover:text-purple-800 dark:hover:text-purple-300'
+                        }`}
+                      >
+                        <User className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'personalExperience' && personalExperienceFilter === 'individual' ? 'text-white' : 'text-purple-500'}`} />
+                        <div className="flex flex-col text-left leading-tight">
+                          <span className="font-bold">2. 个体体验</span>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 {/* 3 & 4. 其余一级菜单项: 想出来个啥、出了个门儿 */}
                 {otherNavItems.map((item) => {

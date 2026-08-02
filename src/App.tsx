@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SystemData, CaseRecord, Supervisor, ScheduleItem, ThinkingNote, ReminderItem, SessionData, SupervisionRecord } from './types';
+import { SystemData, CaseRecord, Supervisor, ScheduleItem, ThinkingNote, ReminderItem, SessionData, SupervisionRecord, ParentSessionData } from './types';
 import { loadDataFromLocalStorage, saveDataToLocalStorage, saveDataToBackend, fetchBackendData } from './services/storage';
 import { getCurrentUser, logoutUser, UserAccount } from './services/auth';
 import { loadWorkspaceLayout, saveWorkspaceLayout, WorkspaceLayoutConfig } from './services/layout';
@@ -10,15 +10,18 @@ import { CaseManagement } from './components/CaseManagement';
 import { SupervisorManagement } from './components/SupervisorManagement';
 import { ScheduleManagement } from './components/ScheduleManagement';
 import { ThinkingNotes } from './components/ThinkingNotes';
+import { PersonalExperienceManagement } from './components/PersonalExperienceManagement';
 import { PrivacySecurityModal } from './components/PrivacySecurityModal';
 import { ReminderModal } from './components/ReminderModal';
 import { TodayScheduleOverview } from './components/TodayScheduleOverview';
+import { TotalHoursOverview } from './components/TotalHoursOverview';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
   const [activeTab, setActiveTab] = useState<ActiveTab>('longTerm');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [supervisionTypeFilter, setSupervisionTypeFilter] = useState<'all' | 'individual' | 'group'>('all');
+  const [personalExperienceFilter, setPersonalExperienceFilter] = useState<'all' | 'individual' | 'group'>('all');
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [privacyModalTab, setPrivacyModalTab] = useState<'privacy' | 'backup' | 'clear' | 'layout'>('privacy');
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
@@ -205,6 +208,98 @@ export default function App() {
     }));
   };
 
+  const handleUpdateParentSessionNote = (
+    caseId: string,
+    parentSessionNum: number,
+    parentSessionData: Partial<ParentSessionData>
+  ) => {
+    setSystemData((prev) => ({
+      ...prev,
+      records: (prev.records || []).map((r) => {
+        if (r.id !== caseId) return r;
+        const currentParentSessions = r.parentSessions || {};
+        const currentParentSession = currentParentSessions[parentSessionNum] || { completed: true, note: '' };
+        const updatedParentSession: ParentSessionData = {
+          ...currentParentSession,
+          ...parentSessionData,
+        };
+        return {
+          ...r,
+          parentSessions: {
+            ...currentParentSessions,
+            [parentSessionNum]: updatedParentSession,
+          },
+        };
+      }),
+    }));
+  };
+
+  const handleUpdateTotalHoursOverrides = (newOverrides: {
+    caseHours?: number;
+    supervisionHours?: number;
+    personalExperienceHours?: number;
+  }) => {
+    setSystemData((prev) => ({
+      ...prev,
+      totalHoursOverrides: newOverrides,
+    }));
+  };
+
+  const handleBatchUpdateSessions = (
+    caseId: string,
+    sessionUpdates: { sessionNum: number; sessionData: Partial<SessionData> }[]
+  ) => {
+    setSystemData((prev) => ({
+      ...prev,
+      records: (prev.records || []).map((r) => {
+        if (r.id !== caseId) return r;
+        const currentSessions = { ...(r.sessions || {}) };
+        sessionUpdates.forEach(({ sessionNum, sessionData }) => {
+          const current = currentSessions[sessionNum] || {};
+          currentSessions[sessionNum] = {
+            ...current,
+            ...sessionData,
+          };
+        });
+        return {
+          ...r,
+          sessions: currentSessions,
+        };
+      }),
+    }));
+  };
+
+  const handleBatchUpdateCases = (
+    caseUpdates: { id: string; status?: 'active' | 'ended'; totalSessions?: number }[]
+  ) => {
+    const updateMap = new Map(caseUpdates.map((u) => [u.id, u]));
+    setSystemData((prev) => ({
+      ...prev,
+      records: (prev.records || []).map((r) => {
+        const update = updateMap.get(r.id);
+        if (!update) return r;
+        return {
+          ...r,
+          ...(update.status ? { status: update.status, endDate: update.status === 'ended' ? new Date().toISOString().split('T')[0] : r.endDate } : {}),
+          ...(update.totalSessions !== undefined ? { totalSessions: update.totalSessions } : {}),
+        };
+      }),
+    }));
+  };
+
+  const handleBatchDeleteCases = (ids: string[]) => {
+    const idSet = new Set(ids);
+    setSystemData((prev) => ({
+      ...prev,
+      records: (prev.records || []).filter((r) => !idSet.has(r.id)),
+      mentors: (prev.mentors || []).map((m) => ({
+        ...m,
+        boundCaseIds: (m.boundCaseIds || []).filter((cid) => !idSet.has(cid)),
+        records: (m.records || []).filter((r) => !idSet.has(r.caseId)),
+      })),
+    }));
+  };
+
   const handleUpdateCaseTotalSessions = (caseId: string, newTotal: number) => {
     setSystemData((prev) => ({
       ...prev,
@@ -236,6 +331,13 @@ export default function App() {
     setSystemData((prev) => ({
       ...prev,
       mentors: (prev.mentors || []).map((m) => (m.id === mentorId ? { ...m, boundCaseIds } : m)),
+    }));
+  };
+
+  const handleUpdateMentorTotalSupervisions = (mentorId: string, newTotal: number) => {
+    setSystemData((prev) => ({
+      ...prev,
+      mentors: (prev.mentors || []).map((m) => (m.id === mentorId ? { ...m, totalSupervisions: newTotal } : m)),
     }));
   };
 
@@ -442,6 +544,8 @@ export default function App() {
           setActiveTab={setActiveTab}
           supervisionTypeFilter={supervisionTypeFilter}
           onSelectSupervisionFilter={setSupervisionTypeFilter}
+          personalExperienceFilter={personalExperienceFilter}
+          onSelectPersonalExperienceFilter={setPersonalExperienceFilter}
           systemData={systemData}
           onOpenPrivacyModal={handleOpenPrivacyModal}
           onOpenReminderModal={() => setIsReminderModalOpen(true)}
@@ -458,6 +562,12 @@ export default function App() {
         {/* 主内容展示区 */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-6 md:p-8 bg-rose-50/40 dark:bg-slate-900/60 transition-colors duration-300">
           <div className="max-w-7xl mx-auto">
+            {/* 顶置：个案总时数、督导总时数、个人体验总时数统计板 */}
+            <TotalHoursOverview
+              systemData={systemData}
+              onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
+            />
+
             {/* 今日日程概览（精美紧凑顶置，方便在主界面自动筛选并快速查看所有安排好的咨询/督导任务） */}
             <TodayScheduleOverview
               schedules={systemData.schedules || []}
@@ -475,6 +585,10 @@ export default function App() {
                 onAddCase={handleAddCase}
                 onDeleteCase={handleDeleteCase}
                 onUpdateSessionNote={handleUpdateSessionNote}
+                onUpdateParentSessionNote={handleUpdateParentSessionNote}
+                onBatchUpdateSessions={handleBatchUpdateSessions}
+                onBatchUpdateCases={handleBatchUpdateCases}
+                onBatchDeleteCases={handleBatchDeleteCases}
                 onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
                 onSaveToThinkingNotes={handleAddThinkingNote}
                 onTogglePinCase={handleTogglePinCase}
@@ -491,6 +605,10 @@ export default function App() {
                 onAddCase={handleAddCase}
                 onDeleteCase={handleDeleteCase}
                 onUpdateSessionNote={handleUpdateSessionNote}
+                onUpdateParentSessionNote={handleUpdateParentSessionNote}
+                onBatchUpdateSessions={handleBatchUpdateSessions}
+                onBatchUpdateCases={handleBatchUpdateCases}
+                onBatchDeleteCases={handleBatchDeleteCases}
                 onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
                 onSaveToThinkingNotes={handleAddThinkingNote}
                 onTogglePinCase={handleTogglePinCase}
@@ -506,6 +624,10 @@ export default function App() {
                 onAddCase={handleAddCase}
                 onDeleteCase={handleDeleteCase}
                 onUpdateSessionNote={handleUpdateSessionNote}
+                onUpdateParentSessionNote={handleUpdateParentSessionNote}
+                onBatchUpdateSessions={handleBatchUpdateSessions}
+                onBatchUpdateCases={handleBatchUpdateCases}
+                onBatchDeleteCases={handleBatchDeleteCases}
                 onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
                 onSaveToThinkingNotes={handleAddThinkingNote}
                 onTogglePinCase={handleTogglePinCase}
@@ -519,11 +641,26 @@ export default function App() {
                 onAddMentor={handleAddMentor}
                 onDeleteMentor={handleDeleteMentor}
                 onUpdateMentorCaseBinding={handleUpdateMentorCaseBinding}
+                onUpdateMentorTotalSupervisions={handleUpdateMentorTotalSupervisions}
                 onAddSupervisionRecord={handleAddSupervisionRecord}
                 onDeleteSupervisionRecord={handleDeleteSupervisionRecord}
                 onUpdateSupervisionRecord={handleUpdateSupervisionRecord}
                 supervisionTypeFilter={supervisionTypeFilter}
                 onTypeFilterChange={setSupervisionTypeFilter}
+              />
+            )}
+
+            {activeTab === 'personalExperience' && (
+              <PersonalExperienceManagement
+                experienceData={systemData.personalExperience}
+                onUpdateExperienceData={(updated) =>
+                  setSystemData((prev) => ({
+                    ...prev,
+                    personalExperience: updated,
+                  }))
+                }
+                experienceTypeFilter={personalExperienceFilter}
+                onTypeFilterChange={setPersonalExperienceFilter}
               />
             )}
 
