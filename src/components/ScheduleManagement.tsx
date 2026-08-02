@@ -1,8 +1,42 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ScheduleItem, ScheduleType, CaseRecord, Supervisor, ScheduleCategory, SessionData } from '../types';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Clock, X, Search, Tag, Settings, Sparkles, Palette, Users, UserCheck, ChevronDown, Layers, Bookmark, CheckCircle2 } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Clock, X, Search, Tag, Settings, Sparkles, Palette, Users, UserCheck, ChevronDown, Layers, Bookmark, CheckCircle2, Repeat, GripVertical, Pencil } from 'lucide-react';
 import { COLOR_GROUPS, parseColorToStyle, getHexColor } from '../data/colorPalette';
 import { VoiceInputButton } from './VoiceInputButton';
+
+export const formatRepeatRuleLabel = (ruleStr?: string): string => {
+  if (!ruleStr || ruleStr === 'none') return '';
+  if (ruleStr === 'daily') return '每天';
+  if (ruleStr === 'workdays') return '工作日';
+  if (ruleStr === 'monthly') return '每月';
+  if (ruleStr === 'biweekly') return '隔周';
+
+  if (ruleStr.startsWith('weekly')) {
+    const weekNames: Record<number, string> = { 1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六', 0: '日' };
+    let intervalPrefix = '每周';
+    let daysSuffix = '';
+
+    const intervalMatch = ruleStr.match(/interval=(\d+)/);
+    if (intervalMatch) {
+      const val = parseInt(intervalMatch[1], 10);
+      if (val === 2) intervalPrefix = '隔周';
+      else if (val > 2) intervalPrefix = `每${val}周`;
+    }
+
+    const daysMatch = ruleStr.match(/days=([0-9,]+)/);
+    if (daysMatch) {
+      const days = daysMatch[1].split(',').map(Number);
+      daysSuffix = days.map((d) => weekNames[d] || d).join('、');
+    }
+
+    if (daysSuffix) {
+      return `${intervalPrefix}周${daysSuffix}`;
+    }
+    return `${intervalPrefix}`;
+  }
+
+  return '重复';
+};
 
 interface ScheduleManagementProps {
   schedules: ScheduleItem[];
@@ -11,6 +45,7 @@ interface ScheduleManagementProps {
   onAddSchedule: (newItem: Omit<ScheduleItem, 'id'>) => void;
   onUpdateSchedule: (id: string, updated: Omit<ScheduleItem, 'id'>) => void;
   onDeleteSchedule: (id: string) => void;
+  onReorderSchedules?: (newSchedules: ScheduleItem[]) => void;
 }
 
 type Dimension = 'day' | 'week' | 'month' | 'year';
@@ -48,10 +83,118 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
   onAddSchedule,
   onUpdateSchedule,
   onDeleteSchedule,
+  onReorderSchedules,
 }) => {
   const [dimension, setDimension] = useState<Dimension>('week');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [searchQuery, setSearchQuery] = useState('');
+
+  // 拖拽排序状态与 Handler
+  const [draggedScheduleId, setDraggedScheduleId] = useState<string | null>(null);
+  const [dragOverScheduleId, setDragOverScheduleId] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedScheduleId(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverScheduleId !== targetId) {
+      setDragOverScheduleId(targetId);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedScheduleId(null);
+    setDragOverScheduleId(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const sourceId = e.dataTransfer.getData('text/plain') || draggedScheduleId;
+    if (sourceId && sourceId !== targetId) {
+      handleReorderItems(sourceId, targetId);
+    }
+    setDraggedScheduleId(null);
+    setDragOverScheduleId(null);
+  };
+
+  const handleDropToSlot = (e: React.DragEvent, targetDateStr: string, targetHour: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const sourceId = e.dataTransfer.getData('text/plain') || draggedScheduleId;
+    if (!sourceId) return;
+
+    const sourceIndex = schedules.findIndex((s) => s.id === sourceId);
+    if (sourceIndex === -1) return;
+
+    const sourceItem = schedules[sourceIndex];
+
+    const updatedSourceItem: ScheduleItem = {
+      ...sourceItem,
+      dateStr: targetDateStr,
+      hour: targetHour,
+    };
+
+    const newSchedules = [...schedules];
+    newSchedules[sourceIndex] = updatedSourceItem;
+
+    if (onReorderSchedules) {
+      onReorderSchedules(newSchedules);
+    } else {
+      onUpdateSchedule(sourceId, {
+        dateStr: updatedSourceItem.dateStr,
+        hour: updatedSourceItem.hour,
+        timeStr: updatedSourceItem.timeStr,
+        type: updatedSourceItem.type,
+        clientName: updatedSourceItem.clientName,
+        detail: updatedSourceItem.detail,
+        completed: updatedSourceItem.completed,
+        repeatRule: updatedSourceItem.repeatRule,
+      });
+    }
+    setDraggedScheduleId(null);
+    setDragOverScheduleId(null);
+  };
+
+  const handleReorderItems = (sourceId: string, targetId: string) => {
+    const sourceIndex = schedules.findIndex((s) => s.id === sourceId);
+    const targetIndex = schedules.findIndex((s) => s.id === targetId);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const targetItem = schedules[targetIndex];
+    const sourceItem = schedules[sourceIndex];
+
+    const updatedSourceItem: ScheduleItem = {
+      ...sourceItem,
+      dateStr: targetItem.dateStr,
+      hour: targetItem.hour,
+    };
+
+    const newSchedules = [...schedules];
+    newSchedules.splice(sourceIndex, 1);
+    const newTargetIndex = newSchedules.findIndex((s) => s.id === targetId);
+    newSchedules.splice(newTargetIndex, 0, updatedSourceItem);
+
+    if (onReorderSchedules) {
+      onReorderSchedules(newSchedules);
+    } else {
+      onUpdateSchedule(sourceId, {
+        dateStr: updatedSourceItem.dateStr,
+        hour: updatedSourceItem.hour,
+        timeStr: updatedSourceItem.timeStr,
+        type: updatedSourceItem.type,
+        clientName: updatedSourceItem.clientName,
+        detail: updatedSourceItem.detail,
+        completed: updatedSourceItem.completed,
+        repeatRule: updatedSourceItem.repeatRule,
+      });
+    }
+  };
 
   // 时间范围筛选器 ('all' | 'this_week' | 'this_month' | 'next_7_days')
   type TimeRangeFilter = 'all' | 'this_week' | 'this_month' | 'next_7_days';
@@ -218,9 +361,114 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
   const [formClientName, setFormClientName] = useState('');
   const [formDetail, setFormDetail] = useState('');
 
+  // 周期性重复安排状态
+  type RepeatMode = 'none' | 'daily' | 'weekly' | 'workdays' | 'monthly';
+  const [formRepeatMode, setFormRepeatMode] = useState<RepeatMode>('none');
+  const [formSelectedWeekDays, setFormSelectedWeekDays] = useState<number[]>([1]); // 0=日, 1=一, 2=二, 3=三, 4=四, 5=五, 6=六
+  const [formWeekInterval, setFormWeekInterval] = useState<number>(1); // 1=每周, 2=每2周(隔周)
+  const [formRepeatEndType, setFormRepeatEndType] = useState<'count' | 'untilDate'>('count');
+  const [formRepeatCount, setFormRepeatCount] = useState<number>(4);
+  const [formRepeatUntilDate, setFormRepeatUntilDate] = useState<string>('');
+
   // 关联对象下拉选择器状态
   const [showObjectPicker, setShowObjectPicker] = useState<boolean>(false);
   const objectPickerRef = useRef<HTMLDivElement>(null);
+
+  // 计算周期性重复日期序列 helper
+  const calculateRepeatDates = (
+    baseDateStr: string,
+    mode: RepeatMode,
+    selectedDays: number[],
+    interval: number,
+    endType: 'count' | 'untilDate',
+    count: number,
+    untilDateStr: string
+  ): string[] => {
+    if (!baseDateStr || mode === 'none') return [baseDateStr];
+
+    const parts = baseDateStr.split('-').map(Number);
+    if (parts.length !== 3) return [baseDateStr];
+
+    const results: string[] = [];
+    const startObj = new Date(parts[0], parts[1] - 1, parts[2]);
+    let curr = new Date(startObj);
+
+    const maxItems = endType === 'count' ? Math.max(1, Math.min(count, 100)) : 100;
+    const targetUntil = endType === 'untilDate' && untilDateStr ? new Date(untilDateStr + 'T23:59:59') : null;
+
+    let daysLimit = 365;
+
+    if (mode === 'daily') {
+      while (results.length < maxItems && daysLimit > 0) {
+        if (targetUntil && curr > targetUntil) break;
+        const y = curr.getFullYear();
+        const m = String(curr.getMonth() + 1).padStart(2, '0');
+        const d = String(curr.getDate()).padStart(2, '0');
+        results.push(`${y}-${m}-${d}`);
+        curr.setDate(curr.getDate() + 1);
+        daysLimit--;
+      }
+    } else if (mode === 'workdays') {
+      while (results.length < maxItems && daysLimit > 0) {
+        if (targetUntil && curr > targetUntil) break;
+        const dayOfWeek = curr.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          const y = curr.getFullYear();
+          const m = String(curr.getMonth() + 1).padStart(2, '0');
+          const d = String(curr.getDate()).padStart(2, '0');
+          results.push(`${y}-${m}-${d}`);
+        }
+        curr.setDate(curr.getDate() + 1);
+        daysLimit--;
+      }
+    } else if (mode === 'weekly') {
+      const validDays = selectedDays.length > 0 ? selectedDays : [startObj.getDay()];
+      const startWeekTime = new Date(startObj);
+      const startDay = startWeekTime.getDay() === 0 ? 7 : startWeekTime.getDay();
+      startWeekTime.setDate(startWeekTime.getDate() - (startDay - 1));
+
+      while (results.length < maxItems && daysLimit > 0) {
+        if (targetUntil && curr > targetUntil) break;
+
+        const currDayOfWeek = curr.getDay();
+        const currWeekStart = new Date(curr);
+        const currDay = currWeekStart.getDay() === 0 ? 7 : currWeekStart.getDay();
+        currWeekStart.setDate(currWeekStart.getDate() - (currDay - 1));
+
+        const weekDiff = Math.round((currWeekStart.getTime() - startWeekTime.getTime()) / (1000 * 60 * 60 * 24 * 7));
+
+        if (weekDiff >= 0 && weekDiff % (interval || 1) === 0 && validDays.includes(currDayOfWeek)) {
+          if (curr >= startObj) {
+            const y = curr.getFullYear();
+            const m = String(curr.getMonth() + 1).padStart(2, '0');
+            const d = String(curr.getDate()).padStart(2, '0');
+            results.push(`${y}-${m}-${d}`);
+          }
+        }
+
+        curr.setDate(curr.getDate() + 1);
+        daysLimit--;
+      }
+    } else if (mode === 'monthly') {
+      const targetDateNum = startObj.getDate();
+      while (results.length < maxItems && daysLimit > 0) {
+        if (targetUntil && curr > targetUntil) break;
+
+        if (curr.getDate() === targetDateNum) {
+          const y = curr.getFullYear();
+          const m = String(curr.getMonth() + 1).padStart(2, '0');
+          const d = String(curr.getDate()).padStart(2, '0');
+          results.push(`${y}-${m}-${d}`);
+          curr.setMonth(curr.getMonth() + 1);
+        } else {
+          curr.setDate(curr.getDate() + 1);
+        }
+        daysLimit--;
+      }
+    }
+
+    return results.length > 0 ? results : [baseDateStr];
+  };
 
   // 点击组件外部自动关闭关联对象选择弹层
   useEffect(() => {
@@ -266,6 +514,9 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
     const startH = hour < 10 ? `0${hour}:00` : `${hour}:00`;
     const endH = (hour + 1) < 10 ? `0${hour + 1}:00` : `${hour + 1}:00`;
 
+    const baseD = dateStr ? new Date(dateStr) : new Date();
+    const baseDay = baseD.getDay();
+
     if (scheduleId) {
       const existing = schedules.find((s) => s.id === scheduleId);
       if (existing) {
@@ -273,6 +524,38 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
         setFormType(existing.type);
         setFormClientName(existing.clientName || '');
         setFormDetail(existing.detail || '');
+
+        // 反解析重复规则
+        const rule = existing.repeatRule;
+        if (rule) {
+          if (rule === 'daily' || rule === 'workdays' || rule === 'monthly') {
+            setFormRepeatMode(rule as RepeatMode);
+          } else if (rule.startsWith('weekly')) {
+            setFormRepeatMode('weekly');
+            const daysMatch = rule.match(/days=([0-9,]+)/);
+            if (daysMatch) {
+              setFormSelectedWeekDays(daysMatch[1].split(',').map(Number));
+            } else {
+              setFormSelectedWeekDays([baseDay]);
+            }
+            const intervalMatch = rule.match(/interval=(\d+)/);
+            if (intervalMatch) {
+              setFormWeekInterval(Number(intervalMatch[1]));
+            } else {
+              setFormWeekInterval(1);
+            }
+          } else if (rule === 'biweekly') {
+            setFormRepeatMode('weekly');
+            setFormWeekInterval(2);
+            setFormSelectedWeekDays([baseDay]);
+          } else {
+            setFormRepeatMode('none');
+          }
+        } else {
+          setFormRepeatMode('none');
+          setFormSelectedWeekDays([baseDay]);
+          setFormWeekInterval(1);
+        }
 
         const timeVal = existing.timeStr || `${startH} - ${endH}`;
         setFormTimeStr(timeVal);
@@ -298,6 +581,19 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
       setFormStartTime(startH);
       setFormEndTime(endH);
       setFormTimeStr(`${startH} - ${endH}`);
+      setFormRepeatMode('none');
+      setFormSelectedWeekDays([baseDay]);
+      setFormWeekInterval(1);
+      setFormRepeatEndType('count');
+      setFormRepeatCount(4);
+
+      // 计算默认 2 个月后的截止日期
+      const d = new Date(dateStr ? dateStr : new Date());
+      d.setMonth(d.getMonth() + 2);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      setFormRepeatUntilDate(`${y}-${m}-${day}`);
     }
 
     setModalOpen(true);
@@ -347,6 +643,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
       }
     }
 
+    const computedRepeatRule = formRepeatMode === 'none'
+      ? undefined
+      : formRepeatMode === 'weekly'
+      ? `weekly:days=${[...formSelectedWeekDays].sort((a, b) => a - b).join(',')}:interval=${formWeekInterval}`
+      : formRepeatMode;
+
     const itemData: Omit<ScheduleItem, 'id'> = {
       dateStr: formDateStr,
       hour: computedHour,
@@ -354,12 +656,31 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
       type: formType,
       clientName: formClientName,
       detail: formDetail,
+      repeatRule: computedRepeatRule,
     };
 
     if (selectedScheduleId) {
       onUpdateSchedule(selectedScheduleId, itemData);
     } else {
-      onAddSchedule(itemData);
+      if (formRepeatMode === 'none') {
+        onAddSchedule(itemData);
+      } else {
+        const repeatDates = calculateRepeatDates(
+          formDateStr,
+          formRepeatMode,
+          formSelectedWeekDays,
+          formWeekInterval,
+          formRepeatEndType,
+          formRepeatCount,
+          formRepeatUntilDate
+        );
+        repeatDates.forEach((dStr) => {
+          onAddSchedule({
+            ...itemData,
+            dateStr: dStr,
+          });
+        });
+      }
     }
 
     setModalOpen(false);
@@ -377,12 +698,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
     if (dimension === 'day') {
       const dateStr = formatDateKey(currentDate);
       return (
-        <div className="bg-white rounded-xl border border-rose-200 overflow-hidden shadow-2xs">
+        <div className="bg-white rounded-xl border border-rose-200 overflow-hidden shadow-2xs space-y-0">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-rose-100/80 border-b border-rose-200 text-rose-950 font-bold">
                 <th className="p-3 w-28 text-center border-r border-rose-200">时间段</th>
-                <th className="p-3">日程安排 (点击空白添加)</th>
+                <th className="p-3">日程安排 (点击空白添加，可按住左侧 ⠇图标拖拽调整先后执行顺序)</th>
               </tr>
             </thead>
             <tbody>
@@ -397,33 +718,89 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                     </td>
                     <td
                       onClick={() => handleOpenModal(dateStr, hour)}
-                      className="p-2 cursor-pointer min-h-[50px] align-top"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => handleDropToSlot(e, dateStr, hour)}
+                      className="p-2 cursor-pointer min-h-[50px] align-top hover:bg-rose-50/20"
                     >
                       <div className="space-y-1.5">
                         {hourItems.map((item) => {
                           const { style, label } = getTypeStyleAndLabel(item.type);
                           const displayTime = item.timeStr || (item.hour < 10 ? `0${item.hour}:00` : `${item.hour}:00`);
+                          const isDragging = draggedScheduleId === item.id;
+                          const isDragOver = dragOverScheduleId === item.id;
+
                           return (
                             <div
                               key={item.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, item.id)}
+                              onDragOver={(e) => handleDragOver(e, item.id)}
+                              onDrop={(e) => handleDrop(e, item.id)}
+                              onDragEnd={handleDragEnd}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOpenModal(dateStr, hour, item.id);
                               }}
                               style={style}
-                              className="p-2.5 rounded-xl text-xs shadow-2xs font-medium cursor-pointer hover:opacity-95 transition border border-black/5"
+                              className={`p-2.5 rounded-xl text-xs shadow-2xs font-medium cursor-pointer transition-all border group relative ${
+                                isDragOver ? 'ring-2 ring-rose-500 border-rose-400 scale-[1.01]' : 'border-black/5 hover:border-black/20'
+                              } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
                             >
                               <div className="flex items-center justify-between gap-2 mb-1">
-                                <div className="font-bold flex items-center gap-1.5 text-xs">
+                                <div className="font-bold flex items-center gap-1.5 text-xs flex-wrap min-w-0 flex-1">
+                                  <span
+                                    className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-800 p-0.5 shrink-0"
+                                    title="按住拖拽可调整排序或移动时间段"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <GripVertical className="w-3.5 h-3.5" />
+                                  </span>
                                   <span>[{label}]</span>
-                                  <span>{item.clientName || '自定对象'}</span>
+                                  <span className="truncate">{item.clientName || '自定对象'}</span>
+                                  {item.repeatRule && item.repeatRule !== 'none' && (
+                                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-200/80 dark:bg-amber-900/60 text-amber-950 dark:text-amber-100 border border-amber-300 dark:border-amber-700 flex items-center gap-0.5 shrink-0" title={`重复规则: ${item.repeatRule}`}>
+                                      <Repeat className="w-2.5 h-2.5" />
+                                      <span>{formatRepeatRuleLabel(item.repeatRule)}</span>
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-lg bg-white/80 dark:bg-black/40 backdrop-blur-xs flex items-center gap-1 shrink-0 border border-black/10 shadow-2xs">
-                                  <Clock className="w-3 h-3 text-rose-600 dark:text-rose-400" />
-                                  <span>{displayTime}</span>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <div className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded-lg bg-white/80 dark:bg-black/40 backdrop-blur-xs flex items-center gap-1 border border-black/10 shadow-2xs">
+                                    <Clock className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                                    <span>{displayTime}</span>
+                                  </div>
+
+                                  {/* 修改按钮 */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenModal(dateStr, hour, item.id);
+                                    }}
+                                    className="p-1 rounded-lg bg-white/90 dark:bg-slate-800/90 hover:bg-sky-50 dark:hover:bg-sky-950 text-slate-700 dark:text-slate-200 hover:text-sky-600 border border-black/10 shadow-2xs transition cursor-pointer"
+                                    title="修改/编辑日程"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* 删除按钮 */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (window.confirm(`确定要删除日程 “${label}: ${item.clientName || '自定对象'}” 吗？`)) {
+                                        onDeleteSchedule(item.id);
+                                      }
+                                    }}
+                                    className="p-1 rounded-lg bg-white/90 dark:bg-slate-800/90 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-600 hover:text-rose-700 border border-black/10 shadow-2xs transition cursor-pointer"
+                                    title="删除日程"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                               </div>
-                              {item.detail && <div className="text-[11px] opacity-85 mt-1 border-t border-black/5 pt-1">{item.detail}</div>}
+                              {item.detail && <div className="text-[11px] opacity-85 mt-1 border-t border-black/5 pt-1 pl-5">{item.detail}</div>}
                             </div>
                           );
                         })}
@@ -485,27 +862,75 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                         <td
                           key={idx}
                           onClick={() => handleOpenModal(dateStr, hour)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => handleDropToSlot(e, dateStr, hour)}
                           className="p-1.5 border-r border-rose-100 last:border-r-0 align-top cursor-pointer min-h-[50px] hover:bg-rose-50/40"
                         >
                           <div className="space-y-1">
                             {items.map((item) => {
                               const { style, label } = getTypeStyleAndLabel(item.type);
                               const displayTime = item.timeStr || (item.hour < 10 ? `0${item.hour}:00` : `${item.hour}:00`);
+                              const isDragging = draggedScheduleId === item.id;
+                              const isDragOver = dragOverScheduleId === item.id;
+
                               return (
                                 <div
                                   key={item.id}
+                                  draggable
+                                  onDragStart={(e) => handleDragStart(e, item.id)}
+                                  onDragOver={(e) => handleDragOver(e, item.id)}
+                                  onDrop={(e) => handleDrop(e, item.id)}
+                                  onDragEnd={handleDragEnd}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleOpenModal(dateStr, hour, item.id);
                                   }}
                                   style={style}
-                                  className="p-1.5 rounded-lg text-[11px] text-left leading-tight shadow-2xs font-semibold cursor-pointer hover:opacity-95 transition border border-black/5"
+                                  className={`p-1.5 rounded-lg text-[11px] text-left leading-tight shadow-2xs font-semibold cursor-pointer transition-all border group relative ${
+                                    isDragOver ? 'ring-2 ring-rose-500 border-rose-400 scale-[1.02]' : 'border-black/5 hover:border-black/20'
+                                  } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
                                 >
-                                  <div className="flex items-center justify-between text-[10px] font-mono opacity-90 mb-0.5 border-b border-black/5 pb-0.5">
-                                    <span className="truncate font-bold">[{label}]</span>
-                                    <span className="shrink-0 font-bold ml-1">{displayTime}</span>
+                                  <div className="flex items-center justify-between text-[10px] font-mono opacity-90 mb-0.5 border-b border-black/5 pb-0.5 gap-1">
+                                    <div className="flex items-center gap-0.5 min-w-0">
+                                      <span
+                                        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-800 shrink-0"
+                                        title="拖拽排序"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <GripVertical className="w-2.5 h-2.5" />
+                                      </span>
+                                      <span className="truncate font-bold">[{label}]</span>
+                                      {item.repeatRule && item.repeatRule !== 'none' && <Repeat className="w-2.5 h-2.5 shrink-0 text-amber-700 dark:text-amber-300" title={`重复: ${item.repeatRule}`} />}
+                                    </div>
+                                    <div className="flex items-center gap-0.5 shrink-0">
+                                      <span className="shrink-0 font-bold">{displayTime}</span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenModal(dateStr, hour, item.id);
+                                        }}
+                                        className="p-0.5 rounded bg-white/80 hover:bg-white text-slate-700 hover:text-sky-600 transition cursor-pointer"
+                                        title="修改"
+                                      >
+                                        <Pencil className="w-2.5 h-2.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (window.confirm('确定要删除此日程吗？')) {
+                                            onDeleteSchedule(item.id);
+                                          }
+                                        }}
+                                        className="p-0.5 rounded bg-white/80 hover:bg-rose-100 text-rose-600 hover:text-rose-800 transition cursor-pointer"
+                                        title="删除"
+                                      >
+                                        <Trash2 className="w-2.5 h-2.5" />
+                                      </button>
+                                    </div>
                                   </div>
-                                  <div className="truncate font-bold mt-0.5">{item.clientName || item.detail || '已安排'}</div>
+                                  <div className="truncate font-bold mt-0.5 pl-3">{item.clientName || item.detail || '已安排'}</div>
                                 </div>
                               );
                             })}
@@ -554,30 +979,78 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                 <div
                   key={day}
                   onClick={() => handleOpenModal(dateStr, 9)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleDropToSlot(e, dateStr, 9)}
                   className="min-h-[85px] p-2 bg-white border border-rose-200 rounded-lg hover:bg-rose-50/40 cursor-pointer transition space-y-1"
                 >
                   <div className="font-bold text-xs text-slate-800">{day} 日</div>
                   <div className="space-y-1">
-                    {dayItems.slice(0, 3).map((item) => {
+                    {dayItems.slice(0, 4).map((item) => {
                       const { style, label } = getTypeStyleAndLabel(item.type);
                       const displayTime = item.timeStr || (item.hour < 10 ? `0${item.hour}:00` : `${item.hour}:00`);
+                      const isDragging = draggedScheduleId === item.id;
+                      const isDragOver = dragOverScheduleId === item.id;
+
                       return (
                         <div
                           key={item.id}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, item.id)}
+                          onDragOver={(e) => handleDragOver(e, item.id)}
+                          onDrop={(e) => handleDrop(e, item.id)}
+                          onDragEnd={handleDragEnd}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleOpenModal(dateStr, item.hour, item.id);
                           }}
                           style={style}
-                          className="p-1 rounded-md text-[10px] font-bold truncate flex items-center justify-between gap-1 shadow-2xs border border-black/5"
+                          className={`p-1 rounded-md text-[10px] font-bold truncate flex items-center justify-between gap-1 shadow-2xs border transition cursor-pointer ${
+                            isDragOver ? 'ring-2 ring-rose-500 border-rose-400 scale-[1.01]' : 'border-black/5'
+                          } ${isDragging ? 'opacity-40' : 'opacity-100'}`}
                         >
-                          <span className="truncate">[{label}] {item.clientName || '已安排'}</span>
-                          <span className="font-mono opacity-85 shrink-0 text-[9px] font-bold">{displayTime}</span>
+                          <div className="flex items-center gap-0.5 truncate min-w-0">
+                            <span
+                              className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-800 shrink-0"
+                              title="拖拽排序"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <GripVertical className="w-2.5 h-2.5" />
+                            </span>
+                            <span className="truncate">[{label}] {item.clientName || '已安排'}</span>
+                          </div>
+
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <span className="font-mono opacity-85 text-[9px] font-bold">{displayTime}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenModal(dateStr, item.hour, item.id);
+                              }}
+                              className="p-0.5 rounded hover:bg-black/10 text-slate-700 transition cursor-pointer"
+                              title="修改"
+                            >
+                              <Pencil className="w-2.5 h-2.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm('确定要删除此日程吗？')) {
+                                  onDeleteSchedule(item.id);
+                                }
+                              }}
+                              className="p-0.5 rounded hover:bg-rose-100 text-rose-600 transition cursor-pointer"
+                              title="删除"
+                            >
+                              <Trash2 className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
-                    {dayItems.length > 3 && (
-                      <div className="text-[10px] font-bold text-rose-700">+{dayItems.length - 3} 更多</div>
+                    {dayItems.length > 4 && (
+                      <div className="text-[10px] font-bold text-rose-700">+{dayItems.length - 4} 更多</div>
                     )}
                   </div>
                 </div>
@@ -844,6 +1317,17 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
         </div>
       </div>
 
+      {/* 拖拽与快捷操作提示条 */}
+      <div className="bg-rose-50/80 border border-rose-200 rounded-xl p-2.5 flex items-center justify-between text-xs text-rose-900 gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-bold flex items-center gap-1 bg-white px-2 py-0.5 rounded-md border border-rose-200 shadow-2xs text-rose-700">
+            <GripVertical className="w-3.5 h-3.5 text-rose-600" />
+            拖拽与快捷操作
+          </span>
+          <span>按住任务卡片左侧 <GripVertical className="w-3 h-3 inline text-slate-400" /> 图标可手调执行顺序或跨时段放置；鼠标移至卡片点击 <Pencil className="w-3 h-3 inline text-sky-600" /> 可修改日程，点击 <Trash2 className="w-3 h-3 inline text-rose-600" /> 可删除日程。</span>
+        </div>
+      </div>
+
       {/* Render Active View */}
       {renderScheduleGrid()}
 
@@ -948,6 +1432,261 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                     className="w-full p-2 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-rose-400"
                   />
                 </div>
+              </div>
+
+              {/* 周期性重复安排设置 */}
+              <div className="bg-amber-50/60 dark:bg-slate-800/80 p-3 rounded-xl border border-amber-200/80 dark:border-slate-700 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <Repeat className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <span>周期性重复安排 (自由自定义：每周几、每天、隔周等)</span>
+                  </label>
+                  {selectedScheduleId && (
+                    <span className="text-[10px] font-bold text-slate-500 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                      编辑单次日程
+                    </span>
+                  )}
+                </div>
+
+                {/* 5 种常用重复频率模式选择 */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: 'none', label: '🚫 单次 (不重复)' },
+                    { id: 'weekly', label: '🔁 自定义周/星期重复' },
+                    { id: 'daily', label: '☀️ 每天重复' },
+                    { id: 'workdays', label: '💼 工作日 (周一至周五)' },
+                    { id: 'monthly', label: '📅 每月同日重复' },
+                  ].map((rule) => {
+                    const isSelected = formRepeatMode === rule.id;
+                    return (
+                      <button
+                        key={rule.id}
+                        type="button"
+                        onClick={() => setFormRepeatMode(rule.id as RepeatMode)}
+                        className={`px-2.5 py-1.5 rounded-lg font-bold text-[11px] transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-600 text-white shadow-2xs'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-amber-100/80 dark:hover:bg-slate-700 border border-amber-200/60 dark:border-slate-700'
+                        }`}
+                      >
+                        {rule.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* 如果选择了“自定义周/星期重复”，展开星期勾选与周频间隔设置 */}
+                {!selectedScheduleId && formRepeatMode === 'weekly' && (
+                  <div className="p-2.5 bg-white dark:bg-slate-900/90 rounded-xl border border-amber-300/80 dark:border-slate-700 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1">
+                        <span>📅 请选择重复的星期几 (可多选):</span>
+                      </span>
+
+                      {/* 快捷勾选组合 */}
+                      <div className="flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setFormSelectedWeekDays([1, 2, 3, 4])}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200 transition cursor-pointer"
+                        >
+                          周一至周四
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormSelectedWeekDays([1, 2, 3, 4, 5])}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200 transition cursor-pointer"
+                        >
+                          工作日(一至五)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormSelectedWeekDays([6, 0])}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200 transition cursor-pointer"
+                        >
+                          周末(六、日)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormSelectedWeekDays([1, 2, 3, 4, 5, 6, 0])}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200 transition cursor-pointer"
+                        >
+                          全选(一至日)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 7 个星期选择块 */}
+                    <div className="grid grid-cols-7 gap-1">
+                      {[
+                        { id: 1, label: '周一' },
+                        { id: 2, label: '周二' },
+                        { id: 3, label: '周三' },
+                        { id: 4, label: '周四' },
+                        { id: 5, label: '周五' },
+                        { id: 6, label: '周六' },
+                        { id: 0, label: '周日' },
+                      ].map((item) => {
+                        const isChecked = formSelectedWeekDays.includes(item.id);
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              if (isChecked) {
+                                // 保证至少保留一个
+                                if (formSelectedWeekDays.length > 1) {
+                                  setFormSelectedWeekDays(formSelectedWeekDays.filter((d) => d !== item.id));
+                                }
+                              } else {
+                                setFormSelectedWeekDays([...formSelectedWeekDays, item.id]);
+                              }
+                            }}
+                            className={`py-1.5 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center cursor-pointer ${
+                              isChecked
+                                ? 'bg-amber-600 text-white shadow-2xs ring-2 ring-amber-400/50'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-amber-100/60'
+                            }`}
+                          >
+                            <span>{item.label}</span>
+                            <span className="text-[9px] opacity-80">{isChecked ? '✓' : '+'}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* 周频间隔（每周 / 隔周 / 每3周） */}
+                    <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">周数间隔:</span>
+                      <div className="flex items-center gap-1">
+                        {[
+                          { val: 1, label: '每周' },
+                          { val: 2, label: '每 2 周 (隔周)' },
+                          { val: 3, label: '每 3 周' },
+                          { val: 4, label: '每 4 周' },
+                        ].map((intvl) => (
+                          <button
+                            key={intvl.val}
+                            type="button"
+                            onClick={() => setFormWeekInterval(intvl.val)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                              formWeekInterval === intvl.val
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                            }`}
+                          >
+                            {intvl.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 如果启用了重复频率，显示重复终止条件与实时预选日期预览 */}
+                {!selectedScheduleId && formRepeatMode !== 'none' && (
+                  <div className="pt-2 border-t border-amber-200/60 dark:border-slate-700 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-700 dark:text-slate-300">终止规则:</span>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="repeatEndType"
+                            checked={formRepeatEndType === 'count'}
+                            onChange={() => setFormRepeatEndType('count')}
+                            className="accent-amber-600"
+                          />
+                          <span>按重复次数</span>
+                        </label>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="repeatEndType"
+                            checked={formRepeatEndType === 'untilDate'}
+                            onChange={() => setFormRepeatEndType('untilDate')}
+                            className="accent-amber-600"
+                          />
+                          <span>按截止日期</span>
+                        </label>
+                      </div>
+
+                      {formRepeatEndType === 'count' ? (
+                        <div className="flex items-center gap-1">
+                          {[2, 4, 8, 12, 24].map((cnt) => (
+                            <button
+                              key={cnt}
+                              type="button"
+                              onClick={() => setFormRepeatCount(cnt)}
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                                formRepeatCount === cnt
+                                  ? 'bg-amber-600 text-white'
+                                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-amber-200 dark:border-slate-700'
+                              }`}
+                            >
+                              {cnt}次
+                            </button>
+                          ))}
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={formRepeatCount}
+                            onChange={(e) => setFormRepeatCount(parseInt(e.target.value, 10) || 1)}
+                            className="w-12 p-0.5 border border-amber-300 dark:border-slate-700 rounded text-center font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                          />
+                          <span>期</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span>截止到:</span>
+                          <input
+                            type="date"
+                            value={formRepeatUntilDate}
+                            onChange={(e) => setFormRepeatUntilDate(e.target.value)}
+                            className="p-1 border border-amber-300 dark:border-slate-700 rounded font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 实时日期序列预览 */}
+                    {(() => {
+                      const dates = calculateRepeatDates(
+                        formDateStr,
+                        formRepeatMode,
+                        formSelectedWeekDays,
+                        formWeekInterval,
+                        formRepeatEndType,
+                        formRepeatCount,
+                        formRepeatUntilDate
+                      );
+                      const weekMap = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+                      return (
+                        <div className="p-2 bg-amber-100/40 dark:bg-slate-900/60 rounded-lg border border-amber-200/80 dark:border-slate-700/80">
+                          <div className="text-[11px] font-bold text-amber-900 dark:text-amber-300 mb-1 flex items-center justify-between">
+                            <span>⚡ 将自动生成 {dates.length} 期重复日程卡片：</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">跨度: {dates[0]} ~ {dates[dates.length - 1]}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                            {dates.map((d, idx) => {
+                              const dObj = new Date(d);
+                              const wName = !isNaN(dObj.getTime()) ? weekMap[dObj.getDay()] : '';
+                              return (
+                                <span
+                                  key={d + idx}
+                                  className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-white dark:bg-slate-800 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-slate-700 shadow-2xs"
+                                >
+                                  #{idx + 1} {d} <span className="opacity-75">({wName})</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
               {/* 日程类型：自主添加与快捷选框 */}

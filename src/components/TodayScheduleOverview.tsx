@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ScheduleItem, ScheduleType, ScheduleCategory } from '../types';
-import { Calendar, Clock, ChevronDown, ChevronUp, Plus, ArrowRight, CheckCircle2, Circle, Sparkles, ChevronLeft, ChevronRight, User, Check } from 'lucide-react';
+import { Calendar, Clock, ChevronDown, ChevronUp, Plus, ArrowRight, CheckCircle2, Circle, Sparkles, ChevronLeft, ChevronRight, User, Check, Repeat } from 'lucide-react';
 import { parseColorToStyle, getHexColor } from '../data/colorPalette';
 import { ActiveTab } from './Sidebar';
+import { formatRepeatRuleLabel } from './ScheduleManagement';
 
 interface TodayScheduleOverviewProps {
   schedules: ScheduleItem[];
@@ -241,16 +242,24 @@ export const TodayScheduleOverview: React.FC<TodayScheduleOverviewProps> = ({
                     <div className="flex-1 min-w-0">
                       {/* 顶部分类 Badge 与时间卡片 */}
                       <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <span
-                          className={`px-2 py-0.5 rounded-lg text-[11px] font-bold text-white shadow-2xs flex items-center gap-1 ${
-                            isDone ? 'line-through opacity-70' : ''
-                          }`}
-                          style={{ backgroundColor: hex }}
-                        >
-                          {label}
-                        </span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className={`px-2 py-0.5 rounded-lg text-[11px] font-bold text-white shadow-2xs flex items-center gap-1 shrink-0 ${
+                              isDone ? 'line-through opacity-70' : ''
+                            }`}
+                            style={{ backgroundColor: hex }}
+                          >
+                            {label}
+                          </span>
+                          {item.repeatRule && item.repeatRule !== 'none' && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-0.5 shrink-0" title={`重复规则: ${item.repeatRule}`}>
+                              <Repeat className="w-2.5 h-2.5" />
+                              <span>{formatRepeatRuleLabel(item.repeatRule)}</span>
+                            </span>
+                          )}
+                        </div>
 
-                        <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-200 bg-rose-50 dark:bg-slate-900/80 px-2 py-0.5 rounded-md border border-rose-200/60 dark:border-slate-700 flex items-center gap-1">
+                        <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-200 bg-rose-50 dark:bg-slate-900/80 px-2 py-0.5 rounded-md border border-rose-200/60 dark:border-slate-700 flex items-center gap-1 shrink-0">
                           <Clock className="w-3 h-3 text-rose-500" />
                           <span>{displayTime}</span>
                         </span>

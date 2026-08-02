@@ -341,6 +341,13 @@ export default function App() {
     }));
   };
 
+  const handleReorderSchedules = (newSchedules: ScheduleItem[]) => {
+    setSystemData((prev) => ({
+      ...prev,
+      schedules: newSchedules,
+    }));
+  };
+
   const handleToggleScheduleComplete = (id: string) => {
     setSystemData((prev) => ({
       ...prev,
@@ -496,6 +503,7 @@ export default function App() {
                 onAddSchedule={handleAddSchedule}
                 onUpdateSchedule={handleUpdateSchedule}
                 onDeleteSchedule={handleDeleteSchedule}
+                onReorderSchedules={handleReorderSchedules}
               />
             )}
           </div>

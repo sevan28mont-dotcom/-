@@ -79,6 +79,8 @@ export interface ScheduleItem {
   relatedId?: string; // 关联的对象ID (个案ID或督导ID)
   relatedType?: 'case' | 'supervisor' | 'custom'; // 关联类型
   completed?: boolean; // 是否一键标记完成
+  repeatRule?: string; // 重复规则，如 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'workdays'
+  order?: number; // 拖拽手动自定义排序权重
 }
 
 export interface ThinkingNote {
