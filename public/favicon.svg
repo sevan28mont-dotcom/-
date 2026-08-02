@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Soft Pink Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff1f2"/>
+      <stop offset="50%" stop-color="#ffe4e6"/>
+      <stop offset="100%" stop-color="#fecdd3"/>
+    </linearGradient>
+
+    <!-- Feather Main Body Pink Gradient -->
+    <linearGradient id="featherGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fda4af"/>
+      <stop offset="35%" stop-color="#f43f5e"/>
+      <stop offset="85%" stop-color="#e11d48"/>
+      <stop offset="100%" stop-color="#be123c"/>
+    </linearGradient>
+
+    <!-- Quill Stem White/Gold Gradient -->
+    <linearGradient id="shaftGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="70%" stop-color="#fff1f2"/>
+      <stop offset="100%" stop-color="#fecdd3"/>
+    </linearGradient>
+
+    <!-- Drop Shadow for Depth -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#e11d48" flood-opacity="0.3"/>
+    </filter>
+
+    <!-- Golden Nib Accent Gradient -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer Rounded Square Canvas (Squircle App Icon Format) -->
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#bgGrad)" stroke="#fda4af" stroke-width="6"/>
+  <rect x="38" y="38" width="436" height="436" rx="98" fill="none" stroke="#ffffff" stroke-width="4" stroke-opacity="0.7"/>
+
+  <!-- Feather Quill Artwork -->
+  <g filter="url(#shadow)">
+    <!-- Feather Plume Silhouette -->
+    <path d="M 360 85 C 270 85 140 180 130 330 C 160 310 195 300 225 305 C 190 330 165 375 145 425 C 210 395 265 365 295 320 C 315 350 335 365 365 365 C 375 300 405 205 360 85 Z" fill="url(#featherGrad)"/>
+
+    <!-- Inner Soft Feather Highlights & Vane Cuts -->
+    <path d="M 345 115 C 285 155 215 215 160 315" stroke="#ffe4e6" stroke-width="4" stroke-linecap="round" opacity="0.6" fill="none"/>
+    <path d="M 335 145 Q 265 205 225 265" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.5" fill="none"/>
+    <path d="M 315 195 Q 275 235 245 285" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.5" fill="none"/>
+    <path d="M 285 245 Q 255 275 235 325" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.5" fill="none"/>
+
+    <!-- Vane Notch Accents -->
+    <path d="M 240 220 L 210 215" stroke="#be123c" stroke-width="3" stroke-linecap="round" opacity="0.4"/>
+    <path d="M 290 170 L 265 160" stroke="#be123c" stroke-width="3" stroke-linecap="round" opacity="0.4"/>
+
+    <!-- Central Stem Shaft -->
+    <path d="M 365 82 C 295 170 215 270 125 430" stroke="url(#shaftGrad)" stroke-width="12" stroke-linecap="round" fill="none"/>
+    <path d="M 365 82 C 295 170 215 270 125 430" stroke="#be123c" stroke-width="2.5" stroke-linecap="round" opacity="0.3" fill="none"/>
+
+    <!-- Golden Nib Tip -->
+    <path d="M 130 420 L 112 448 L 140 435 Z" fill="url(#goldGrad)"/>
+
+    <!-- Sparkle Elements around Quill -->
+    <!-- Large Sparkle Top Right -->
+    <path d="M 395 130 L 402 148 L 420 155 L 402 162 L 395 180 L 388 162 L 370 155 L 388 148 Z" fill="#ffffff"/>
+    <!-- Small Sparkle Bottom Left -->
+    <path d="M 115 160 L 119 170 L 129 174 L 119 178 L 115 188 L 111 178 L 101 174 L 111 170 Z" fill="#f43f5e"/>
+    <!-- Tiny Glow Dot -->
+    <circle cx="360" cy="115" r="8" fill="#ffffff" opacity="0.9"/>
+  </g>
+</svg>

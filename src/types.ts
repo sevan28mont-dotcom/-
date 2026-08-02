@@ -78,6 +78,7 @@ export interface ScheduleItem {
   detail?: string;
   relatedId?: string; // 关联的对象ID (个案ID或督导ID)
   relatedType?: 'case' | 'supervisor' | 'custom'; // 关联类型
+  completed?: boolean; // 是否一键标记完成
 }
 
 export interface ThinkingNote {

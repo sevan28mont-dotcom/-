@@ -293,7 +293,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
     } else {
       setSelectedScheduleId(null);
       setFormType('consult');
-      setFormClientName(cases[0] ? `${cases[0].caseNum} ${cases[0].name}` : '');
+      setFormClientName('');
       setFormDetail('');
       setFormStartTime(startH);
       setFormEndTime(endH);
@@ -1000,12 +1000,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                 </div>
               </div>
 
-              {/* 关联对象组：多维选择（个体咨询/个体督导/团体督导）+ 自定义自由手填 */}
+              {/* 关联对象组：多维选择（个体咨询/个体督导/团体督导）+ 自定义自由手填 (完全可选) */}
               <div className="relative" ref={objectPickerRef}>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                     <Users className="w-4 h-4 text-rose-600" />
-                    <span>关联对象 / 个案 / 督导师 / 参与者*</span>
+                    <span>关联对象 / 个案 / 督导师 / 参与者 (可选，可不选)</span>
                   </label>
                   <button
                     type="button"
@@ -1021,11 +1021,21 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                 <div className="relative flex items-center">
                   <input
                     type="text"
-                    placeholder="可直接手动输入，或右侧点击快捷选取个案/督导对象"
+                    placeholder="可选填对象名称；也可留空不填（如团体活动、研讨会等）"
                     value={formClientName}
                     onChange={(e) => setFormClientName(e.target.value)}
-                    className="w-full p-2.5 pr-24 border border-rose-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-400 font-bold"
+                    className="w-full p-2.5 pr-28 border border-rose-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-400 font-bold"
                   />
+                  {formClientName && (
+                    <button
+                      type="button"
+                      onClick={() => setFormClientName('')}
+                      className="absolute right-20 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                      title="清空选择"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setShowObjectPicker((prev) => !prev)}
@@ -1035,15 +1045,39 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                     <ChevronDown className="w-3 h-3" />
                   </button>
                 </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                  💡 支持直接手动打字手填，也可一键下拉选择前面的“个体咨询个案”、“个体督导”或“团体督导”对象。
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center justify-between">
+                  <span>💡 可自由手动打字，也可选择“个体个案”、“督导”或直接留空不选。</span>
+                  {formClientName && (
+                    <button
+                      type="button"
+                      onClick={() => setFormClientName('')}
+                      className="text-rose-600 dark:text-rose-400 underline font-bold cursor-pointer hover:text-rose-700"
+                    >
+                      清空关联对象
+                    </button>
+                  )}
                 </div>
 
                 {/* 多维快捷对象下拉选框 Floating Dropdown */}
                 {showObjectPicker && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 p-3 max-h-72 overflow-y-auto space-y-3 divide-y divide-rose-100 dark:divide-slate-700">
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 p-3 max-h-80 overflow-y-auto space-y-3 divide-y divide-rose-100 dark:divide-slate-700">
+                    {/* 0. 顶部一键留空 / 不关联对象选项 */}
+                    <div className="pb-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormClientName('');
+                          setShowObjectPicker(false);
+                        }}
+                        className="w-full p-2 text-center bg-rose-50 dark:bg-slate-700/80 hover:bg-rose-100 dark:hover:bg-slate-700 rounded-xl text-rose-800 dark:text-rose-200 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer border border-rose-200 dark:border-slate-600"
+                      >
+                        <X className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                        <span>不选择/清空关联对象（保持留空）</span>
+                      </button>
+                    </div>
+
                     {/* 1. 个体咨询对象组 */}
-                    <div>
+                    <div className="pt-2">
                       <div className="text-[11px] font-bold text-rose-800 dark:text-rose-300 mb-1.5 flex items-center gap-1.5 px-1">
                         <Users className="w-3.5 h-3.5 text-rose-600" />
                         <span>👥 选择个体咨询对象 (当前案例库)</span>
@@ -1156,11 +1190,11 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                       </div>
                     </div>
 
-                    {/* 4. 常见通用对象 / 活动组 */}
+                    {/* 4. 常见通用主题 (可选设类型且不限关联对象) */}
                     <div className="pt-2">
                       <div className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 mb-1.5 flex items-center gap-1.5 px-1">
                         <Bookmark className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>🎯 常见快捷通用主题</span>
+                        <span>🎯 常见快捷通用类型（可填关联人，也可留空）</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {[
@@ -1174,13 +1208,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                             key={idx}
                             type="button"
                             onClick={() => {
-                              setFormClientName(item.name);
                               setFormType(item.type);
                               setShowObjectPicker(false);
                             }}
                             className="px-2.5 py-1 text-xs font-bold bg-emerald-50 dark:bg-slate-700 hover:bg-emerald-100 dark:hover:bg-slate-600 text-emerald-900 dark:text-emerald-200 border border-emerald-200 dark:border-slate-600 rounded-lg transition cursor-pointer"
                           >
-                            + {item.name}
+                            + 切换为【{item.name}】类型
                           </button>
                         ))}
                       </div>

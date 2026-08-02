@@ -12,6 +12,7 @@ import { ScheduleManagement } from './components/ScheduleManagement';
 import { ThinkingNotes } from './components/ThinkingNotes';
 import { PrivacySecurityModal } from './components/PrivacySecurityModal';
 import { ReminderModal } from './components/ReminderModal';
+import { TodayScheduleOverview } from './components/TodayScheduleOverview';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
@@ -340,6 +341,15 @@ export default function App() {
     }));
   };
 
+  const handleToggleScheduleComplete = (id: string) => {
+    setSystemData((prev) => ({
+      ...prev,
+      schedules: (prev.schedules || []).map((s) =>
+        s.id === id ? { ...s, completed: !s.completed } : s
+      ),
+    }));
+  };
+
   const handleAddReminder = (reminder: Omit<ReminderItem, 'id' | 'createdAt'>) => {
     const newRem: ReminderItem = {
       ...reminder,
@@ -417,6 +427,13 @@ export default function App() {
         {/* 主内容展示区 */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-6 md:p-8 bg-rose-50/40 dark:bg-slate-900/60 transition-colors duration-300">
           <div className="max-w-7xl mx-auto">
+            {/* 今日日程概览（精美紧凑顶置，方便在主界面自动筛选并快速查看所有安排好的咨询/督导任务） */}
+            <TodayScheduleOverview
+              schedules={systemData.schedules || []}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+              onToggleComplete={handleToggleScheduleComplete}
+            />
+
             {activeTab === 'longTerm' && (
               <CaseManagement
                 category="longTerm"
