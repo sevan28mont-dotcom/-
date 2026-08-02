@@ -1,8 +1,234 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ScheduleItem, ScheduleType, CaseRecord, Supervisor, ScheduleCategory, SessionData } from '../types';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Clock, X, Search, Tag, Settings, Sparkles, Palette, Users, UserCheck, ChevronDown, Layers, Bookmark, CheckCircle2, Repeat, GripVertical, Pencil } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Clock, X, Search, Tag, Settings, Sparkles, Palette, Users, UserCheck, ChevronDown, Layers, Bookmark, CheckCircle2, Repeat, GripVertical, Pencil, Umbrella, CalendarX, CalendarCheck, Check } from 'lucide-react';
 import { COLOR_GROUPS, parseColorToStyle, getHexColor } from '../data/colorPalette';
 import { VoiceInputButton } from './VoiceInputButton';
+
+// 格式化 Date 为 YYYY-MM-DD
+const formatDateKey = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+// 中国法定节假日识别 Helper (覆盖 2025-2027 年国定假期与公历固定节日)
+export interface HolidayInfo {
+  isHoliday: boolean;
+  name?: string;
+}
+
+export const getChineseHolidayInfo = (dateStr: string): HolidayInfo => {
+  if (!dateStr) return { isHoliday: false };
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return { isHoliday: false };
+  const [y, m, d] = parts;
+  const mmdd = `${m}-${d}`;
+
+  // 通用固定公历节假日
+  if (mmdd === '01-01') return { isHoliday: true, name: '元旦' };
+  if (mmdd === '05-01') return { isHoliday: true, name: '劳动节' };
+  if (mmdd >= '10-01' && mmdd <= '10-07') return { isHoliday: true, name: '国庆节' };
+
+  // 2025 年法定节假日
+  if (y === '2025') {
+    if (dateStr === '2025-01-01') return { isHoliday: true, name: '元旦' };
+    if (dateStr >= '2025-01-28' && dateStr <= '2025-02-04') return { isHoliday: true, name: '春节' };
+    if (dateStr >= '2025-04-04' && dateStr <= '2025-04-06') return { isHoliday: true, name: '清明节' };
+    if (dateStr >= '2025-05-01' && dateStr <= '2025-05-05') return { isHoliday: true, name: '劳动节' };
+    if (dateStr >= '2025-05-31' && dateStr <= '2025-06-02') return { isHoliday: true, name: '端午节' };
+    if (dateStr >= '2025-10-01' && dateStr <= '2025-10-08') return { isHoliday: true, name: '中秋/国庆' };
+  }
+
+  // 2026 年法定节假日
+  if (y === '2026') {
+    if (dateStr === '2026-01-01') return { isHoliday: true, name: '元旦' };
+    if (dateStr >= '2026-02-16' && dateStr <= '2026-02-23') return { isHoliday: true, name: '春节' };
+    if (dateStr >= '2026-04-04' && dateStr <= '2026-04-06') return { isHoliday: true, name: '清明节' };
+    if (dateStr >= '2026-05-01' && dateStr <= '2026-05-05') return { isHoliday: true, name: '劳动节' };
+    if (dateStr >= '2026-06-19' && dateStr <= '2026-06-21') return { isHoliday: true, name: '端午节' };
+    if (dateStr >= '2026-09-25' && dateStr <= '2026-09-27') return { isHoliday: true, name: '中秋节' };
+    if (dateStr >= '2026-10-01' && dateStr <= '2026-10-07') return { isHoliday: true, name: '国庆节' };
+  }
+
+  // 2027 年法定节假日
+  if (y === '2027') {
+    if (dateStr === '2027-01-01') return { isHoliday: true, name: '元旦' };
+    if (dateStr >= '2027-02-06' && dateStr <= '2027-02-13') return { isHoliday: true, name: '春节' };
+    if (dateStr >= '2027-04-04' && dateStr <= '2027-04-06') return { isHoliday: true, name: '清明节' };
+    if (dateStr >= '2027-05-01' && dateStr <= '2027-05-05') return { isHoliday: true, name: '劳动节' };
+    if (dateStr >= '2027-06-09' && dateStr <= '2027-06-11') return { isHoliday: true, name: '端午节' };
+    if (dateStr >= '2027-09-15' && dateStr <= '2027-09-17') return { isHoliday: true, name: '中秋节' };
+    if (dateStr >= '2027-10-01' && dateStr <= '2027-10-07') return { isHoliday: true, name: '国庆节' };
+  }
+
+  return { isHoliday: false };
+};
+
+export interface PauseRange {
+  id: string;
+  start: string;
+  end: string;
+  label: string;
+}
+
+export interface ExcludedDateReason {
+  dateStr: string;
+  reason: string;
+  type: 'holiday' | 'range' | 'manual';
+}
+
+export type RepeatMode = 'none' | 'daily' | 'weekly' | 'workdays' | 'monthly' | 'custom';
+
+// 扩展版重复日期计算与排除过滤引擎
+export const calculateRepeatDatesDetailed = (
+  baseDateStr: string,
+  mode: RepeatMode,
+  selectedDays: number[],
+  interval: number,
+  endType: 'count' | 'untilDate',
+  count: number,
+  untilDateStr: string,
+  customDates: string[],
+  excludeHolidays: boolean,
+  excludedDates: string[],
+  excludeRanges: PauseRange[]
+): { validDates: string[]; excludedInfo: ExcludedDateReason[] } => {
+  if (!baseDateStr || mode === 'none') {
+    return { validDates: [baseDateStr], excludedInfo: [] };
+  }
+
+  let rawCandidates: string[] = [];
+
+  if (mode === 'custom') {
+    // 自定义跳选日历选日模式: 使用用户点击的 customDates
+    const setOfDates = new Set(customDates);
+    if (baseDateStr && !setOfDates.has(baseDateStr)) {
+      setOfDates.add(baseDateStr);
+    }
+    rawCandidates = Array.from(setOfDates).sort();
+  } else {
+    const parts = baseDateStr.split('-').map(Number);
+    if (parts.length !== 3) return { validDates: [baseDateStr], excludedInfo: [] };
+
+    const startObj = new Date(parts[0], parts[1] - 1, parts[2]);
+    let curr = new Date(startObj);
+
+    const maxItems = endType === 'count' ? Math.max(1, Math.min(count, 100)) : 100;
+    const targetUntil = endType === 'untilDate' && untilDateStr ? new Date(untilDateStr + 'T23:59:59') : null;
+
+    let daysLimit = 365;
+
+    if (mode === 'daily') {
+      while (rawCandidates.length < maxItems && daysLimit > 0) {
+        if (targetUntil && curr > targetUntil) break;
+        const y = curr.getFullYear();
+        const m = String(curr.getMonth() + 1).padStart(2, '0');
+        const d = String(curr.getDate()).padStart(2, '0');
+        rawCandidates.push(`${y}-${m}-${d}`);
+        curr.setDate(curr.getDate() + 1);
+        daysLimit--;
+      }
+    } else if (mode === 'workdays') {
+      while (rawCandidates.length < maxItems && daysLimit > 0) {
+        if (targetUntil && curr > targetUntil) break;
+        const dayOfWeek = curr.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          const y = curr.getFullYear();
+          const m = String(curr.getMonth() + 1).padStart(2, '0');
+          const d = String(curr.getDate()).padStart(2, '0');
+          rawCandidates.push(`${y}-${m}-${d}`);
+        }
+        curr.setDate(curr.getDate() + 1);
+        daysLimit--;
+      }
+    } else if (mode === 'weekly') {
+      const validDays = selectedDays.length > 0 ? selectedDays : [startObj.getDay()];
+      const startWeekTime = new Date(startObj);
+      const startDay = startWeekTime.getDay() === 0 ? 7 : startWeekTime.getDay();
+      startWeekTime.setDate(startWeekTime.getDate() - (startDay - 1));
+
+      while (rawCandidates.length < maxItems && daysLimit > 0) {
+        if (targetUntil && curr > targetUntil) break;
+
+        const currDayOfWeek = curr.getDay();
+        const currWeekStart = new Date(curr);
+        const currDay = currWeekStart.getDay() === 0 ? 7 : currWeekStart.getDay();
+        currWeekStart.setDate(currWeekStart.getDate() - (currDay - 1));
+
+        const weekDiff = Math.round((currWeekStart.getTime() - startWeekTime.getTime()) / (1000 * 60 * 60 * 24 * 7));
+
+        if (weekDiff >= 0 && weekDiff % (interval || 1) === 0 && validDays.includes(currDayOfWeek)) {
+          if (curr >= startObj) {
+            const y = curr.getFullYear();
+            const m = String(curr.getMonth() + 1).padStart(2, '0');
+            const d = String(curr.getDate()).padStart(2, '0');
+            rawCandidates.push(`${y}-${m}-${d}`);
+          }
+        }
+
+        curr.setDate(curr.getDate() + 1);
+        daysLimit--;
+      }
+    } else if (mode === 'monthly') {
+      const targetDateNum = startObj.getDate();
+      while (rawCandidates.length < maxItems && daysLimit > 0) {
+        if (targetUntil && curr > targetUntil) break;
+
+        if (curr.getDate() === targetDateNum) {
+          const y = curr.getFullYear();
+          const m = String(curr.getMonth() + 1).padStart(2, '0');
+          const d = String(curr.getDate()).padStart(2, '0');
+          rawCandidates.push(`${y}-${m}-${d}`);
+          curr.setMonth(curr.getMonth() + 1);
+        } else {
+          curr.setDate(curr.getDate() + 1);
+        }
+        daysLimit--;
+      }
+    }
+  }
+
+  // 二次过滤：检查手动排除、休假/旅游暂停区间、节假日
+  const validDates: string[] = [];
+  const excludedInfo: ExcludedDateReason[] = [];
+
+  for (const d of rawCandidates) {
+    // 1. 手动点选排除
+    if (excludedDates.includes(d)) {
+      excludedInfo.push({ dateStr: d, reason: '手动点选排除', type: 'manual' });
+      continue;
+    }
+
+    // 2. 检查是否落在休假/旅游暂停区间
+    const matchedRange = excludeRanges.find((r) => d >= r.start && d <= r.end);
+    if (matchedRange) {
+      excludedInfo.push({
+        dateStr: d,
+        reason: `休假暂停 (${matchedRange.label || '休假/旅游'})`,
+        type: 'range',
+      });
+      continue;
+    }
+
+    // 3. 检查是否为国家法定节假日
+    if (excludeHolidays) {
+      const hInfo = getChineseHolidayInfo(d);
+      if (hInfo.isHoliday) {
+        excludedInfo.push({
+          dateStr: d,
+          reason: `法定节假日 (${hInfo.name || '节假日'})`,
+          type: 'holiday',
+        });
+        continue;
+      }
+    }
+
+    validDates.push(d);
+  }
+
+  return { validDates, excludedInfo };
+};
 
 export const formatRepeatRuleLabel = (ruleStr?: string): string => {
   if (!ruleStr || ruleStr === 'none') return '';
@@ -362,13 +588,27 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
   const [formDetail, setFormDetail] = useState('');
 
   // 周期性重复安排状态
-  type RepeatMode = 'none' | 'daily' | 'weekly' | 'workdays' | 'monthly';
   const [formRepeatMode, setFormRepeatMode] = useState<RepeatMode>('none');
   const [formSelectedWeekDays, setFormSelectedWeekDays] = useState<number[]>([1]); // 0=日, 1=一, 2=二, 3=三, 4=四, 5=五, 6=六
   const [formWeekInterval, setFormWeekInterval] = useState<number>(1); // 1=每周, 2=每2周(隔周)
   const [formRepeatEndType, setFormRepeatEndType] = useState<'count' | 'untilDate'>('count');
   const [formRepeatCount, setFormRepeatCount] = useState<number>(4);
   const [formRepeatUntilDate, setFormRepeatUntilDate] = useState<string>('');
+
+  // 1. 新增: 自定义跳选日期列表与选日日历导航
+  const [formCustomDates, setFormCustomDates] = useState<string[]>([]);
+  const [customCalendarMonth, setCustomCalendarMonth] = useState<Date>(new Date());
+
+  // 2. 新增: 自动去除法定节假日选项
+  const [formExcludeHolidays, setFormExcludeHolidays] = useState<boolean>(false);
+
+  // 3. 新增: 排除/暂停指定日期与区间 (如外出旅游、出差暂停)
+  const [formExcludedDates, setFormExcludedDates] = useState<string[]>([]);
+  const [formExcludeRanges, setFormExcludeRanges] = useState<PauseRange[]>([]);
+  const [newPauseStart, setNewPauseStart] = useState<string>('');
+  const [newPauseEnd, setNewPauseEnd] = useState<string>('');
+  const [newPauseLabel, setNewPauseLabel] = useState<string>('旅游休假');
+  const [showAddPauseRange, setShowAddPauseRange] = useState<boolean>(false);
 
   // 关联对象下拉选择器状态
   const [showObjectPicker, setShowObjectPicker] = useState<boolean>(false);
@@ -528,7 +768,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
         // 反解析重复规则
         const rule = existing.repeatRule;
         if (rule) {
-          if (rule === 'daily' || rule === 'workdays' || rule === 'monthly') {
+          if (rule === 'daily' || rule === 'workdays' || rule === 'monthly' || rule === 'custom') {
             setFormRepeatMode(rule as RepeatMode);
           } else if (rule.startsWith('weekly')) {
             setFormRepeatMode('weekly');
@@ -556,6 +796,13 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
           setFormSelectedWeekDays([baseDay]);
           setFormWeekInterval(1);
         }
+
+        setFormCustomDates([existing.dateStr]);
+        setCustomCalendarMonth(new Date(existing.dateStr));
+        setFormExcludeHolidays(false);
+        setFormExcludedDates([]);
+        setFormExcludeRanges([]);
+        setShowAddPauseRange(false);
 
         const timeVal = existing.timeStr || `${startH} - ${endH}`;
         setFormTimeStr(timeVal);
@@ -586,6 +833,17 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
       setFormWeekInterval(1);
       setFormRepeatEndType('count');
       setFormRepeatCount(4);
+
+      // 重置自定义选日与排除规则
+      setFormCustomDates([dateStr || formatDateKey(new Date())]);
+      setCustomCalendarMonth(dateStr ? new Date(dateStr) : new Date());
+      setFormExcludeHolidays(false);
+      setFormExcludedDates([]);
+      setFormExcludeRanges([]);
+      setNewPauseStart('');
+      setNewPauseEnd('');
+      setNewPauseLabel('旅游休假');
+      setShowAddPauseRange(false);
 
       // 计算默认 2 个月后的截止日期
       const d = new Date(dateStr ? dateStr : new Date());
@@ -665,19 +923,30 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
       if (formRepeatMode === 'none') {
         onAddSchedule(itemData);
       } else {
-        const repeatDates = calculateRepeatDates(
+        const { validDates } = calculateRepeatDatesDetailed(
           formDateStr,
           formRepeatMode,
           formSelectedWeekDays,
           formWeekInterval,
           formRepeatEndType,
           formRepeatCount,
-          formRepeatUntilDate
+          formRepeatUntilDate,
+          formCustomDates,
+          formExcludeHolidays,
+          formExcludedDates,
+          formExcludeRanges
         );
-        repeatDates.forEach((dStr) => {
+
+        if (validDates.length === 0) {
+          alert('在当前所选的重复规则与暂停/节假日排除规则下，未生成任何有效日期，请重新检查规则设置。');
+          return;
+        }
+
+        validDates.forEach((dStr) => {
           onAddSchedule({
             ...itemData,
             dateStr: dStr,
+            repeatRule: formRepeatMode === 'custom' ? 'custom' : computedRepeatRule,
           });
         });
       }
@@ -1438,12 +1707,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                 </div>
               </div>
 
-              {/* 周期性重复安排设置 */}
+              {/* 周期性与多日期重复安排设置 */}
               <div className="bg-amber-50/60 dark:bg-slate-800/80 p-3 rounded-xl border border-amber-200/80 dark:border-slate-700 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                     <Repeat className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                    <span>周期性重复安排 (自由自定义：每周几、每天、隔周等)</span>
+                    <span>周期重复与自定义多日期安排 (支持跳选日期、剔除节假日与旅游暂停)</span>
                   </label>
                   {selectedScheduleId && (
                     <span className="text-[10px] font-bold text-slate-500 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
@@ -1452,10 +1721,11 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                   )}
                 </div>
 
-                {/* 5 种常用重复频率模式选择 */}
+                {/* 6 种重复/多日模式选择 */}
                 <div className="flex flex-wrap gap-1.5">
                   {[
                     { id: 'none', label: '🚫 单次 (不重复)' },
+                    { id: 'custom', label: '📆 自定义日历选日 (跳选/指定多日)' },
                     { id: 'weekly', label: '🔁 自定义周/星期重复' },
                     { id: 'daily', label: '☀️ 每天重复' },
                     { id: 'workdays', label: '💼 工作日 (周一至周五)' },
@@ -1469,7 +1739,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                         onClick={() => setFormRepeatMode(rule.id as RepeatMode)}
                         className={`px-2.5 py-1.5 rounded-lg font-bold text-[11px] transition cursor-pointer ${
                           isSelected
-                            ? 'bg-amber-600 text-white shadow-2xs'
+                            ? 'bg-amber-600 text-white shadow-2xs ring-2 ring-amber-400/50'
                             : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-amber-100/80 dark:hover:bg-slate-700 border border-amber-200/60 dark:border-slate-700'
                         }`}
                       >
@@ -1479,7 +1749,164 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                   })}
                 </div>
 
-                {/* 如果选择了“自定义周/星期重复”，展开星期勾选与周频间隔设置 */}
+                {/* 1. 如果选择了“自定义日历选日 (跳选)”，展开嵌入式交互月历 */}
+                {!selectedScheduleId && formRepeatMode === 'custom' && (
+                  <div className="p-3 bg-white dark:bg-slate-900/90 rounded-xl border border-amber-300/80 dark:border-slate-700 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-amber-950 dark:text-amber-200 text-xs flex items-center gap-1">
+                          <CalendarIcon className="w-3.5 h-3.5 text-amber-600" />
+                          <span>点击日历格直接跳选/取消日期:</span>
+                        </span>
+                        <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950 px-2 py-0.5 rounded-md border border-amber-300">
+                          已自定义勾选 {formCustomDates.length} 天
+                        </span>
+                      </div>
+
+                      {/* 月份导航 */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setCustomCalendarMonth(new Date(customCalendarMonth.getFullYear(), customCalendarMonth.getMonth() - 1, 1))}
+                          className="p-1 rounded bg-amber-100 hover:bg-amber-200 dark:bg-slate-800 text-amber-900 dark:text-amber-200 text-xs font-bold cursor-pointer"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="font-bold text-xs text-slate-800 dark:text-slate-100 font-mono px-1">
+                          {customCalendarMonth.getFullYear()}年 {customCalendarMonth.getMonth() + 1}月
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setCustomCalendarMonth(new Date(customCalendarMonth.getFullYear(), customCalendarMonth.getMonth() + 1, 1))}
+                          className="p-1 rounded bg-amber-100 hover:bg-amber-200 dark:bg-slate-800 text-amber-900 dark:text-amber-200 text-xs font-bold cursor-pointer"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 快捷选日工具栏 */}
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5 pb-1 border-b border-amber-100 dark:border-slate-800">
+                      <span className="text-[10px] text-slate-500 font-bold">本月快捷:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const year = customCalendarMonth.getFullYear();
+                          const month = customCalendarMonth.getMonth();
+                          const daysInM = new Date(year, month + 1, 0).getDate();
+                          const newDates = new Set(formCustomDates);
+                          for (let day = 1; day <= daysInM; day++) {
+                            const d = new Date(year, month, day);
+                            if (d.getDay() === 1) newDates.add(formatDateKey(d));
+                          }
+                          setFormCustomDates(Array.from(newDates).sort());
+                        }}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100/80 hover:bg-amber-200 dark:bg-slate-800 text-amber-900 dark:text-amber-300 border border-amber-200 dark:border-slate-700 cursor-pointer"
+                      >
+                        🎯 选本月周一
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const year = customCalendarMonth.getFullYear();
+                          const month = customCalendarMonth.getMonth();
+                          const daysInM = new Date(year, month + 1, 0).getDate();
+                          const newDates = new Set(formCustomDates);
+                          for (let day = 1; day <= daysInM; day++) {
+                            const d = new Date(year, month, day);
+                            if (d.getDay() === 5) newDates.add(formatDateKey(d));
+                          }
+                          setFormCustomDates(Array.from(newDates).sort());
+                        }}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100/80 hover:bg-amber-200 dark:bg-slate-800 text-amber-900 dark:text-amber-300 border border-amber-200 dark:border-slate-700 cursor-pointer"
+                      >
+                        🎯 选本月周五
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const year = customCalendarMonth.getFullYear();
+                          const month = customCalendarMonth.getMonth();
+                          const daysInM = new Date(year, month + 1, 0).getDate();
+                          const newDates = new Set(formCustomDates);
+                          for (let day = 1; day <= daysInM; day++) {
+                            const d = new Date(year, month, day);
+                            if (d.getDay() >= 1 && d.getDay() <= 5) newDates.add(formatDateKey(d));
+                          }
+                          setFormCustomDates(Array.from(newDates).sort());
+                        }}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100/80 hover:bg-amber-200 dark:bg-slate-800 text-amber-900 dark:text-amber-300 border border-amber-200 dark:border-slate-700 cursor-pointer"
+                      >
+                        💼 选本月工作日
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormCustomDates([])}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 cursor-pointer ml-auto"
+                      >
+                        🧹 清空自选
+                      </button>
+                    </div>
+
+                    {/* Mini Calendar Grid */}
+                    {(() => {
+                      const year = customCalendarMonth.getFullYear();
+                      const month = customCalendarMonth.getMonth();
+                      const firstDay = new Date(year, month, 1);
+                      let startingDay = firstDay.getDay();
+                      startingDay = startingDay === 0 ? 6 : startingDay - 1;
+                      const daysInM = new Date(year, month + 1, 0).getDate();
+
+                      return (
+                        <div className="space-y-1">
+                          <div className="grid grid-cols-7 text-center font-bold text-[10px] text-slate-500 bg-amber-50 dark:bg-slate-800/80 p-1 rounded-md">
+                            <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div>
+                          </div>
+                          <div className="grid grid-cols-7 gap-1">
+                            {Array.from({ length: startingDay }).map((_, i) => (
+                              <div key={`empty-${i}`} className="h-7 rounded bg-slate-50/50 dark:bg-slate-900/40 opacity-30" />
+                            ))}
+                            {Array.from({ length: daysInM }).map((_, i) => {
+                              const dayNum = i + 1;
+                              const dateObj = new Date(year, month, dayNum);
+                              const dateKey = formatDateKey(dateObj);
+                              const isSelected = formCustomDates.includes(dateKey);
+                              const isBaseDate = dateKey === formDateStr;
+
+                              return (
+                                <button
+                                  key={dayNum}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      setFormCustomDates(formCustomDates.filter((d) => d !== dateKey));
+                                    } else {
+                                      setFormCustomDates([...formCustomDates, dateKey].sort());
+                                    }
+                                  }}
+                                  className={`h-7 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-amber-600 text-white shadow-2xs ring-2 ring-amber-400/60'
+                                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-amber-100/60 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                                  }`}
+                                >
+                                  <span>{dayNum}</span>
+                                  {isBaseDate && (
+                                    <span className="text-[7px] leading-none opacity-80">
+                                      首日
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* 2. 如果选择了“自定义周/星期重复”，展开星期勾选与周频间隔设置 */}
                 {!selectedScheduleId && formRepeatMode === 'weekly' && (
                   <div className="p-2.5 bg-white dark:bg-slate-900/90 rounded-xl border border-amber-300/80 dark:border-slate-700 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1538,7 +1965,6 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                             type="button"
                             onClick={() => {
                               if (isChecked) {
-                                // 保证至少保留一个
                                 if (formSelectedWeekDays.length > 1) {
                                   setFormSelectedWeekDays(formSelectedWeekDays.filter((d) => d !== item.id));
                                 }
@@ -1587,105 +2013,298 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                   </div>
                 )}
 
-                {/* 如果启用了重复频率，显示重复终止条件与实时预选日期预览 */}
+                {/* 3. 排除与暂停规则设置（节假日剔除 & 旅游休假暂停区间） */}
                 {!selectedScheduleId && formRepeatMode !== 'none' && (
-                  <div className="pt-2 border-t border-amber-200/60 dark:border-slate-700 space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-700 dark:text-slate-300">终止规则:</span>
-                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="repeatEndType"
-                            checked={formRepeatEndType === 'count'}
-                            onChange={() => setFormRepeatEndType('count')}
-                            className="accent-amber-600"
-                          />
-                          <span>按重复次数</span>
-                        </label>
-                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="repeatEndType"
-                            checked={formRepeatEndType === 'untilDate'}
-                            onChange={() => setFormRepeatEndType('untilDate')}
-                            className="accent-amber-600"
-                          />
-                          <span>按截止日期</span>
-                        </label>
+                  <div className="space-y-2 pt-1">
+                    {/* A. 自动去除节假日开关 */}
+                    <div className="flex items-center justify-between p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-rose-200/80 dark:border-slate-700 shadow-2xs">
+                      <label className="flex items-center gap-2 font-bold text-xs text-slate-800 dark:text-slate-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formExcludeHolidays}
+                          onChange={(e) => setFormExcludeHolidays(e.target.checked)}
+                          className="w-4 h-4 rounded text-rose-600 accent-rose-600 cursor-pointer"
+                        />
+                        <span className="flex items-center gap-1">
+                          <span>🎉 自动去除/跳过法定节假日 (国庆节、春节、劳动节、元旦等)</span>
+                        </span>
+                      </label>
+                      <span className="text-[10px] font-bold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-800">
+                        {formExcludeHolidays ? '已启用节假日剔除' : '未启用'}
+                      </span>
+                    </div>
+
+                    {/* B. 暂停/休假/旅游区间设置 */}
+                    <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-amber-200/80 dark:border-slate-700 space-y-2 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1.5 text-xs">
+                          <Umbrella className="w-3.5 h-3.5 text-amber-600" />
+                          <span>休假/暂停/旅游区间 (如外出旅游暂停两周)</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddPauseRange(!showAddPauseRange)}
+                          className="text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950 px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-700 hover:bg-amber-200 transition cursor-pointer flex items-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>添加休假暂停区间</span>
+                        </button>
                       </div>
 
-                      {formRepeatEndType === 'count' ? (
-                        <div className="flex items-center gap-1">
-                          {[2, 4, 8, 12, 24].map((cnt) => (
-                            <button
-                              key={cnt}
-                              type="button"
-                              onClick={() => setFormRepeatCount(cnt)}
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
-                                formRepeatCount === cnt
-                                  ? 'bg-amber-600 text-white'
-                                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-amber-200 dark:border-slate-700'
-                              }`}
+                      {/* 已添加的休假区间清单 */}
+                      {formExcludeRanges.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {formExcludeRanges.map((range) => (
+                            <span
+                              key={range.id}
+                              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 shadow-2xs"
                             >
-                              {cnt}次
-                            </button>
+                              <span>🏖️ {range.label || '暂停'}: {range.start} ~ {range.end}</span>
+                              <button
+                                type="button"
+                                onClick={() => setFormExcludeRanges(formExcludeRanges.filter((r) => r.id !== range.id))}
+                                className="text-amber-700 dark:text-amber-300 hover:text-rose-600 p-0.5 rounded cursor-pointer"
+                                title="删除此休假暂停区间"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
                           ))}
-                          <input
-                            type="number"
-                            min={1}
-                            max={100}
-                            value={formRepeatCount}
-                            onChange={(e) => setFormRepeatCount(parseInt(e.target.value, 10) || 1)}
-                            className="w-12 p-0.5 border border-amber-300 dark:border-slate-700 rounded text-center font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-                          />
-                          <span>期</span>
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <span>截止到:</span>
-                          <input
-                            type="date"
-                            value={formRepeatUntilDate}
-                            onChange={(e) => setFormRepeatUntilDate(e.target.value)}
-                            className="p-1 border border-amber-300 dark:border-slate-700 rounded font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-                          />
+                      )}
+
+                      {/* 展开新增休假区间表单 */}
+                      {showAddPauseRange && (
+                        <div className="p-2 bg-amber-50 dark:bg-slate-800/90 rounded-lg border border-amber-300 dark:border-slate-700 space-y-2 animate-fadeIn">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">休假开始日期</label>
+                              <input
+                                type="date"
+                                value={newPauseStart}
+                                onChange={(e) => setNewPauseStart(e.target.value)}
+                                className="w-full p-1 bg-white dark:bg-slate-900 border border-amber-300 dark:border-slate-700 rounded text-xs font-bold text-slate-800 dark:text-slate-100"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">休假结束日期</label>
+                              <input
+                                type="date"
+                                value={newPauseEnd}
+                                onChange={(e) => setNewPauseEnd(e.target.value)}
+                                className="w-full p-1 bg-white dark:bg-slate-900 border border-amber-300 dark:border-slate-700 rounded text-xs font-bold text-slate-800 dark:text-slate-100"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">休假/暂停备注说明</label>
+                              <input
+                                type="text"
+                                placeholder="例如: 外出旅游两周"
+                                value={newPauseLabel}
+                                onChange={(e) => setNewPauseLabel(e.target.value)}
+                                className="w-full p-1 bg-white dark:bg-slate-900 border border-amber-300 dark:border-slate-700 rounded text-xs font-bold text-slate-800 dark:text-slate-100"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-1.5 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setShowAddPauseRange(false)}
+                              className="px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:text-slate-400 cursor-pointer"
+                            >
+                              取消
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newPauseStart || !newPauseEnd) {
+                                  alert('请选择有效的休假/暂停起止日期！');
+                                  return;
+                                }
+                                if (newPauseStart > newPauseEnd) {
+                                  alert('休假开始日期不能晚于结束日期！');
+                                  return;
+                                }
+                                const newRange: PauseRange = {
+                                  id: 'pause_' + Date.now(),
+                                  start: newPauseStart,
+                                  end: newPauseEnd,
+                                  label: newPauseLabel.trim() || '休假/旅游',
+                                };
+                                setFormExcludeRanges([...formExcludeRanges, newRange]);
+                                setNewPauseStart('');
+                                setNewPauseEnd('');
+                                setShowAddPauseRange(false);
+                              }}
+                              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-[11px] cursor-pointer shadow-2xs"
+                            >
+                              保存休假区间
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
 
-                    {/* 实时日期序列预览 */}
+                {/* 4. 终止条件 (非 custom 模式下) 与 实时生成日期序列预览 */}
+                {!selectedScheduleId && formRepeatMode !== 'none' && (
+                  <div className="pt-2 border-t border-amber-200/60 dark:border-slate-700 space-y-2">
+                    {formRepeatMode !== 'custom' && (
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="font-bold text-slate-700 dark:text-slate-300">终止规则:</span>
+                          <label className="flex items-center gap-1 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="repeatEndType"
+                              checked={formRepeatEndType === 'count'}
+                              onChange={() => setFormRepeatEndType('count')}
+                              className="accent-amber-600"
+                            />
+                            <span>按重复次数</span>
+                          </label>
+                          <label className="flex items-center gap-1 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="repeatEndType"
+                              checked={formRepeatEndType === 'untilDate'}
+                              onChange={() => setFormRepeatEndType('untilDate')}
+                              className="accent-amber-600"
+                            />
+                            <span>按截止日期</span>
+                          </label>
+                        </div>
+
+                        {formRepeatEndType === 'count' ? (
+                          <div className="flex items-center gap-1 text-xs">
+                            {[2, 4, 8, 12, 24].map((cnt) => (
+                              <button
+                                key={cnt}
+                                type="button"
+                                onClick={() => setFormRepeatCount(cnt)}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                                  formRepeatCount === cnt
+                                    ? 'bg-amber-600 text-white'
+                                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-amber-200 dark:border-slate-700'
+                                }`}
+                              >
+                                {cnt}次
+                              </button>
+                            ))}
+                            <input
+                              type="number"
+                              min={1}
+                              max={100}
+                              value={formRepeatCount}
+                              onChange={(e) => setFormRepeatCount(parseInt(e.target.value, 10) || 1)}
+                              className="w-12 p-0.5 border border-amber-300 dark:border-slate-700 rounded text-center font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                            />
+                            <span>期</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-xs">
+                            <span>截止到:</span>
+                            <input
+                              type="date"
+                              value={formRepeatUntilDate}
+                              onChange={(e) => setFormRepeatUntilDate(e.target.value)}
+                              className="p-1 border border-amber-300 dark:border-slate-700 rounded font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 实时生成日期序列与二次点选剔除/恢复预览 */}
                     {(() => {
-                      const dates = calculateRepeatDates(
+                      const { validDates, excludedInfo } = calculateRepeatDatesDetailed(
                         formDateStr,
                         formRepeatMode,
                         formSelectedWeekDays,
                         formWeekInterval,
                         formRepeatEndType,
                         formRepeatCount,
-                        formRepeatUntilDate
+                        formRepeatUntilDate,
+                        formCustomDates,
+                        formExcludeHolidays,
+                        formExcludedDates,
+                        formExcludeRanges
                       );
                       const weekMap = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
                       return (
-                        <div className="p-2 bg-amber-100/40 dark:bg-slate-900/60 rounded-lg border border-amber-200/80 dark:border-slate-700/80">
-                          <div className="text-[11px] font-bold text-amber-900 dark:text-amber-300 mb-1 flex items-center justify-between">
-                            <span>⚡ 将自动生成 {dates.length} 期重复日程卡片：</span>
-                            <span className="text-[10px] text-slate-500 dark:text-slate-400">跨度: {dates[0]} ~ {dates[dates.length - 1]}</span>
+                        <div className="p-2.5 bg-amber-100/50 dark:bg-slate-900/80 rounded-xl border border-amber-300/80 dark:border-slate-700/80 space-y-2">
+                          <div className="text-[11px] font-bold text-amber-950 dark:text-amber-200 flex items-center justify-between">
+                            <span>⚡ 将自动生成 {validDates.length} 期重复日程卡片：</span>
+                            {validDates.length > 0 && (
+                              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">
+                                跨度: {validDates[0]} ~ {validDates[validDates.length - 1]}
+                              </span>
+                            )}
                           </div>
-                          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-                            {dates.map((d, idx) => {
-                              const dObj = new Date(d);
-                              const wName = !isNaN(dObj.getTime()) ? weekMap[dObj.getDay()] : '';
-                              return (
-                                <span
-                                  key={d + idx}
-                                  className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-white dark:bg-slate-800 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-slate-700 shadow-2xs"
-                                >
-                                  #{idx + 1} {d} <span className="opacity-75">({wName})</span>
-                                </span>
-                              );
-                            })}
-                          </div>
+
+                          {/* 有效日期列表 */}
+                          {validDates.length === 0 ? (
+                            <div className="p-3 text-center text-xs text-rose-600 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-950/40 rounded-lg border border-rose-200">
+                              ⚠️ 当前规则与休假/节假日排除条件叠加后无有效生成日期，请调整规则设置。
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1 bg-white/70 dark:bg-slate-800/70 rounded-lg border border-amber-200 dark:border-slate-700">
+                              {validDates.map((d, idx) => {
+                                const dObj = new Date(d);
+                                const wName = !isNaN(dObj.getTime()) ? weekMap[dObj.getDay()] : '';
+                                return (
+                                  <span
+                                    key={d + idx}
+                                    className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-white dark:bg-slate-900 text-amber-950 dark:text-amber-200 border border-amber-300 dark:border-slate-700 shadow-2xs flex items-center gap-1 group"
+                                  >
+                                    <span>#{idx + 1} {d} <span className="opacity-75">({wName})</span></span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setFormExcludedDates([...formExcludedDates, d])}
+                                      className="text-amber-700 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 p-0.5 rounded cursor-pointer opacity-60 group-hover:opacity-100 transition"
+                                      title="点此单独立即排除此日期"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* 排除/跳过日期提示 */}
+                          {excludedInfo.length > 0 && (
+                            <div className="pt-2 border-t border-amber-200 dark:border-slate-700/80 space-y-1">
+                              <div className="text-[10px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                                <span>🎉 已跳过 / 剔除 {excludedInfo.length} 个不安排日期：</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                                {excludedInfo.map((ex) => (
+                                  <span
+                                    key={ex.dateStr}
+                                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center gap-1"
+                                  >
+                                    <span>{ex.dateStr} ({ex.reason})</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setFormExcludedDates(formExcludedDates.filter((d) => d !== ex.dateStr));
+                                        if (formRepeatMode === 'custom' && !formCustomDates.includes(ex.dateStr)) {
+                                          setFormCustomDates([...formCustomDates, ex.dateStr].sort());
+                                        }
+                                      }}
+                                      className="text-xs text-sky-600 dark:text-sky-400 underline hover:text-sky-800 ml-1 cursor-pointer font-bold"
+                                      title="恢复纳入生成"
+                                    >
+                                      恢复
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })()}

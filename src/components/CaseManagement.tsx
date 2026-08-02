@@ -100,7 +100,342 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   const [editingTotalCaseId, setEditingTotalCaseId] = useState<string | null>(null);
   const [editingTotalValue, setEditingTotalValue] = useState<number | string>(30);
 
-  const titleText = category === 'longTerm' ? '长程案例记录' : '短程案例记录';
+  const activeRecords = sortedRecords.filter((item) => item.status === 'active' || !item.status);
+  const endedRecords = sortedRecords.filter((item) => item.status === 'ended');
+
+  const renderCaseCard = (item: CaseRecord) => {
+    const sessions = item.sessions || {};
+    let completedCount = 0;
+    let recordedCount = 0;
+    for (let i = 1; i <= item.totalSessions; i++) {
+      const sess = sessions[i];
+      if (sess) {
+        if (sess.completed) completedCount++;
+        const hasContent = Boolean(
+          sess.completed ||
+          (sess.note && sess.note.trim()) ||
+          (sess.transcript && sess.transcript.trim()) ||
+          (sess.ideas && sess.ideas.length > 0) ||
+          (sess.resources && sess.resources.length > 0)
+        );
+        if (hasContent) recordedCount++;
+      }
+    }
+    const progressPercent = item.totalSessions > 0 ? Math.min(100, Math.round((recordedCount / item.totalSessions) * 100)) : 0;
+
+    return (
+      <div
+        key={item.id}
+        className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-xs transition ${
+          item.pinned
+            ? 'border-amber-300 dark:border-amber-700/80 ring-2 ring-amber-400/20 bg-amber-50/20 dark:bg-slate-900/90'
+            : 'border-rose-200 dark:border-slate-800 hover:border-rose-300 dark:hover:border-slate-700'
+        }`}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-rose-100 dark:border-slate-800 pb-3 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="text-3xl p-2.5 bg-rose-50 dark:bg-slate-800 rounded-2xl border border-rose-100 dark:border-slate-700">
+              {item.avatar}
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                {item.pinned && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 rounded-md border border-amber-300 dark:border-amber-700 flex items-center gap-1 shadow-2xs">
+                    <Pin className="w-3 h-3 fill-amber-500 text-amber-600 shrink-0" />
+                    <span>重要个案</span>
+                  </span>
+                )}
+                <span className="font-bold text-zinc-800 dark:text-slate-100 text-base">
+                  {item.caseNum} {item.name}
+                </span>
+                {item.status === 'active' ? (
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-200 dark:border-emerald-800">
+                    进行中
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-md border border-rose-200 dark:border-rose-800">
+                    已结案 ({item.endDate || '未设'})
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500 dark:text-slate-400 mt-1.5">
+                <span className="flex items-center gap-1">
+                  <CalendarIcon className="w-3.5 h-3.5 text-rose-400" />
+                  起始日期: YYYY-MM-DD ({item.startDate})
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-rose-400" />
+                  已完成进度: <strong className="text-rose-600 dark:text-rose-400">{completedCount}</strong> / {item.totalSessions} 次
+                </span>
+
+                {/* 个案管理次数: 减1次、加1次、精准行内数字直接修改 */}
+                {editingTotalCaseId === item.id ? (
+                  <div className="flex items-center gap-1.5 bg-rose-100 dark:bg-slate-800 p-1.5 rounded-xl border border-rose-300 dark:border-slate-600 text-xs shadow-xs animate-fadeIn">
+                    <span className="font-bold text-rose-900 dark:text-rose-300 text-[11px]">设置管理总次数:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={editingTotalValue}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setEditingTotalValue('');
+                        } else {
+                          const num = parseInt(val, 10);
+                          setEditingTotalValue(isNaN(num) ? '' : num);
+                        }
+                      }}
+                      onFocus={(e) => e.target.select()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const num = Number(editingTotalValue);
+                          if (num > 0) {
+                            onUpdateCaseTotalSessions?.(item.id, num);
+                          }
+                          setEditingTotalCaseId(null);
+                        } else if (e.key === 'Escape') {
+                          setEditingTotalCaseId(null);
+                        }
+                      }}
+                      className="w-16 p-1 text-center font-bold text-xs bg-white dark:bg-slate-900 border border-rose-300 dark:border-slate-700 rounded-lg text-rose-700 dark:text-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      autoFocus
+                    />
+                    <span className="text-xs font-bold text-zinc-600 dark:text-slate-300">次</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const num = Number(editingTotalValue);
+                        if (num > 0) {
+                          onUpdateCaseTotalSessions?.(item.id, num);
+                        }
+                        setEditingTotalCaseId(null);
+                      }}
+                      className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-2xs"
+                    >
+                      保存
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingTotalCaseId(null)}
+                      className="px-1.5 py-1 text-zinc-500 dark:text-slate-400 hover:text-zinc-700 dark:hover:text-slate-200 text-[11px] cursor-pointer"
+                    >
+                      取消
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 bg-rose-50/80 dark:bg-slate-800 p-1 rounded-xl border border-rose-200 dark:border-slate-700 text-xs">
+                    <span className="font-bold text-rose-900 dark:text-rose-300 px-1 text-[11px]">个案管理次数:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (item.totalSessions > 1) {
+                          onUpdateCaseTotalSessions?.(item.id, item.totalSessions - 1);
+                        }
+                      }}
+                      className="p-1 hover:bg-rose-200 dark:hover:bg-slate-700 rounded-lg text-rose-700 dark:text-rose-300 transition cursor-pointer"
+                      title="减少1次管理节次"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTotalCaseId(item.id);
+                        setEditingTotalValue(item.totalSessions);
+                      }}
+                      className="px-1.5 py-0.5 hover:bg-white dark:hover:bg-slate-900 rounded-md font-bold text-rose-700 dark:text-rose-300 text-xs border border-transparent hover:border-rose-300 dark:hover:border-slate-600 transition cursor-pointer"
+                      title="点击直接修改设置总次数"
+                    >
+                      {item.totalSessions}次
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onUpdateCaseTotalSessions?.(item.id, item.totalSessions + 1);
+                      }}
+                      className="p-1 hover:bg-rose-200 dark:hover:bg-slate-700 rounded-lg text-rose-700 dark:text-rose-300 transition cursor-pointer"
+                      title="增加1次管理节次"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onTogglePinCase?.(item.id)}
+              className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition border cursor-pointer ${
+                item.pinned
+                  ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-200'
+                  : 'bg-zinc-50 dark:bg-slate-800 text-zinc-600 dark:text-slate-300 border-zinc-200 dark:border-slate-700 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+              }`}
+              title={item.pinned ? '取消重点置顶' : '置顶重要个案'}
+            >
+              {item.pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-amber-500" />}
+              <span>{item.pinned ? '已置顶' : '置顶'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowChartsCaseId(showChartsCaseId === item.id ? null : item.id)}
+              className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition border cursor-pointer ${
+                showChartsCaseId === item.id
+                  ? 'bg-rose-600 text-white border-rose-600'
+                  : 'bg-rose-50 dark:bg-slate-800 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-slate-700 hover:bg-rose-100'
+              }`}
+              title="查看可视化咨询进度图表分析"
+            >
+              <BarChart2 className="w-3.5 h-3.5" />
+              <span>{showChartsCaseId === item.id ? '收起图表' : '进度图表'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSummaryModalCase(item)}
+              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-lg transition cursor-pointer shadow-2xs"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+              <span>AI总结/报告</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setExportingPdfCase(item)}
+              className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 bg-zinc-100 dark:bg-slate-800 hover:bg-zinc-200 dark:hover:bg-slate-700 text-zinc-700 dark:text-slate-200 border border-zinc-200 dark:border-slate-700 rounded-lg transition cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>导出PDF/打印</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`确定要彻底删除 ${item.caseNum} ${item.name} 的个案档案及其所有会谈记录吗？`)) {
+                  onDeleteCase(item.id);
+                }
+              }}
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1.5 text-zinc-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 bg-zinc-50 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-zinc-200 dark:border-slate-700 rounded-lg transition cursor-pointer"
+              title="删除个案记录"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* 咨询节次可视化进展分析图表 (D3 / Recharts) */}
+        {showChartsCaseId === item.id && (
+          <div className="mb-4">
+            <CaseProgressCharts record={item} />
+          </div>
+        )}
+
+        {/* 咨询进程进度百分比视觉条 */}
+        <div className="mb-4 bg-rose-50/50 dark:bg-slate-800/80 border border-rose-100 dark:border-slate-700/80 rounded-xl p-3 transition-colors">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-zinc-800 dark:text-slate-100 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                咨询进度节奏:
+              </span>
+              <span className="text-zinc-600 dark:text-slate-300 font-medium">
+                已记录 <strong className="text-rose-600 dark:text-rose-400 font-bold">{recordedCount}</strong> 次 / 预设总数 <strong>{item.totalSessions}</strong> 次
+                {completedCount > 0 && (
+                  <span className="text-[11px] text-zinc-500 dark:text-slate-400 ml-1.5">
+                    (已完结: {completedCount} 次)
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black text-rose-600 dark:text-rose-400 font-mono bg-white dark:bg-slate-900 px-2.5 py-0.5 rounded-lg border border-rose-200 dark:border-slate-700 shadow-2xs">
+                {progressPercent}%
+              </span>
+            </div>
+          </div>
+
+          {/* 进度百分比轨迹条 */}
+          <div className="w-full bg-rose-200/60 dark:bg-slate-700/80 h-2.5 rounded-full overflow-hidden relative shadow-inner">
+            <div
+              className="bg-gradient-to-r from-rose-400 via-rose-500 to-rose-600 dark:from-rose-500 dark:to-rose-400 h-full rounded-full transition-all duration-500 shadow-xs"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+
+        {/* 次数网格 */}
+        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-15 gap-2">
+          {Array.from({ length: item.totalSessions }, (_, idx) => {
+            const sessionNum = idx + 1;
+            const sessionData = item.sessions[sessionNum] || { completed: false, note: '' };
+
+            const hasNote = Boolean(sessionData.note && sessionData.note.trim());
+            const hasTranscript = Boolean(sessionData.transcript && sessionData.transcript.trim());
+            const hasIdeas = Boolean(sessionData.ideas && sessionData.ideas.length > 0);
+            const resources = sessionData.resources || [];
+            const hasResources = resources.length > 0;
+
+            return (
+              <div key={sessionNum} className="relative group">
+                <button
+                  type="button"
+                  onClick={() => openSessionModal(item, sessionNum)}
+                  className={`w-full min-h-12 border rounded-xl flex flex-col items-center justify-center p-1 text-xs transition cursor-pointer relative ${
+                    sessionData.completed
+                      ? 'bg-rose-400 dark:bg-rose-600 border-rose-500 dark:border-rose-500 text-white font-bold shadow-2xs'
+                      : 'bg-white dark:bg-slate-800 border-rose-200 dark:border-slate-700 hover:bg-rose-50 dark:hover:bg-slate-700 text-zinc-700 dark:text-slate-200'
+                  }`}
+                >
+                  <span className="text-[11px] font-bold">{sessionNum}次</span>
+                  <div className="flex items-center gap-0.5 mt-0.5">
+                    {hasNote && (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          sessionData.completed ? 'bg-white' : 'bg-rose-500 dark:bg-rose-400'
+                        }`}
+                        title="包含笔记"
+                      />
+                    )}
+                    {hasTranscript && (
+                      <Mic className={`w-2.5 h-2.5 ${sessionData.completed ? 'text-white' : 'text-emerald-600'}`} title="包含逐字稿" />
+                    )}
+                    {hasIdeas && (
+                      <Lightbulb className={`w-2.5 h-2.5 ${sessionData.completed ? 'text-amber-200' : 'text-amber-500'}`} title="包含随记想法" />
+                    )}
+                    {hasResources && (
+                      <LinkIcon className={`w-2.5 h-2.5 ${sessionData.completed ? 'text-white' : 'text-blue-500'}`} title="包含WPS/公众号/小红书外链" />
+                    )}
+                  </div>
+                </button>
+
+                {/* 如果包含外链，悬浮/右上方提供一键嵌入预览快捷按钮 */}
+                {hasResources && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSessionResourcePreview({
+                        resource: resources[0],
+                        allResources: resources,
+                      });
+                    }}
+                    className="absolute -top-1.5 -right-1.5 p-1 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-xs transition cursor-pointer hover:scale-110 z-10"
+                    title={`点击直接在线预览绑定的 ${resources[0].title || 'WPS/微信公众号外链'}`}
+                  >
+                    <Eye className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   const handleCreateCase = (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,6 +491,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   };
 
   const currentCase = records.find((r) => r.id === selectedCaseId);
+  const titleText = category === 'longTerm' ? '长程心理咨询个案库' : '单次心理咨询个案库';
 
   return (
     <div className="space-y-6">
@@ -232,7 +568,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
               className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400"
             >
               <option value="active">正在进行中</option>
-              <option value="ended">已终止/结案</option>
+              <option value="ended">暂停/终止/已结案</option>
             </select>
           </div>
 
@@ -294,6 +630,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             />
             {searchQuery && (
               <button
+                type="button"
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-0.5 rounded-full cursor-pointer"
               >
@@ -315,355 +652,58 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
           )}
         </div>
       </div>
-
-      {/* 个案档案列表 */}
-      <div className="space-y-4">
+                {/* 个案档案列表 */}
+      <div className="space-y-6">
         {sortedRecords.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-2xl p-8 text-center text-zinc-500 dark:text-slate-400 text-xs space-y-3">
             <p>暂无此分类下的个案档案。请在上方表单输入代号/名称直接“新建个案”。</p>
           </div>
         ) : (
-          sortedRecords.map((item) => {
-            const sessions = item.sessions || {};
-            let completedCount = 0;
-            let recordedCount = 0;
-            for (let i = 1; i <= item.totalSessions; i++) {
-              const sess = sessions[i];
-              if (sess) {
-                if (sess.completed) completedCount++;
-                const hasContent = Boolean(
-                  sess.completed ||
-                  (sess.note && sess.note.trim()) ||
-                  (sess.transcript && sess.transcript.trim()) ||
-                  (sess.ideas && sess.ideas.length > 0) ||
-                  (sess.resources && sess.resources.length > 0)
-                );
-                if (hasContent) recordedCount++;
-              }
-            }
-            const progressPercent = item.totalSessions > 0 ? Math.min(100, Math.round((recordedCount / item.totalSessions) * 100)) : 0;
-
-            return (
-              <div
-                key={item.id}
-                className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-xs transition ${
-                  item.pinned
-                    ? 'border-amber-300 dark:border-amber-700/80 ring-2 ring-amber-400/20 bg-amber-50/20 dark:bg-slate-900/90'
-                    : 'border-rose-200 dark:border-slate-800 hover:border-rose-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-rose-100 dark:border-slate-800 pb-3 mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="text-3xl p-2.5 bg-rose-50 dark:bg-slate-800 rounded-2xl border border-rose-100 dark:border-slate-700">
-                      {item.avatar}
-                    </div>
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {item.pinned && (
-                          <span className="text-[11px] font-bold px-2 py-0.5 bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 rounded-md border border-amber-300 dark:border-amber-700 flex items-center gap-1 shadow-2xs">
-                            <Pin className="w-3 h-3 fill-amber-500 text-amber-600 shrink-0" />
-                            <span>重要个案</span>
-                          </span>
-                        )}
-                        <span className="font-bold text-zinc-800 dark:text-slate-100 text-base">
-                          {item.caseNum} {item.name}
-                        </span>
-                        {item.status === 'active' ? (
-                          <span className="text-[11px] font-bold px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-200 dark:border-emerald-800">
-                            进行中
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-bold px-2.5 py-0.5 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-md border border-rose-200 dark:border-rose-800">
-                            已结案 ({item.endDate || '未设'})
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500 dark:text-slate-400 mt-1.5">
-                        <span className="flex items-center gap-1">
-                          <CalendarIcon className="w-3.5 h-3.5 text-rose-400" />
-                          起始日期: YYYY-MM-DD ({item.startDate})
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-rose-400" />
-                          已完成进度: <strong className="text-rose-600 dark:text-rose-400">{completedCount}</strong> / {item.totalSessions} 次
-                        </span>
-
-                        {/* 个案管理次数: 减1次、加1次、精准行内数字直接修改 */}
-                        {editingTotalCaseId === item.id ? (
-                          <div className="flex items-center gap-1.5 bg-rose-100 dark:bg-slate-800 p-1.5 rounded-xl border border-rose-300 dark:border-slate-600 text-xs shadow-xs animate-fadeIn">
-                            <span className="font-bold text-rose-900 dark:text-rose-300 text-[11px]">设置管理总次数:</span>
-                            <input
-                              type="number"
-                              min={1}
-                              max={1000}
-                              value={editingTotalValue}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                if (val === '') {
-                                  setEditingTotalValue('');
-                                } else {
-                                  const num = parseInt(val, 10);
-                                  setEditingTotalValue(isNaN(num) ? '' : num);
-                                }
-                              }}
-                              onFocus={(e) => e.target.select()}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  const num = Number(editingTotalValue);
-                                  if (num > 0) {
-                                    onUpdateCaseTotalSessions?.(item.id, num);
-                                  }
-                                  setEditingTotalCaseId(null);
-                                } else if (e.key === 'Escape') {
-                                  setEditingTotalCaseId(null);
-                                }
-                              }}
-                              className="w-16 p-1 text-center font-bold text-xs bg-white dark:bg-slate-900 border border-rose-300 dark:border-slate-700 rounded-lg text-rose-700 dark:text-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                              autoFocus
-                            />
-                            <span className="text-xs font-bold text-zinc-600 dark:text-slate-300">次</span>
-                             <button
-                              type="button"
-                              onClick={() => {
-                                const num = Number(editingTotalValue);
-                                if (num > 0) {
-                                  onUpdateCaseTotalSessions?.(item.id, num);
-                                }
-                                setEditingTotalCaseId(null);
-                              }}
-                              className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-2xs"
-                            >
-                              保存
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingTotalCaseId(null)}
-                              className="px-1.5 py-1 text-zinc-500 dark:text-slate-400 hover:text-zinc-700 dark:hover:text-slate-200 text-[11px] cursor-pointer"
-                            >
-                              取消
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1 bg-rose-50/80 dark:bg-slate-800 p-1 rounded-xl border border-rose-200 dark:border-slate-700 text-xs">
-                            <span className="font-bold text-rose-900 dark:text-rose-300 px-1 text-[11px]">个案管理次数:</span>
-                            <button
-                              type="button"
-                              onClick={() => onUpdateCaseTotalSessions?.(item.id, Math.max(1, item.totalSessions - 1))}
-                              disabled={item.totalSessions <= 1}
-                              className="p-1 bg-white dark:bg-slate-700 hover:bg-rose-100 dark:hover:bg-slate-600 disabled:opacity-40 text-rose-800 dark:text-slate-200 border border-rose-200 dark:border-slate-600 rounded-lg transition cursor-pointer font-bold"
-                              title="减少 1 次个案管理次数"
-                            >
-                              <Minus className="w-3 h-3" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingTotalCaseId(item.id);
-                                setEditingTotalValue(item.totalSessions);
-                              }}
-                              className="font-bold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-slate-700 px-2 py-0.5 rounded-lg border border-transparent hover:border-rose-200 transition text-xs cursor-pointer"
-                              title="点击直接精确输入修改管理次数"
-                            >
-                              {item.totalSessions}次
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onUpdateCaseTotalSessions?.(item.id, item.totalSessions + 1)}
-                              className="px-2 py-1 bg-white dark:bg-slate-700 hover:bg-rose-100 dark:hover:bg-slate-600 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-slate-600 rounded-lg transition cursor-pointer font-bold flex items-center gap-0.5 text-xs"
-                              title="增加 1 次个案管理次数"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>+1次</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingTotalCaseId(item.id);
-                                setEditingTotalValue(item.totalSessions);
-                              }}
-                              className="px-2 py-1 bg-white dark:bg-slate-700 hover:bg-rose-100 dark:hover:bg-slate-600 text-zinc-700 dark:text-slate-200 border border-rose-200 dark:border-slate-600 rounded-lg transition cursor-pointer text-[11px] font-bold flex items-center gap-1"
-                              title="直接输入精确修改管理次数"
-                            >
-                              <Pencil className="w-3 h-3 text-rose-500" />
-                              <span>直接修改</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    {/* 重要个案置顶按钮 */}
-                    <button
-                      type="button"
-                      onClick={() => onTogglePinCase?.(item.id)}
-                      className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition cursor-pointer active:scale-95 ${
-                        item.pinned
-                          ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-xs'
-                          : 'bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-slate-700 text-zinc-700 dark:text-slate-300 border-zinc-200 dark:border-slate-700'
-                      }`}
-                      title={item.pinned ? '取消重要个案置顶' : '设为重要个案并置顶显示'}
-                    >
-                      {item.pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-amber-500" />}
-                      <span>{item.pinned ? '取消置顶' : '置顶'}</span>
-                    </button>
-
-                    {/* 可视化图表展开按钮 */}
-                    <button
-                      type="button"
-                      onClick={() => setShowChartsCaseId(showChartsCaseId === item.id ? null : item.id)}
-                      className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition cursor-pointer shadow-2xs active:scale-95 ${
-                        showChartsCaseId === item.id
-                          ? 'bg-rose-600 text-white border-rose-700'
-                          : 'bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-slate-700 hover:bg-rose-50'
-                      }`}
-                      title="查看基于 Recharts 的咨询节次进展与时长趋势图表"
-                    >
-                      <BarChart2 className="w-3.5 h-3.5 text-rose-500" />
-                      <span>{showChartsCaseId === item.id ? '收起图表' : '进度图表'}</span>
-                    </button>
-
-                    {/* Gemini AI 摘要生成 */}
-                    <button
-                      type="button"
-                      onClick={() => setSummaryModalCase(item)}
-                      className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 text-white bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 rounded-lg transition cursor-pointer shadow-2xs active:scale-95"
-                      title="利用 Gemini AI 总结个案进度、核心移情与阻抗并生成临床建议"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                      <span>AI摘要生成</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setExportingPdfCase(item)}
-                      className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 text-rose-700 dark:text-rose-300 hover:text-white bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-600 border border-rose-200 dark:border-rose-800 rounded-lg transition cursor-pointer shadow-2xs"
-                      title="将当前个案的所有会谈记录、关联督导与思考笔记汇总导出为 PDF 卷宗"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      <span>导出PDF</span>
-                    </button>
-
-                    <button
-                      onClick={() => onDeleteCase(item.id)}
-                      className="flex items-center gap-1 text-[11px] px-2.5 py-1.5 text-zinc-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 bg-zinc-50 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-zinc-200 dark:border-slate-700 rounded-lg transition cursor-pointer"
-                      title="删除个案记录"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* 咨询节次可视化进展分析图表 (D3 / Recharts) */}
-                {showChartsCaseId === item.id && (
-                  <div className="mb-4">
-                    <CaseProgressCharts record={item} />
-                  </div>
-                )}
-
-                {/* 咨询进程进度百分比视觉条 */}
-                <div className="mb-4 bg-rose-50/50 dark:bg-slate-800/80 border border-rose-100 dark:border-slate-700/80 rounded-xl p-3 transition-colors">
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-zinc-800 dark:text-slate-100 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                        咨询进度节奏:
-                      </span>
-                      <span className="text-zinc-600 dark:text-slate-300 font-medium">
-                        已记录 <strong className="text-rose-600 dark:text-rose-400 font-bold">{recordedCount}</strong> 次 / 预设总数 <strong>{item.totalSessions}</strong> 次
-                        {completedCount > 0 && (
-                          <span className="text-[11px] text-zinc-500 dark:text-slate-400 ml-1.5">
-                            (已完结: {completedCount} 次)
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-rose-600 dark:text-rose-400 font-mono bg-white dark:bg-slate-900 px-2.5 py-0.5 rounded-lg border border-rose-200 dark:border-slate-700 shadow-2xs">
-                        {progressPercent}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 进度百分比轨迹条 */}
-                  <div className="w-full bg-rose-200/60 dark:bg-slate-700/80 h-2.5 rounded-full overflow-hidden relative shadow-inner">
-                    <div
-                      className="bg-gradient-to-r from-rose-400 via-rose-500 to-rose-600 dark:from-rose-500 dark:to-rose-400 h-full rounded-full transition-all duration-500 shadow-xs"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* 次数网格 */}
-                <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-15 gap-2">
-                  {Array.from({ length: item.totalSessions }, (_, idx) => {
-                    const sessionNum = idx + 1;
-                    const sessionData = item.sessions[sessionNum] || { completed: false, note: '' };
-
-                    const hasNote = Boolean(sessionData.note && sessionData.note.trim());
-                    const hasTranscript = Boolean(sessionData.transcript && sessionData.transcript.trim());
-                    const hasIdeas = Boolean(sessionData.ideas && sessionData.ideas.length > 0);
-                    const resources = sessionData.resources || [];
-                    const hasResources = resources.length > 0;
-
-                    return (
-                      <div key={sessionNum} className="relative group">
-                        <button
-                          type="button"
-                          onClick={() => openSessionModal(item, sessionNum)}
-                          className={`w-full min-h-12 border rounded-xl flex flex-col items-center justify-center p-1 text-xs transition cursor-pointer relative ${
-                            sessionData.completed
-                              ? 'bg-rose-400 dark:bg-rose-600 border-rose-500 dark:border-rose-500 text-white font-bold shadow-2xs'
-                              : 'bg-white dark:bg-slate-800 border-rose-200 dark:border-slate-700 hover:bg-rose-50 dark:hover:bg-slate-700 text-zinc-700 dark:text-slate-200'
-                          }`}
-                        >
-                          <span className="text-[11px] font-bold">{sessionNum}次</span>
-                          <div className="flex items-center gap-0.5 mt-0.5">
-                            {hasNote && (
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  sessionData.completed ? 'bg-white' : 'bg-rose-500 dark:bg-rose-400'
-                                }`}
-                                title="包含笔记"
-                              />
-                            )}
-                            {hasTranscript && (
-                              <Mic className={`w-2.5 h-2.5 ${sessionData.completed ? 'text-white' : 'text-emerald-600'}`} title="包含逐字稿" />
-                            )}
-                            {hasIdeas && (
-                              <Lightbulb className={`w-2.5 h-2.5 ${sessionData.completed ? 'text-amber-200' : 'text-amber-500'}`} title="包含随记想法" />
-                            )}
-                            {hasResources && (
-                              <LinkIcon className={`w-2.5 h-2.5 ${sessionData.completed ? 'text-white' : 'text-blue-500'}`} title="包含WPS/公众号/小红书外链" />
-                            )}
-                          </div>
-                        </button>
-
-                        {/* 如果包含外链，悬浮/右上方提供一键嵌入预览快捷按钮 */}
-                        {hasResources && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSessionResourcePreview({
-                                resource: resources[0],
-                                allResources: resources,
-                              });
-                            }}
-                            className="absolute -top-1.5 -right-1.5 p-1 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-xs transition cursor-pointer hover:scale-110 z-10"
-                            title={`点击直接在线预览绑定的 ${resources[0].title || 'WPS/微信公众号外链'}`}
-                          >
-                            <Eye className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
+          <>
+            {/* 小标题 1: 正在进行中 */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 px-4 py-2.5 rounded-xl shadow-2xs">
+                <div className="flex items-center gap-2.5 font-bold text-emerald-900 dark:text-emerald-300 text-sm">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  <h3>1. 正在进行中</h3>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-200/60 dark:bg-emerald-900/80 text-emerald-950 dark:text-emerald-200 font-bold border border-emerald-300 dark:border-emerald-700">
+                    {activeRecords.length} 项
+                  </span>
                 </div>
               </div>
-            );
-          })
+              {activeRecords.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400 bg-white/60 dark:bg-slate-900/60 rounded-xl border border-dashed border-rose-200 dark:border-slate-800">
+                  暂无进行中的个案记录
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {activeRecords.map((item) => renderCaseCard(item))}
+                </div>
+              )}
+            </div>
+
+            {/* 小标题 2: 暂停或终止的长程个案 */}
+            <div className="space-y-3 pt-3">
+              <div className="flex items-center justify-between bg-zinc-100/80 dark:bg-slate-800/80 border border-zinc-200 dark:border-slate-700 px-4 py-2.5 rounded-xl shadow-2xs">
+                <div className="flex items-center gap-2.5 font-bold text-zinc-800 dark:text-slate-200 text-sm">
+                  <span className="w-2.5 h-2.5 rounded-full bg-zinc-400 shrink-0" />
+                  <h3>2. {category === 'longTerm' ? '暂停或终止的长程个案' : '暂停或终止的短程个案'}</h3>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-zinc-200 dark:bg-slate-700 text-zinc-700 dark:text-slate-300 font-bold border border-zinc-300 dark:border-slate-600">
+                    {endedRecords.length} 项
+                  </span>
+                </div>
+              </div>
+              {endedRecords.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400 bg-white/60 dark:bg-slate-900/60 rounded-xl border border-dashed border-rose-200 dark:border-slate-800">
+                  暂无暂停或终止的个案记录
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {endedRecords.map((item) => renderCaseCard(item))}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
