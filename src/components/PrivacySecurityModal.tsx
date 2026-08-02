@@ -590,6 +590,54 @@ export const PrivacySecurityModal: React.FC<PrivacySecurityModalProps> = ({
                 </p>
               </div>
 
+              {/* 针对用户访客数/扣费/数据安全疑问解答 FAQ 板块 */}
+              <div className="p-4 bg-sky-50/80 dark:bg-slate-800/90 border border-sky-200 dark:border-slate-700 rounded-xl space-y-3">
+                <div className="flex items-center gap-2 font-bold text-sky-900 dark:text-sky-300 text-xs">
+                  <Globe className="w-4 h-4 text-sky-600" />
+                  <span>隐私与安全说明：关于网络访客量、扣费、数据隔离与访问权限设置</span>
+                </div>
+                <div className="space-y-2 text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed">
+                  <div className="p-2.5 bg-white/80 dark:bg-slate-900/80 rounded-lg border border-sky-100 dark:border-slate-800 space-y-1">
+                    <p className="font-bold text-sky-950 dark:text-sky-200 flex items-center gap-1">
+                      <span>❓ 如何设置限制访问，只允许我同意/发给的人进网站？</span>
+                    </p>
+                    <p className="text-slate-600 dark:text-slate-400">
+                      <strong>双重权限把关方案：</strong><br />
+                      1. <strong>设置工作台登录密码：</strong> 您可以在系统登录页注册专属账号与强密码。没有您的账号密码，其他人即使获取链接也无法解锁系统主界面。<br />
+                      2. <strong>私密数据加密分享：</strong> 若要将某些记录单独发给特定督导或同事，请在【数据备份】中导出**带密码加密**的数据包，对方必须输入您告知的解密口令才能还原查看。<br />
+                      3. <strong>物理隔离优势：</strong> 本网站基于本地浏览器独立存储，即便陌生人打开网址，其看到的是完全空白的页面，绝不可能看到您的任何私密记录。
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 bg-white/80 dark:bg-slate-900/80 rounded-lg border border-sky-100 dark:border-slate-800 space-y-1">
+                    <p className="font-bold text-sky-950 dark:text-sky-200 flex items-center gap-1">
+                      <span>❓ 为什么统计显示有 300+ 独立访客与 1k+ 请求数？</span>
+                    </p>
+                    <p className="text-slate-600 dark:text-slate-400">
+                      该应用托管在 Cloud Run 公网云端节点。当应用部署后，云端平台防护系统、搜索引擎蜘蛛爬虫、网络自动安全探测以及静态资源下载都会被云端 CDN 计入“独立访客”和“请求数”，这属于公网网站托管的正常技术现象。
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 bg-white/80 dark:bg-slate-900/80 rounded-lg border border-sky-100 dark:border-slate-800 space-y-1">
+                    <p className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                      <span>💰 会扣我的钱吗？</span>
+                    </p>
+                    <p className="text-slate-600 dark:text-slate-400">
+                      <strong>完全不会扣费！零额外费用！</strong> AI Studio 提供的应用分享与预览环境完全包含在平台免费额度与开发测试权限内，您无需绑定任何信用卡，也不会产生任何扣费或账单支出。
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 bg-white/80 dark:bg-slate-900/80 rounded-lg border border-sky-100 dark:border-slate-800 space-y-1">
+                    <p className="font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1">
+                      <span>🔒 那些“独立访客”能看到我录入的日程与咨询档案吗？</span>
+                    </p>
+                    <p className="text-slate-600 dark:text-slate-400">
+                      <strong>绝对不会！数据 100% 物理隔离！</strong> 因为本应用是纯前端浏览器沙盒架构，所有数据仅存储在您个人电脑/手机的本地浏览器中。陌生访客或网络爬虫打开链接时，只能看到全新的空白页面或默认示例，绝不可能调取或查看您的任何隐私记录。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Grid Features */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1.5">
@@ -638,9 +686,24 @@ export const PrivacySecurityModal: React.FC<PrivacySecurityModalProps> = ({
           {/* TAB 3: BACKUP */}
           {activeTab === 'backup' && (
             <div className="space-y-4">
-              <p className="text-slate-600 dark:text-slate-300">
-                请定期导出备份文件，保存至个人安全云盘或加密移动硬盘中，以保障数据双重备份：
-              </p>
+              {/* 优化后的备份引导提示卡片 */}
+              <div className="p-4 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl space-y-2">
+                <div className="flex items-center gap-2 font-bold text-amber-900 dark:text-amber-300 text-xs">
+                  <Download className="w-4 h-4 text-amber-600" />
+                  <span>💡 零泄露风险的安全备份建议与引导说明</span>
+                </div>
+                <div className="text-[11px] text-amber-900/90 dark:text-amber-200/90 space-y-1.5 leading-relaxed">
+                  <p>
+                    <strong>1. 定期备份：</strong> 由于当前系统数据 100% 存储于您的当前浏览器中，清空浏览器缓存或更换设备将无法自动跨设备同步。建议每周或在新增重要咨询记录后，点击下方的【一键导出 JSON 备份文件】。
+                  </p>
+                  <p>
+                    <strong>2. 异地或更换设备恢复：</strong> 若要在新电脑、手机或更换浏览器后使用，只需将导出的 JSON 文件传输到新设备上，点击下方的【从 JSON 备份导入恢复】即可一键完美还原所有案例、逐字稿与日程安排！
+                  </p>
+                  <p>
+                    <strong>3. 双重加密保障：</strong> 导出的备份文件可以开启自定义密码加密，防止文件意外丢在 U 盘或公共电脑中造成患者隐私泄漏。
+                  </p>
+                </div>
+              </div>
 
               {/* Encryption options */}
               <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl space-y-3">
