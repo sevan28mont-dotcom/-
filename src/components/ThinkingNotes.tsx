@@ -209,47 +209,65 @@ export const ThinkingNotes: React.FC<ThinkingNotesProps> = ({ notes, onAddNote, 
             </button>
 
             <VoiceInputButton
-              buttonText="语音口述反思"
+              buttonText="🎙️ 语音口述反思"
               onTranscript={(text) => handleContentChange(content ? content + ' ' + text : text)}
             />
           </div>
         </div>
 
         <form onSubmit={handleSaveNoteSubmit} className={isFullscreen ? "flex-1 flex flex-col space-y-3 mt-2 min-h-0" : "space-y-3"}>
-          <div>
-            <input
-              type="text"
-              placeholder="请输入主题/标题 (例: 关于精神分析中的反移情觉察)..."
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              required
-              className={`w-full text-xs font-bold p-3 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400 bg-white dark:bg-slate-800 ${
-                editorFont === 'kaiti' ? 'font-kaiti text-sm' : editorFont === 'song' ? 'font-song' : ''
-              }`}
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder="请输入主题/标题 (例: 关于精神分析中的反移情觉察)..."
+                value={title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                required
+                className={`w-full text-xs font-bold p-3 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400 bg-white dark:bg-slate-800 ${
+                  editorFont === 'kaiti' ? 'font-kaiti text-sm' : editorFont === 'song' ? 'font-song' : ''
+                }`}
+              />
+            </div>
+            <VoiceInputButton
+              buttonText="🎤 语音标题"
+              onTranscript={(text) => handleTitleChange(text.replace(/[。！？]$/, ''))}
             />
           </div>
 
-          {/* 表情快捷插入栏 */}
-          <div className="flex flex-wrap items-center gap-2 bg-rose-50/50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-rose-100 dark:border-slate-700 text-xs shrink-0">
-            <span className="font-semibold text-rose-900 dark:text-rose-300 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-rose-500" /> 快捷标记:
-            </span>
-            {['💡 思考', '🧠 联想', '⚠️ 觉察', '❤️ 共情', '🔍 动力学', '🌱 成长'].map((item) => {
-              const [emoji, label] = item.split(' ');
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => {
-                    insertEmoji(emoji);
-                    notifyTextChange();
-                  }}
-                  className="px-2.5 py-1 bg-white dark:bg-slate-700 hover:bg-rose-100 dark:hover:bg-slate-600 border border-rose-200 dark:border-slate-600 rounded-lg text-zinc-700 dark:text-slate-200 font-medium transition cursor-pointer text-xs"
-                >
-                  {emoji} {label}
-                </button>
-              );
-            })}
+          {/* 表情与语音快捷标记栏 */}
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-rose-50/50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-rose-100 dark:border-slate-700 text-xs shrink-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-rose-900 dark:text-rose-300 flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-rose-500" /> 快捷标记:
+              </span>
+              {['💡 思考', '🧠 联想', '⚠️ 觉察', '❤️ 共情', '🔍 动力学', '🌱 成长'].map((item) => {
+                const [emoji, label] = item.split(' ');
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => {
+                      insertEmoji(emoji);
+                      notifyTextChange();
+                    }}
+                    className="px-2.5 py-1 bg-white dark:bg-slate-700 hover:bg-rose-100 dark:hover:bg-slate-600 border border-rose-200 dark:border-slate-600 rounded-lg text-zinc-700 dark:text-slate-200 font-medium transition cursor-pointer text-xs"
+                  >
+                    {emoji} {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-rose-700 dark:text-rose-400 font-bold hidden sm:inline">
+                🎙️ 浏览器 Microphone API 录音速记
+              </span>
+              <VoiceInputButton
+                buttonText="🎙️ 追加口述正文"
+                onTranscript={(text) => handleContentChange(content ? content + '\n' + text : text)}
+              />
+            </div>
           </div>
 
           <div className={isFullscreen ? "flex-1 flex flex-col min-h-0" : ""}>

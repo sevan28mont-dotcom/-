@@ -25,7 +25,7 @@ import {
 import { SystemData } from '../types';
 import { WorkspaceLayoutConfig, DEFAULT_WORKSPACE_LAYOUT } from '../services/layout';
 
-export type ActiveTab = 'longTerm' | 'shortTerm' | 'mentor' | 'thinking' | 'schedule';
+export type ActiveTab = 'longTerm' | 'longTermActive' | 'longTermEnded' | 'shortTerm' | 'mentor' | 'thinking' | 'schedule';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -89,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const longTermItem = visibleNavItems.find((i) => i.id === 'longTerm');
   const shortTermItem = visibleNavItems.find((i) => i.id === 'shortTerm');
   const hasCasesGroup = Boolean(longTermItem || shortTermItem);
-  const isCasesActive = activeTab === 'longTerm' || activeTab === 'shortTerm';
+  const isCasesActive = activeTab === 'longTerm' || activeTab === 'longTermActive' || activeTab === 'longTermEnded' || activeTab === 'shortTerm';
 
   const mentorItem = visibleNavItems.find((i) => i.id === 'mentor');
 
@@ -194,19 +194,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {isCasesDropdownOpen && (
                       <div className="p-1.5 space-y-1 bg-white/80 dark:bg-slate-900/80 border-t border-rose-100/80 dark:border-slate-800">
                         {longTermItem && (
-                          <button
-                            onClick={() => handleItemSelect(() => setActiveTab('longTerm'))}
-                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                              activeTab === 'longTerm'
-                                ? 'bg-rose-500 text-white dark:bg-rose-600 font-bold shadow-xs'
-                                : 'text-zinc-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800 hover:text-rose-800 dark:hover:text-rose-300'
-                            }`}
-                          >
-                            <FolderOpen className={`w-3.5 h-3.5 ${activeTab === 'longTerm' ? 'text-white' : 'text-rose-400'}`} />
-                            <div className="flex flex-col text-left">
-                              <span className="font-bold">{longTermItem.label || '长程（下周见）'}</span>
-                            </div>
-                          </button>
+                          <div className="space-y-1">
+                            {/* 1. 正在进行 */}
+                            <button
+                              onClick={() => handleItemSelect(() => setActiveTab('longTermActive'))}
+                              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                activeTab === 'longTermActive' || activeTab === 'longTerm'
+                                  ? 'bg-emerald-600 text-white dark:bg-emerald-600 font-bold shadow-xs'
+                                  : 'text-zinc-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-emerald-800 dark:hover:text-emerald-300'
+                              }`}
+                            >
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${activeTab === 'longTermActive' || activeTab === 'longTerm' ? 'bg-white' : 'bg-emerald-500'}`} />
+                              <div className="flex flex-col text-left">
+                                <span className="font-bold">1. 长程 · 正在进行</span>
+                                <span className="text-[10px] opacity-80 font-normal">活跃咨询中个案</span>
+                              </div>
+                            </button>
+
+                            {/* 2. 终止和暂停 */}
+                            <button
+                              onClick={() => handleItemSelect(() => setActiveTab('longTermEnded'))}
+                              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                activeTab === 'longTermEnded'
+                                  ? 'bg-amber-600 text-white dark:bg-amber-600 font-bold shadow-xs'
+                                  : 'text-zinc-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-slate-800 hover:text-amber-800 dark:hover:text-amber-300'
+                              }`}
+                            >
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${activeTab === 'longTermEnded' ? 'bg-white' : 'bg-amber-500'}`} />
+                              <div className="flex flex-col text-left">
+                                <span className="font-bold">2. 长程 · 终止和暂停</span>
+                                <span className="text-[10px] opacity-80 font-normal">已结案/暂告一段落</span>
+                              </div>
+                            </button>
+                          </div>
                         )}
 
                         {shortTermItem && (

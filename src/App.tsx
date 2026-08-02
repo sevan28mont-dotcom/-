@@ -465,9 +465,26 @@ export default function App() {
               onToggleComplete={handleToggleScheduleComplete}
             />
 
-            {activeTab === 'longTerm' && (
+            {(activeTab === 'longTerm' || activeTab === 'longTermActive') && (
               <CaseManagement
                 category="longTerm"
+                statusFilter="active"
+                records={systemData.records}
+                mentors={systemData.mentors}
+                thinkingNotes={systemData.thinking}
+                onAddCase={handleAddCase}
+                onDeleteCase={handleDeleteCase}
+                onUpdateSessionNote={handleUpdateSessionNote}
+                onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
+                onSaveToThinkingNotes={handleAddThinkingNote}
+                onTogglePinCase={handleTogglePinCase}
+              />
+            )}
+
+            {activeTab === 'longTermEnded' && (
+              <CaseManagement
+                category="longTerm"
+                statusFilter="ended"
                 records={systemData.records}
                 mentors={systemData.mentors}
                 thinkingNotes={systemData.thinking}

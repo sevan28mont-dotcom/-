@@ -13,6 +13,7 @@ import { CaseProgressCharts } from './CaseProgressCharts';
 
 interface CaseManagementProps {
   category: CaseCategory;
+  statusFilter?: 'all' | 'active' | 'ended';
   records: CaseRecord[];
   mentors?: Supervisor[];
   thinkingNotes?: ThinkingNote[];
@@ -26,6 +27,7 @@ interface CaseManagementProps {
 
 export const CaseManagement: React.FC<CaseManagementProps> = ({
   category,
+  statusFilter = 'all',
   records,
   mentors = [],
   thinkingNotes = [],
@@ -37,12 +39,32 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   onTogglePinCase,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [internalStatusFilter, setInternalStatusFilter] = useState<'all' | 'active' | 'ended'>(statusFilter);
   const [summaryModalCase, setSummaryModalCase] = useState<CaseRecord | null>(null);
   const [showChartsCaseId, setShowChartsCaseId] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    setInternalStatusFilter(statusFilter);
+    if (statusFilter === 'ended') {
+      setStatus('ended');
+    } else {
+      setStatus('active');
+    }
+  }, [statusFilter]);
+
   const categoryRecords = records.filter((r) => r.category === category);
 
-  const filteredRecords = categoryRecords.filter((item) => {
+  const statusFilteredRecords = categoryRecords.filter((item) => {
+    if (internalStatusFilter === 'active') {
+      return item.status === 'active' || !item.status;
+    }
+    if (internalStatusFilter === 'ended') {
+      return item.status === 'ended';
+    }
+    return true;
+  });
+
+  const filteredRecords = statusFilteredRecords.filter((item) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
     const matchName = item.name.toLowerCase().includes(q);
@@ -491,18 +513,63 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   };
 
   const currentCase = records.find((r) => r.id === selectedCaseId);
-  const titleText = category === 'longTerm' ? '长程心理咨询个案库' : '单次心理咨询个案库';
+  let titleText = category === 'longTerm' ? '长程心理咨询个案库' : '单次心理咨询个案库';
+  if (category === 'longTerm') {
+    if (internalStatusFilter === 'active') titleText = '长程心理咨询个案库 · 正在进行';
+    else if (internalStatusFilter === 'ended') titleText = '长程心理咨询个案库 · 终止和暂停';
+    else titleText = '长程心理咨询个案库 · 全部档案';
+  }
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-rose-200 dark:border-slate-800 pb-3 flex items-center justify-between">
+      <div className="border-b border-rose-200 dark:border-slate-800 pb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-zinc-800 dark:text-slate-100 border-l-4 border-rose-400 pl-3 flex items-center gap-2">
-          <span>{category === 'longTerm' ? '📂' : '📁'}</span>
+          <span>{internalStatusFilter === 'active' ? '🟢' : internalStatusFilter === 'ended' ? '⏸️' : (category === 'longTerm' ? '📂' : '📁')}</span>
           <span>{titleText}</span>
         </h2>
-        <span className="text-xs font-semibold px-3 py-1 bg-rose-100 dark:bg-slate-800 text-rose-800 dark:text-rose-300 rounded-full border border-rose-200 dark:border-slate-700">
-          共 {filteredRecords.length} 个档案
-        </span>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {category === 'longTerm' && (
+            <div className="flex items-center bg-rose-100/70 dark:bg-slate-800 p-1 rounded-xl border border-rose-200/80 dark:border-slate-700 text-xs">
+              <button
+                type="button"
+                onClick={() => setInternalStatusFilter('active')}
+                className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                  internalStatusFilter === 'active'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'text-zinc-600 dark:text-slate-300 hover:text-zinc-900 dark:hover:text-white'
+                }`}
+              >
+                🟢 正在进行 ({categoryRecords.filter((r) => r.status === 'active' || !r.status).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setInternalStatusFilter('ended')}
+                className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                  internalStatusFilter === 'ended'
+                    ? 'bg-amber-600 text-white shadow-2xs'
+                    : 'text-zinc-600 dark:text-slate-300 hover:text-zinc-900 dark:hover:text-white'
+                }`}
+              >
+                ⏸️ 终止和暂停 ({categoryRecords.filter((r) => r.status === 'ended').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setInternalStatusFilter('all')}
+                className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                  internalStatusFilter === 'all'
+                    ? 'bg-zinc-800 text-white dark:bg-slate-700 shadow-2xs'
+                    : 'text-zinc-600 dark:text-slate-300 hover:text-zinc-900 dark:hover:text-white'
+                }`}
+              >
+                🌐 全部 ({categoryRecords.length})
+              </button>
+            </div>
+          )}
+          <span className="text-xs font-semibold px-3 py-1 bg-rose-100 dark:bg-slate-800 text-rose-800 dark:text-rose-300 rounded-full border border-rose-200 dark:border-slate-700">
+            共 {filteredRecords.length} 个档案
+          </span>
+        </div>
       </div>
 
       {/* 新建个案卡片 */}
