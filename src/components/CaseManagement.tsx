@@ -532,25 +532,27 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* 父母访谈专属高亮按钮（要求：界面设计使用其他颜色/靛蓝/紫罗兰代替） */}
-            <button
-              type="button"
-              onClick={() =>
-                setExpandedParentSection((prev) => ({
-                  ...prev,
-                  [item.id]: !prev[item.id],
-                }))
-              }
-              className={`flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg transition cursor-pointer shadow-2xs border ${
-                isParentSectionOpen
-                  ? 'bg-indigo-700 text-white border-indigo-800'
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
-              }`}
-              title="父母访谈专区 (独立计次，不计入个体访谈总咨询次数)"
-            >
-              <Users className="w-3.5 h-3.5 text-indigo-200" />
-              <span>父母访谈 ({parentCompletedCount} 次)</span>
-            </button>
+            {/* 父母访谈专属高亮按钮: 仅在勾选或选择“青少年个案”时显示 */}
+            {item.isTeenager && (
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedParentSection((prev) => ({
+                    ...prev,
+                    [item.id]: !prev[item.id],
+                  }))
+                }
+                className={`flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg transition cursor-pointer shadow-2xs border ${
+                  isParentSectionOpen
+                    ? 'bg-indigo-700 text-white border-indigo-800'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
+                }`}
+                title="父母访谈专区 (独立计次，不计入个体访谈总咨询次数)"
+              >
+                <Users className="w-3.5 h-3.5 text-indigo-200" />
+                <span>父母访谈 ({parentCompletedCount} 次)</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -1302,7 +1304,15 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             <label className="block text-xs font-semibold text-zinc-600 dark:text-slate-300 mb-1">头像与类型</label>
             <select
               value={avatar}
-              onChange={(e) => setAvatar(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setAvatar(val);
+                if (val === '👦' || val === '👧') {
+                  setIsTeenager(true);
+                } else if (val === '👨‍💼' || val === '👩‍💼' || val === '👴') {
+                  setIsTeenager(false);
+                }
+              }}
               className="w-full text-xs p-2.5 bg-rose-50/40 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400"
             >
               <option value="👨‍💼">👨‍💼 成年男性</option>
