@@ -669,13 +669,13 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      if (confirm(`确认要清空个案【${item.name}】的所有 ${parentTotalCount} 次父母访谈记录吗？`)) {
-                        parentSessionKeys.forEach((pNum) => {
-                          onUpdateParentSessionNote?.(item.id, pNum, null);
-                        });
-                      }
+                      onUpdateParentSessionNote?.(item.id, -1, null);
+                      parentSessionKeys.forEach((pNum) => {
+                        onUpdateParentSessionNote?.(item.id, pNum, null);
+                      });
                     }}
                     className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 rounded-lg text-xs font-bold transition border border-rose-200 dark:border-rose-800 cursor-pointer flex items-center gap-1 shadow-2xs"
+                    title="点击直接清空当前个案的所有父母访谈记录"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>批量清空父母访谈</span>
@@ -729,12 +729,10 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm(`确认要删除第 ${pNum} 次父母访谈档案记录吗？`)) {
-                            onUpdateParentSessionNote?.(item.id, pNum, null);
-                          }
+                          onUpdateParentSessionNote?.(item.id, pNum, null);
                         }}
                         className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-100 dark:hover:bg-slate-800 rounded-md transition cursor-pointer"
-                        title="删除此父母访谈"
+                        title="直接删除此父母访谈"
                       >
                         <X className="w-3.5 h-3.5 text-rose-500" />
                       </button>
@@ -1102,12 +1100,10 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm(`确认要删除第 ${pNum} 次父母访谈档案记录吗？`)) {
-                                  onUpdateParentSessionNote?.(item.id, pNum, null);
-                                }
+                                onUpdateParentSessionNote?.(item.id, pNum, null);
                               }}
                               className="absolute -top-1.5 -right-1.5 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full transition cursor-pointer shadow-xs z-10"
-                              title="删除此父母访谈"
+                              title="直接删除此父母访谈"
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -2047,12 +2043,10 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm(`确认要删除第 ${selectedParentSessionNum} 次父母访谈档案记录吗？`)) {
-                    if (onUpdateParentSessionNote && selectedParentCaseId && selectedParentSessionNum !== null) {
-                      onUpdateParentSessionNote(selectedParentCaseId, selectedParentSessionNum, null);
-                    }
-                    closeParentSessionModal();
+                  if (onUpdateParentSessionNote && selectedParentCaseId && selectedParentSessionNum !== null) {
+                    onUpdateParentSessionNote(selectedParentCaseId, selectedParentSessionNum, null);
                   }
+                  closeParentSessionModal();
                 }}
                 className="px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl cursor-pointer flex items-center gap-1 transition"
               >

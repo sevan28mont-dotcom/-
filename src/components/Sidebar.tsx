@@ -629,7 +629,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         >
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeTab === 'trainingLongShort' ? 'bg-white' : 'bg-sky-500'}`} />
                           <div className="flex flex-col text-left leading-tight">
-                            <span className="font-bold">2. 长程短程培训</span>
+                            <span className="font-bold">2. 动力学短程培训</span>
                           </div>
                         </button>
 

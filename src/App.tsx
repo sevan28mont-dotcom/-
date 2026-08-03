@@ -221,8 +221,18 @@ export default function App() {
         if (r.id !== caseId) return r;
         const currentParentSessions = { ...(r.parentSessions || {}) };
         if (parentSessionData === null) {
-          delete currentParentSessions[parentSessionNum];
-          delete currentParentSessions[String(parentSessionNum)];
+          if (parentSessionNum === -1) {
+            // 清空全部
+            return {
+              ...r,
+              parentSessions: {},
+            };
+          }
+          Object.keys(currentParentSessions).forEach((k) => {
+            if (Number(k) === Number(parentSessionNum) || k === String(parentSessionNum)) {
+              delete currentParentSessions[k];
+            }
+          });
         } else {
           const currentParentSession = currentParentSessions[parentSessionNum] || { completed: true, note: '' };
           currentParentSessions[parentSessionNum] = {

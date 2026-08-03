@@ -34,7 +34,7 @@ const CATEGORY_MAP: Record<TrainingCategory, { label: string; bg: string; text: 
     border: 'border-indigo-200 dark:border-indigo-800',
   },
   longShort: {
-    label: '长程短程培训',
+    label: '动力学短程培训',
     bg: 'bg-sky-50 dark:bg-sky-950/50',
     text: 'text-sky-700 dark:text-sky-300',
     border: 'border-sky-200 dark:border-sky-800',
@@ -350,7 +350,7 @@ export const TrainingManagement: React.FC<TrainingManagementProps> = ({
                 : 'bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900'
             }`}
           >
-            <span>2. 长程短程培训</span>
+            <span>2. 动力学短程培训</span>
             <span className="opacity-80">({trainings.filter((t) => t.category === 'longShort').length})</span>
           </button>
 
@@ -645,7 +645,7 @@ export const TrainingManagement: React.FC<TrainingManagementProps> = ({
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="psychodynamics">1. 长程动力学培训</option>
-                  <option value="longShort">2. 长程短程培训</option>
+                  <option value="longShort">2. 动力学短程培训</option>
                   <option value="otherSchools">3. 其他流派培训</option>
                   <option value="ethicsCrisis">4. 伦理及危机干预培训</option>
                 </select>
