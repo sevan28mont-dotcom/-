@@ -1409,7 +1409,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                 className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-indigo-300"
               />
               <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
-                👶 标记为“青少年个案” (启用父母访谈功能与 4:1 访谈节奏智能提醒)
+                👶 标记为“青少年个案”
               </span>
             </label>
           </div>
