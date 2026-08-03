@@ -49,6 +49,10 @@ const DEFAULT_RECORDS: CaseRecord[] = [
     startDate: '2026-03-05',
     status: 'active',
     totalSessions: 12,
+    isTeenager: true,
+    parentSessions: {
+      1: { completed: true, date: '2026-03-10', note: '与张同学父母进行初次会谈，了解考前家庭支持与期待。' },
+    },
     sessions: {
       1: { completed: true, note: '短期焦点解决技术，澄清考前目标。' },
     },
@@ -295,7 +299,19 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
     const legacyRemindersKeys = [STORAGE_KEYS.REMINDERS, 'psy_reminders_v8', 'psy_reminders_v7', 'psy_reminders_v6', 'psy_reminders_v5', 'psy_reminders', 'psy_master_backup_reminders'];
     const legacyTrainingsKeys = [STORAGE_KEYS.TRAININGS, 'psy_trainings_v8', 'psy_master_backup_trainings'];
 
-    const records = readWithFallback(primaryKeys.records, legacyRecordsKeys, DEFAULT_RECORDS);
+    const rawRecords = readWithFallback(primaryKeys.records, legacyRecordsKeys, DEFAULT_RECORDS);
+    const records = (Array.isArray(rawRecords) ? rawRecords : DEFAULT_RECORDS).map((r: any) => ({
+      ...r,
+      isTeenager: typeof r.isTeenager === 'boolean'
+        ? r.isTeenager
+        : Boolean(
+            r.avatar === '👦' ||
+            r.avatar === '👧' ||
+            r.avatar === '👶' ||
+            (r.parentSessions && Object.keys(r.parentSessions).length > 0)
+          ),
+      parentSessions: r.parentSessions || {},
+    }));
     const mentors = readWithFallback(primaryKeys.mentors, legacyMentorsKeys, DEFAULT_MENTORS);
     const thinking = readWithFallback(primaryKeys.thinking, legacyThinkingKeys, DEFAULT_THINKING);
     const schedules = readWithFallback(primaryKeys.schedules, legacySchedulesKeys, DEFAULT_SCHEDULES);
@@ -417,7 +433,22 @@ export async function fetchBackendData(userId: string): Promise<SystemData | nul
     });
     const result = await response.json();
     if (result.success && result.data) {
-      return result.data as SystemData;
+      const data = result.data as SystemData;
+      if (data.records && Array.isArray(data.records)) {
+        data.records = data.records.map((r: any) => ({
+          ...r,
+          isTeenager: typeof r.isTeenager === 'boolean'
+            ? r.isTeenager
+            : Boolean(
+                r.avatar === '👦' ||
+                r.avatar === '👧' ||
+                r.avatar === '👶' ||
+                (r.parentSessions && Object.keys(r.parentSessions).length > 0)
+              ),
+          parentSessions: r.parentSessions || {},
+        }));
+      }
+      return data;
     }
   } catch (e) {
     console.warn('Backend sync fetch warning:', e);

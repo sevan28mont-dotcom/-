@@ -657,8 +657,8 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
           </div>
         )}
 
-        {/* 父母访谈展开卡片区 (独立计次: 父母访谈不计入个体访谈的总咨询次数) */}
-        {isParentSectionOpen && (
+        {/* 父母访谈展开卡片区 (仅在选择“青少年个案”时允许展示与使用) */}
+        {item.isTeenager && isParentSectionOpen && (
           <div className="mb-4 bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 rounded-2xl p-4 space-y-3 animate-fadeIn">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-200/80 dark:border-indigo-800 pb-2">
               <div className="flex items-center gap-2">
@@ -673,9 +673,6 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                     type="button"
                     onClick={() => {
                       onUpdateParentSessionNote?.(item.id, -1, null);
-                      parentSessionKeys.forEach((pNum) => {
-                        onUpdateParentSessionNote?.(item.id, pNum, null);
-                      });
                     }}
                     className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 rounded-lg text-xs font-bold transition border border-rose-200 dark:border-rose-800 cursor-pointer flex items-center gap-1 shadow-2xs"
                     title="点击直接清空当前个案的所有父母访谈记录"
@@ -1054,8 +1051,8 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                         )}
                       </div>
 
-                      {/* 动态穿插于此次个体咨询后的父母访谈按钮 (可拖拽自由放置) */}
-                      {parentSessionsAfterThis.map((pNum) => {
+                      {/* 动态穿插于此次个体咨询后的父母访谈按钮 (仅限青少年个案) */}
+                      {item.isTeenager && parentSessionsAfterThis.map((pNum) => {
                         const pData = parentSessions[pNum];
                         const hasParentData = Boolean(pData);
                         const isPCompleted = pData?.completed !== false && Boolean(pData?.date);

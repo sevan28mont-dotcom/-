@@ -86,8 +86,8 @@ export default function App() {
 
   // Auto save to LocalStorage whenever systemData or currentUser changes
   useEffect(() => {
+    saveDataToLocalStorage(systemData, currentUser?.id);
     if (currentUser) {
-      saveDataToLocalStorage(systemData, currentUser.id);
       saveDataToBackend(systemData, currentUser.id);
     }
   }, [systemData, currentUser]);
@@ -215,24 +215,22 @@ export default function App() {
     parentSessionNum: number,
     parentSessionData: Partial<ParentSessionData> | null
   ) => {
-    setSystemData((prev) => ({
-      ...prev,
-      records: (prev.records || []).map((r) => {
+    setSystemData((prev) => {
+      const updatedRecords = (prev.records || []).map((r) => {
         if (r.id !== caseId) return r;
         const currentParentSessions = { ...(r.parentSessions || {}) };
         if (parentSessionData === null) {
           if (parentSessionNum === -1) {
-            // 清空全部
+            // 批量清空全部父母访谈记录
             return {
               ...r,
               parentSessions: {},
             };
           }
-          Object.keys(currentParentSessions).forEach((k) => {
-            if (Number(k) === Number(parentSessionNum) || k === String(parentSessionNum)) {
-              delete currentParentSessions[k];
-            }
-          });
+          // 直接彻底移除指定序号的父母访谈记录
+          delete currentParentSessions[parentSessionNum];
+          delete currentParentSessions[String(parentSessionNum)];
+          delete currentParentSessions[Number(parentSessionNum)];
         } else {
           const currentParentSession = currentParentSessions[parentSessionNum] || { completed: true, note: '' };
           currentParentSessions[parentSessionNum] = {
@@ -242,10 +240,15 @@ export default function App() {
         }
         return {
           ...r,
-          parentSessions: currentParentSessions,
+          parentSessions: { ...currentParentSessions },
         };
-      }),
-    }));
+      });
+
+      return {
+        ...prev,
+        records: updatedRecords,
+      };
+    });
   };
 
   const handleUpdateTotalHoursOverrides = (newOverrides: {
