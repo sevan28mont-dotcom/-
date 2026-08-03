@@ -362,6 +362,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
       (k) => parentSessions[k]?.completed !== false && (parentSessions[k]?.note || parentSessions[k]?.transcript || parentSessions[k]?.completed)
     ).length;
     const parentTotalCount = parentSessionKeys.length;
+    const nextParentNum = parentSessionKeys.length > 0 ? Math.max(...parentSessionKeys) + 1 : 1;
     const isParentSectionOpen = Boolean(expandedParentSection[item.id]);
 
     // 4:1 访谈节奏智能提醒: 每进行 4 次个体访谈，推荐安排 1 次父母访谈
@@ -683,11 +684,11 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                 )}
                 <button
                   type="button"
-                  onClick={() => openParentSessionModal(item, parentTotalCount + 1)}
+                  onClick={() => openParentSessionModal(item, nextParentNum)}
                   className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>录入第 {parentTotalCount + 1} 次父母访谈</span>
+                  <span>录入第 {nextParentNum} 次父母访谈</span>
                 </button>
               </div>
             </div>
@@ -925,13 +926,8 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
           const isLongList = item.totalSessions > displayLimit;
           const parentSessions = item.parentSessions || {};
 
-          // 收集所有父母访谈序号，计算穿插位置
-          const allParentNums = Array.from(
-            new Set([
-              ...Array.from({ length: Math.max(1, Math.floor(item.totalSessions / 4)) }, (_, i) => i + 1),
-              ...Object.keys(parentSessions).map(Number),
-            ])
-          ).sort((a, b) => a - b);
+          // 收集所有已录入/保存的父母访谈序号，计算穿插位置
+          const allParentNums = Object.keys(parentSessions).map(Number).sort((a, b) => a - b);
 
           return (
             <div>
