@@ -15,6 +15,7 @@ interface SupervisorManagementProps {
   onUpdateTotalHoursOverrides?: (newOverrides: any) => void;
   onAddMentor: (newMentor: Omit<Supervisor, 'id' | 'records' | 'boundCaseIds'>) => void;
   onDeleteMentor: (id: string) => void;
+  onUpdateMentor?: (mentorId: string, updatedData: Partial<Supervisor>) => void;
   onUpdateMentorCaseBinding: (mentorId: string, caseId: string, bind: boolean) => void;
   onUpdateMentorTotalSupervisions?: (mentorId: string, newTotal: number) => void;
   onAddSupervisionRecord: (mentorId: string, recordData: Omit<SupervisionRecord, 'id'>) => void;
@@ -31,6 +32,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   onUpdateTotalHoursOverrides,
   onAddMentor,
   onDeleteMentor,
+  onUpdateMentor,
   onUpdateMentorCaseBinding,
   onUpdateMentorTotalSupervisions,
   onAddSupervisionRecord,
@@ -43,6 +45,10 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   const [isEditHoursModalOpen, setIsEditHoursModalOpen] = useState(false);
   const [editingHoursType, setEditingHoursType] = useState<'individual' | 'group'>('individual');
   const [hoursInputValue, setHoursInputValue] = useState('');
+
+  // 编辑导师 Modal State
+  const [editingMentorModal, setEditingMentorModal] = useState<Supervisor | null>(null);
+
   // New Supervisor Form State
   const [name, setName] = useState('');
   const [gender, setGender] = useState('👨‍🏫 男导师');
@@ -112,13 +118,13 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   };
 
   const filteredMentors = mentors.filter((mentor) => {
-    // Filter by supervision type if specified
-    if (activeTypeFilter !== 'all') {
-      const records = mentor.records || [];
-      const hasTypeRecord = records.some((r) => r.type === activeTypeFilter);
-      if (!hasTypeRecord && records.length > 0 && !searchQuery.trim()) {
-        return false;
-      }
+    // 严格按个体督导 vs 团体督导隔离呈现
+    if (activeTypeFilter === 'individual') {
+      const isIndiv = mentor.type === 'individual' || mentor.type === 'both' || !mentor.type || (mentor.records || []).some((r) => r.type === 'individual') || (mentor.records || []).length === 0;
+      if (!isIndiv) return false;
+    } else if (activeTypeFilter === 'group') {
+      const isGrp = mentor.type === 'group' || mentor.type === 'both' || (mentor.records || []).some((r) => r.type === 'group');
+      if (!isGrp) return false;
     }
 
     if (!searchQuery.trim()) return true;
@@ -149,6 +155,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
       startDate: startDate || '2026-01-01',
       endDate: endDate || '2026-12-31',
       totalSupervisions: Number(totalSupervisions) || 20,
+      type: activeTypeFilter === 'group' ? 'group' : 'individual',
     });
 
     setName('');
@@ -581,6 +588,15 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                     >
                       <CheckSquare className="w-3.5 h-3.5 text-rose-500" />
                       <span>勾选/关联个案 ({boundIds.length})</span>
+                    </button>
+
+                    <button
+                      onClick={() => setEditingMentorModal(mentor)}
+                      className="flex items-center gap-1 text-[11px] px-3 py-1.5 text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 bg-indigo-50 dark:bg-slate-800 hover:bg-indigo-100 border border-indigo-200 dark:border-slate-700 rounded-xl transition cursor-pointer font-bold"
+                      title="修改此督导师名称、性别/称谓与时间范围"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>编辑导师</span>
                     </button>
 
                     <button
@@ -1691,6 +1707,132 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                 className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-2xs"
               >
                 保存时数
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 编辑督导师 Modal */}
+      {editingMentorModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-indigo-200 dark:border-slate-800 rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-indigo-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <h3 className="font-bold text-sm text-zinc-900 dark:text-slate-100">
+                  编辑督导师信息
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingMentorModal(null)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-slate-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">督导师姓名 *</label>
+                <input
+                  type="text"
+                  value={editingMentorModal.name}
+                  onChange={(e) => setEditingMentorModal({ ...editingMentorModal, name: e.target.value })}
+                  className="w-full p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">称谓 / 性别</label>
+                <select
+                  value={editingMentorModal.gender}
+                  onChange={(e) => setEditingMentorModal({ ...editingMentorModal, gender: e.target.value })}
+                  className="w-full p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                >
+                  <option value="👨‍🏫 男导师">👨‍🏫 男导师</option>
+                  <option value="👩‍🏫 女导师">👩‍🏫 女导师</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">起始时间</label>
+                  <input
+                    type="date"
+                    value={editingMentorModal.startDate || ''}
+                    onChange={(e) => setEditingMentorModal({ ...editingMentorModal, startDate: e.target.value })}
+                    className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">结束时间</label>
+                  <input
+                    type="date"
+                    value={editingMentorModal.endDate || ''}
+                    onChange={(e) => setEditingMentorModal({ ...editingMentorModal, endDate: e.target.value })}
+                    className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">督导额度 (次)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={editingMentorModal.totalSupervisions || 20}
+                    onChange={(e) => setEditingMentorModal({ ...editingMentorModal, totalSupervisions: Number(e.target.value) || 20 })}
+                    className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">督导类型</label>
+                  <select
+                    value={editingMentorModal.type || 'individual'}
+                    onChange={(e) => setEditingMentorModal({ ...editingMentorModal, type: e.target.value as any })}
+                    className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold"
+                  >
+                    <option value="individual">👤 个体督导师</option>
+                    <option value="group">👥 团体督导师</option>
+                    <option value="both">🌐 个体与团体通用</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-indigo-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingMentorModal(null)}
+                className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!editingMentorModal.name.trim()) {
+                    alert('请输入督导师姓名！');
+                    return;
+                  }
+                  if (onUpdateMentor) {
+                    onUpdateMentor(editingMentorModal.id, {
+                      name: editingMentorModal.name.trim(),
+                      gender: editingMentorModal.gender,
+                      startDate: editingMentorModal.startDate,
+                      endDate: editingMentorModal.endDate,
+                      totalSupervisions: editingMentorModal.totalSupervisions,
+                      type: editingMentorModal.type,
+                    });
+                  }
+                  setEditingMentorModal(null);
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-md"
+              >
+                保存更新
               </button>
             </div>
           </div>

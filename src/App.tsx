@@ -358,6 +358,13 @@ export default function App() {
     }));
   };
 
+  const handleUpdateMentor = (mentorId: string, updatedData: Partial<Supervisor>) => {
+    setSystemData((prev) => ({
+      ...prev,
+      mentors: (prev.mentors || []).map((m) => (m.id === mentorId ? { ...m, ...updatedData } : m)),
+    }));
+  };
+
   const handleAddSupervisionRecord = (mentorId: string, recordInput: Omit<SupervisionRecord, 'id'> & Partial<SupervisionRecord>) => {
     const fullRecord: SupervisionRecord = {
       id: `sup_rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -678,6 +685,7 @@ export default function App() {
                 onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
                 onAddMentor={handleAddMentor}
                 onDeleteMentor={handleDeleteMentor}
+                onUpdateMentor={handleUpdateMentor}
                 onUpdateMentorCaseBinding={handleUpdateMentorCaseBinding}
                 onUpdateMentorTotalSupervisions={handleUpdateMentorTotalSupervisions}
                 onAddSupervisionRecord={handleAddSupervisionRecord}

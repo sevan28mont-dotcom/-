@@ -72,6 +72,7 @@ export interface Supervisor {
   boundCaseIds: string[]; // List of case IDs checked/bound to this supervisor
   activeCaseId?: string | null;
   records: SupervisionRecord[];
+  type?: 'individual' | 'group' | 'both'; // Supervision type: Individual vs Group
 }
 
 export type ScheduleType = string;
@@ -123,7 +124,8 @@ export interface PersonalExperienceRecord {
   date: string; // YYYY-MM-DD
   timeRange?: string; // e.g. "14:00-15:00"
   type: 'individual' | 'group'; // 1. 个体体验 2. 团体体验
-  facilitator?: string; // 体验分析师/带领者
+  therapistId?: string; // 关联的个人体验师或团体ID
+  facilitator?: string; // 体验分析师/带领者名称
   note: string; // 体验感悟与反思
   transcript?: string; // 逐字稿/口述
   ideas?: string[]; // 体验想法
@@ -132,10 +134,34 @@ export interface PersonalExperienceRecord {
   durationMinutes?: number;
 }
 
+export interface IndividualTherapist {
+  id: string;
+  name: string;
+  gender?: string; // e.g. "👨‍🏫 男体验师" / "👩‍🏫 女体验师"
+  title?: string; // 称谓/方向
+  startDate?: string;
+  endDate?: string;
+  totalHours?: number; // 体验总次数额度
+  type?: 'individual' | 'group';
+}
+
+export interface GroupExperienceOption {
+  id: string;
+  name: string;
+  facilitator?: string; // 带领者
+  gender?: string;
+  startDate?: string;
+  endDate?: string;
+  totalHours?: number; // 团体总次数额度
+  type?: 'individual' | 'group';
+}
+
 export interface PersonalExperienceSetting {
   totalIndividualHours: number;
   totalGroupHours: number;
   records: PersonalExperienceRecord[];
+  individualTherapists?: IndividualTherapist[];
+  groupOptions?: GroupExperienceOption[];
 }
 
 export type TrainingCategory = 'psychodynamics' | 'longShort' | 'otherSchools' | 'ethicsCrisis';

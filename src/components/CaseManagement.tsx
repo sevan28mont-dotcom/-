@@ -302,6 +302,30 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   const [totalSessions, setTotalSessions] = useState<number | string>(30);
   const [isTeenager, setIsTeenager] = useState(false);
 
+  const handleApplyQuickTemplate = (templateType: 'personal' | 'agency') => {
+    const isPersonal = templateType === 'personal';
+    const randomSuffix = Math.floor(100 + Math.random() * 900);
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    if (isPersonal) {
+      setAvatar('👨‍💼');
+      setCaseNum(`S-PER-${randomSuffix}`);
+      setName(`个人短程案主_${randomSuffix}`);
+      setStartDate(todayStr);
+      setStatus('active');
+      setTotalSessions(10);
+      setIsTeenager(false);
+    } else {
+      setAvatar('👩‍💼');
+      setCaseNum(`HOSP-S-${randomSuffix}`);
+      setName(`机构转介案主_${randomSuffix}`);
+      setStartDate(todayStr);
+      setStatus('active');
+      setTotalSessions(12);
+      setIsTeenager(false);
+    }
+  };
+
   // Parent Session Modal State
   const [selectedParentCaseId, setSelectedParentCaseId] = useState<string | null>(null);
   const [selectedParentSessionNum, setSelectedParentSessionNum] = useState<number | null>(null);
@@ -1390,10 +1414,37 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
       {/* 新建个案卡片 */}
       <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs transition-colors duration-300">
-        <h3 className="text-sm font-bold text-zinc-800 dark:text-slate-100 mb-4 flex items-center gap-2 border-b border-rose-100 dark:border-slate-800 pb-2">
-          <Plus className="w-4 h-4 text-rose-500" />
-          <span>动态新增个案档案</span>
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4 border-b border-rose-100 dark:border-slate-800 pb-2">
+          <h3 className="text-sm font-bold text-zinc-800 dark:text-slate-100 flex items-center gap-2">
+            <Plus className="w-4 h-4 text-rose-500" />
+            <span>动态新增个案档案</span>
+          </h3>
+
+          {/* 快速选择模板功能 */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-bold text-zinc-500 dark:text-slate-400 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-rose-500" />
+              <span>快速套用模板:</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => handleApplyQuickTemplate('personal')}
+              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
+              title="一键自动填充【个人短程案例】默认预设字段"
+            >
+              <span>👤 个人短程模板</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyQuickTemplate('agency')}
+              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
+              title="一键自动填充【医院/机构短程案例】默认预设字段"
+            >
+              <span>🏥 医院/机构短程模板</span>
+            </button>
+          </div>
+        </div>
+
         <form onSubmit={handleCreateCase} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3 items-end">
           <div>
             <label className="block text-xs font-semibold text-zinc-600 dark:text-slate-300 mb-1">头像与类型</label>
