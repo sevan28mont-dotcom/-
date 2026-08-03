@@ -11,6 +11,7 @@ import { SupervisorManagement } from './components/SupervisorManagement';
 import { ScheduleManagement } from './components/ScheduleManagement';
 import { ThinkingNotes } from './components/ThinkingNotes';
 import { PersonalExperienceManagement } from './components/PersonalExperienceManagement';
+import { TrainingManagement } from './components/TrainingManagement';
 import { PrivacySecurityModal } from './components/PrivacySecurityModal';
 import { ReminderModal } from './components/ReminderModal';
 import { TodayScheduleOverview } from './components/TodayScheduleOverview';
@@ -22,6 +23,7 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [supervisionTypeFilter, setSupervisionTypeFilter] = useState<'all' | 'individual' | 'group'>('all');
   const [personalExperienceFilter, setPersonalExperienceFilter] = useState<'all' | 'individual' | 'group'>('all');
+  const [trainingTypeFilter, setTrainingTypeFilter] = useState<'all' | 'psychodynamics' | 'longShort' | 'otherSchools' | 'ethicsCrisis'>('all');
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [privacyModalTab, setPrivacyModalTab] = useState<'privacy' | 'backup' | 'clear' | 'layout'>('privacy');
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
@@ -220,6 +222,7 @@ export default function App() {
         const currentParentSessions = { ...(r.parentSessions || {}) };
         if (parentSessionData === null) {
           delete currentParentSessions[parentSessionNum];
+          delete currentParentSessions[String(parentSessionNum)];
         } else {
           const currentParentSession = currentParentSessions[parentSessionNum] || { completed: true, note: '' };
           currentParentSessions[parentSessionNum] = {
@@ -547,6 +550,8 @@ export default function App() {
           onSelectSupervisionFilter={setSupervisionTypeFilter}
           personalExperienceFilter={personalExperienceFilter}
           onSelectPersonalExperienceFilter={setPersonalExperienceFilter}
+          trainingTypeFilter={trainingTypeFilter}
+          onSelectTrainingFilter={setTrainingTypeFilter}
           systemData={systemData}
           onOpenPrivacyModal={handleOpenPrivacyModal}
           onOpenReminderModal={() => setIsReminderModalOpen(true)}
@@ -673,6 +678,21 @@ export default function App() {
                 }
                 experienceTypeFilter={personalExperienceFilter}
                 onTypeFilterChange={setPersonalExperienceFilter}
+              />
+            )}
+
+            {(activeTab === 'training' || activeTab === 'trainingPsychodynamics' || activeTab === 'trainingLongShort' || activeTab === 'trainingOtherSchools' || activeTab === 'trainingEthicsCrisis') && (
+              <TrainingManagement
+                trainings={systemData.trainings || []}
+                onUpdateTrainings={(updatedTrainings) =>
+                  setSystemData((prev) => ({
+                    ...prev,
+                    trainings: updatedTrainings,
+                  }))
+                }
+                trainingTypeFilter={trainingTypeFilter}
+                onTypeFilterChange={setTrainingTypeFilter}
+                activeTab={activeTab}
               />
             )}
 

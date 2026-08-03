@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Supervisor, CaseRecord, SupervisionRecord, ResourceLink } from '../types';
-import { Plus, Trash2, Calendar as CalendarIcon, CheckSquare, Square, Unlink, FileText, X, ChevronDown, ChevronUp, Search, Pencil, Link as LinkIcon, Lightbulb, Mic, Printer, User, Users, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Calendar as CalendarIcon, Clock, CheckSquare, Square, Unlink, FileText, X, ChevronDown, ChevronUp, Search, Pencil, Link as LinkIcon, Lightbulb, Mic, Printer, User, Users, Sparkles } from 'lucide-react';
 import { VoiceInputButton } from './VoiceInputButton';
 import { ResourceLinkSection } from './ResourceLinkSection';
 import { IdeasSection } from './IdeasSection';

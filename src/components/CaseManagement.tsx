@@ -654,28 +654,6 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
           </div>
         )}
 
-        {/* 青少年个案: 4:1 父母访谈智能推荐提醒 */}
-        {needParentRecommend && (
-          <div className="mb-4 bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800/80 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs text-indigo-950 dark:text-indigo-200 shadow-2xs animate-fadeIn">
-            <div className="flex items-center gap-2">
-              <span className="p-1 bg-indigo-600 text-white rounded-lg text-[10px] font-black shrink-0">
-                💡 访谈节奏智能提醒
-              </span>
-              <span>
-                该青少年个案已进行 <strong className="font-extrabold text-indigo-700 dark:text-indigo-300">{recordedCount}</strong> 次个体访谈，按 4:1 建议节奏，推荐安排第 <strong className="font-extrabold text-indigo-700 dark:text-indigo-300">{parentCompletedCount + 1}</strong> 次父母访谈 (不计入个体咨询总次数)。
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => openParentSessionModal(item, parentCompletedCount + 1)}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1 shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>安排第 {parentCompletedCount + 1} 次父母访谈</span>
-            </button>
-          </div>
-        )}
-
         {/* 父母访谈展开卡片区 (独立计次: 父母访谈不计入个体访谈的总咨询次数) */}
         {isParentSectionOpen && (
           <div className="mb-4 bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 rounded-2xl p-4 space-y-3 animate-fadeIn">
@@ -686,19 +664,37 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                   👪 青少年个案·父母访谈档案区 (单独统计: {parentCompletedCount} 次完成，不占用个体咨询总次数)
                 </h4>
               </div>
-              <button
-                type="button"
-                onClick={() => openParentSessionModal(item, parentTotalCount + 1)}
-                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>录入第 {parentTotalCount + 1} 次父母访谈</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {parentTotalCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`确认要清空个案【${item.name}】的所有 ${parentTotalCount} 次父母访谈记录吗？`)) {
+                        parentSessionKeys.forEach((pNum) => {
+                          onUpdateParentSessionNote?.(item.id, pNum, null);
+                        });
+                      }
+                    }}
+                    className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 rounded-lg text-xs font-bold transition border border-rose-200 dark:border-rose-800 cursor-pointer flex items-center gap-1 shadow-2xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>批量清空父母访谈</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => openParentSessionModal(item, parentTotalCount + 1)}
+                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>录入第 {parentTotalCount + 1} 次父母访谈</span>
+                </button>
+              </div>
             </div>
 
             {parentTotalCount === 0 ? (
               <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 italic py-1">
-                暂无父母访谈记录。建议每完成 4 次个体访谈安排 1 次父母访谈，点击右上角【录入第 1 次父母访谈】进行记录。
+                暂无父母访谈记录。可根据实际需要随时点击右上角【录入第 1 次父母访谈】进行记录。
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pt-1">
@@ -706,29 +702,43 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                   const pNum = Number(pNumStr);
                   const isCompleted = pData.completed !== false;
                   return (
-                    <button
-                      key={pNum}
-                      type="button"
-                      onClick={() => openParentSessionModal(item, pNum)}
-                      className="p-2.5 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 hover:border-indigo-500 rounded-xl flex flex-col items-center justify-center text-xs transition cursor-pointer shadow-2xs hover:scale-102"
-                    >
-                      <span className="font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
-                        <Users className="w-3 h-3 text-indigo-500" />
-                        第 {pNum} 次父母访谈
-                      </span>
-                      <span className="text-[10px] text-zinc-500 dark:text-slate-400 mt-1">
-                        {pData.date || '点击编辑录入'}
-                      </span>
-                      {isCompleted ? (
-                        <span className="mt-1 text-[9px] px-1.5 py-0.2 bg-indigo-100 dark:bg-indigo-900/80 text-indigo-800 dark:text-indigo-200 font-bold rounded">
-                          已完成
+                    <div key={pNum} className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => openParentSessionModal(item, pNum)}
+                        className="w-full p-2.5 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 hover:border-indigo-500 rounded-xl flex flex-col items-center justify-center text-xs transition cursor-pointer shadow-2xs hover:scale-102"
+                      >
+                        <span className="font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
+                          <Users className="w-3 h-3 text-indigo-500" />
+                          第 {pNum} 次父母访谈
                         </span>
-                      ) : (
-                        <span className="mt-1 text-[9px] px-1.5 py-0.2 bg-amber-100 dark:bg-amber-900/80 text-amber-800 dark:text-amber-200 font-bold rounded">
-                          计划中
+                        <span className="text-[10px] text-zinc-500 dark:text-slate-400 mt-1">
+                          {pData.date || '点击编辑录入'}
                         </span>
-                      )}
-                    </button>
+                        {isCompleted ? (
+                          <span className="mt-1 text-[9px] px-1.5 py-0.2 bg-indigo-100 dark:bg-indigo-900/80 text-indigo-800 dark:text-indigo-200 font-bold rounded">
+                            已完成
+                          </span>
+                        ) : (
+                          <span className="mt-1 text-[9px] px-1.5 py-0.2 bg-amber-100 dark:bg-amber-900/80 text-amber-800 dark:text-amber-200 font-bold rounded">
+                            计划中
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`确认要删除第 ${pNum} 次父母访谈档案记录吗？`)) {
+                            onUpdateParentSessionNote?.(item.id, pNum, null);
+                          }
+                        }}
+                        className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-100 dark:hover:bg-slate-800 rounded-md transition cursor-pointer"
+                        title="删除此父母访谈"
+                      >
+                        <X className="w-3.5 h-3.5 text-rose-500" />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -1088,6 +1098,19 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                                 {isPCompleted ? '已完成' : '可拖拽穿插'}
                               </span>
                             </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`确认要删除第 ${pNum} 次父母访谈档案记录吗？`)) {
+                                  onUpdateParentSessionNote?.(item.id, pNum, null);
+                                }
+                              }}
+                              className="absolute -top-1.5 -right-1.5 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full transition cursor-pointer shadow-xs z-10"
+                              title="删除此父母访谈"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
                           </div>
                         );
                       })}
@@ -1187,8 +1210,8 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
   // 计算当前模块 (长程或短程) 自动累计的时数
   const autoCompletedHours = categoryRecords.reduce((acc, rec) => {
-    const completedCount = Object.values(rec.sessions || {}).filter((s) => s.completed).length;
-    const parentCount = Object.values(rec.parentSessions || {}).filter((p) => p.completed !== false && Boolean(p.date)).length;
+    const completedCount = Object.values(rec.sessions || {}).filter((s: any) => s.completed).length;
+    const parentCount = Object.values(rec.parentSessions || {}).filter((p: any) => p.completed !== false && Boolean(p.date)).length;
     return acc + completedCount + parentCount;
   }, 0);
 
@@ -1198,7 +1221,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
   const displayHours = currentCategoryOverrideHours !== undefined ? currentCategoryOverrideHours : autoCompletedHours;
 
-  let titleText = category === 'longTerm' ? '长程个案' : '短程咨询';
+  let titleText = category === 'longTerm' ? '长程个案' : '短程个案';
   if (category === 'longTerm') {
     if (internalStatusFilter === 'active') titleText = '长程个案 · 正在进行';
     else if (internalStatusFilter === 'ended') titleText = '长程个案 · 终止和暂停';
@@ -1577,8 +1600,8 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
               </div>
             )}
 
-            {/* 小标题 2: 暂停或终止的长程个案 */}
-            {(internalStatusFilter === 'ended' || internalStatusFilter === 'all') && (
+            {/* 小标题 2: 暂停或终止的长程个案 (短程个案不显示此区块) */}
+            {category === 'longTerm' && (internalStatusFilter === 'ended' || internalStatusFilter === 'all') && (
               <div className="space-y-3 pt-3">
                 {internalStatusFilter === 'all' && (
                   <div className="flex items-center justify-between bg-zinc-100/80 dark:bg-slate-800/80 border border-zinc-200 dark:border-slate-700 px-4 py-2.5 rounded-xl shadow-2xs">

@@ -94,6 +94,9 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
   const individualRecords = records.filter((r) => r.type === 'individual');
   const groupRecords = records.filter((r) => r.type === 'group');
 
+  const completedIndividualCount = individualRecords.filter((r) => r.completed !== false && Boolean(r.date)).length;
+  const completedGroupCount = groupRecords.filter((r) => r.completed !== false && Boolean(r.date)).length;
+
   const totalIndividualCount = experienceData.totalIndividualHours || 20;
   const totalGroupCount = experienceData.totalGroupHours || 30;
 
