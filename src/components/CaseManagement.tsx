@@ -31,6 +31,7 @@ interface CaseManagementProps {
   onUpdateCaseTotalSessions?: (caseId: string, newTotalSessions: number) => void;
   onSaveToThinkingNotes?: (note: ThinkingNote) => void;
   onTogglePinCase?: (id: string) => void;
+  onReorderCases?: (newCases: CaseRecord[]) => void;
 }
 
 export const CaseManagement: React.FC<CaseManagementProps> = ({
@@ -52,8 +53,53 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   onUpdateCaseTotalSessions,
   onSaveToThinkingNotes,
   onTogglePinCase,
+  onReorderCases,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [draggedCaseId, setDraggedCaseId] = useState<string | null>(null);
+  const [dragOverCaseId, setDragOverCaseId] = useState<string | null>(null);
+
+  const handleMoveCase = (caseId: string, direction: 'up' | 'down') => {
+    const index = records.findIndex((r) => r.id === caseId);
+    if (index < 0) return;
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= records.length) return;
+
+    const newRecords = [...records];
+    const [moved] = newRecords.splice(index, 1);
+    newRecords.splice(targetIndex, 0, moved);
+    onReorderCases?.(newRecords);
+  };
+
+  const handleDragStart = (e: React.DragEvent, caseId: string) => {
+    setDraggedCaseId(caseId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', caseId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, caseId: string) => {
+    e.preventDefault();
+    if (draggedCaseId && draggedCaseId !== caseId) {
+      setDragOverCaseId(caseId);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    setDragOverCaseId(null);
+    if (!draggedCaseId || draggedCaseId === targetId) return;
+
+    const sourceIndex = records.findIndex((r) => r.id === draggedCaseId);
+    const targetIndex = records.findIndex((r) => r.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const newRecords = [...records];
+    const [moved] = newRecords.splice(sourceIndex, 1);
+    newRecords.splice(targetIndex, 0, moved);
+
+    onReorderCases?.(newRecords);
+    setDraggedCaseId(null);
+  };
   const [internalStatusFilter, setInternalStatusFilter] = useState<'all' | 'active' | 'ended'>(statusFilter);
   const [summaryModalCase, setSummaryModalCase] = useState<CaseRecord | null>(null);
   const [showChartsCaseId, setShowChartsCaseId] = useState<string | null>(null);
@@ -212,6 +258,10 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   });
 
   const statusFilteredRecords = categoryRecords.filter((item) => {
+    if (category === 'shortTerm') {
+      // 短程个案（个人短程案例/医院机构短程案例）不设“正在进行”与“已结案”隐形卡顿限制，全部直接自由建立与呈现
+      return true;
+    }
     if (internalStatusFilter === 'active') {
       return item.status === 'active' || !item.status;
     }
@@ -368,11 +418,20 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
     // 4:1 访谈节奏智能提醒: 每进行 4 次个体访谈，推荐安排 1 次父母访谈
     const needParentRecommend = recordedCount >= 4 && recordedCount >= parentCompletedCount * 4 + 4;
 
+    const isBeingDraggedOver = dragOverCaseId === item.id;
+
     return (
       <div
         key={item.id}
+        draggable
+        onDragStart={(e) => handleDragStart(e, item.id)}
+        onDragOver={(e) => handleDragOver(e, item.id)}
+        onDragLeave={() => setDragOverCaseId(null)}
+        onDrop={(e) => handleDrop(e, item.id)}
         className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-xs transition ${
-          isCaseSelected
+          isBeingDraggedOver
+            ? 'ring-4 ring-rose-400 border-rose-500 scale-[1.01] bg-rose-100/50 dark:bg-slate-800'
+            : isCaseSelected
             ? 'ring-2 ring-rose-500 border-rose-500 bg-rose-50/30 dark:bg-slate-900'
             : item.pinned
             ? 'border-amber-300 dark:border-amber-700/80 ring-2 ring-amber-400/20 bg-amber-50/20 dark:bg-slate-900/90'
@@ -381,6 +440,40 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
       >
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-rose-100 dark:border-slate-800 pb-3 mb-4">
           <div className="flex items-center gap-3">
+            {/* 拖拽控制手柄与排序调整按钮 */}
+            <div className="flex items-center gap-0.5 text-zinc-400 dark:text-slate-500 hover:text-rose-600 shrink-0 group">
+              <div
+                className="p-1 cursor-grab active:cursor-grabbing hover:bg-rose-50 dark:hover:bg-slate-800 rounded-lg transition"
+                title="按住此图标可上下拖拽调动个案排序"
+              >
+                <GripVertical className="w-5 h-5 text-rose-400 group-hover:text-rose-600 transition" />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleMoveCase(item.id, 'up');
+                  }}
+                  className="p-0.5 hover:bg-rose-100 dark:hover:bg-slate-800 rounded text-zinc-500 dark:text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                  title="向上移一位"
+                >
+                  <ChevronUp className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleMoveCase(item.id, 'down');
+                  }}
+                  className="p-0.5 hover:bg-rose-100 dark:hover:bg-slate-800 rounded text-zinc-500 dark:text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                  title="向下移一位"
+                >
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+
             {batchCaseMode && (
               <button
                 type="button"
@@ -1149,6 +1242,10 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
       return;
     }
 
+    const targetShortTermType = category === 'shortTerm'
+      ? (shortTermSubtypeFilter === 'agency' ? 'agency' : 'personal')
+      : undefined;
+
     onAddCase({
       category,
       avatar,
@@ -1159,6 +1256,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
       endDate: status === 'ended' ? endDate : undefined,
       totalSessions: Number(totalSessions) || 20,
       isTeenager,
+      shortTermType: targetShortTermType,
     });
 
     setName('');
@@ -1218,9 +1316,9 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
     else if (internalStatusFilter === 'ended') titleText = '长程个案 · 终止和暂停';
     else titleText = '长程个案 · 全部档案';
   } else {
-    if (shortTermSubtypeFilter === 'personal') titleText = '短程咨询 · 个人短程案例';
-    else if (shortTermSubtypeFilter === 'agency') titleText = '短程咨询 · 医院或机构短程案例';
-    else titleText = '短程咨询';
+    if (shortTermSubtypeFilter === 'personal') titleText = '短程个案 · 个人短程案例';
+    else if (shortTermSubtypeFilter === 'agency') titleText = '短程个案 · 医院或机构短程案例';
+    else titleText = '短程个案';
   }
 
   return (
@@ -1243,7 +1341,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             title="点击手动编辑/修改当前模块的累计时数"
           >
             <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>{category === 'longTerm' ? '长程个案累计' : '短程咨询累计'}: <strong>{displayHours}</strong> 小时</span>
+            <span>{category === 'longTerm' ? '长程个案累计' : '短程个案累计'}: <strong>{displayHours}</strong> 小时</span>
             <Pencil className="w-3 h-3 text-amber-600 dark:text-amber-400 opacity-80 shrink-0" />
           </button>
 

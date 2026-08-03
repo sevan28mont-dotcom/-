@@ -17,43 +17,52 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
 }) => {
   const overrides = systemData.totalHoursOverrides || {};
 
-  // 1. 自动计算个案总会谈数/时长
-  const autoCalculatedCaseCount = (systemData.records || []).reduce((acc, rec) => {
-    let completedCount = 0;
-    if (rec.sessions) {
-      Object.values(rec.sessions).forEach((s: SessionData) => {
-        if (s.completed || s.note || s.transcript) {
-          completedCount++;
-        }
-      });
-    }
-    // 加上父母访谈已完成数
-    if (rec.parentSessions) {
-      Object.values(rec.parentSessions).forEach((ps: ParentSessionData) => {
-        if (ps.completed || ps.note || ps.transcript) {
-          completedCount++;
-        }
-      });
-    }
-    return acc + completedCount;
-  }, 0);
+  // 1. 自动计算个案总会谈数与时长 (精确计算所有已录入/已完成个体访谈与父母访谈之和)
+  const { autoCalculatedCaseCount, autoCalculatedCaseHours } = (systemData.records || []).reduce(
+    (acc, rec) => {
+      if (rec.sessions) {
+        Object.values(rec.sessions).forEach((s: SessionData) => {
+          if (s.completed || s.note || s.transcript) {
+            acc.autoCalculatedCaseCount++;
+            acc.autoCalculatedCaseHours += s.durationMinutes ? s.durationMinutes / 60 : 1;
+          }
+        });
+      }
+      if (rec.parentSessions) {
+        Object.values(rec.parentSessions).forEach((ps: ParentSessionData) => {
+          if (ps.completed || ps.note || ps.transcript || ps.date) {
+            acc.autoCalculatedCaseCount++;
+            acc.autoCalculatedCaseHours += ps.durationMinutes ? ps.durationMinutes / 60 : 1;
+          }
+        });
+      }
+      return acc;
+    },
+    { autoCalculatedCaseCount: 0, autoCalculatedCaseHours: 0 }
+  );
 
-  // 2. 自动计算督导总记录数 (规则: 督导总时数/次数仅计算“个体督导”，团体督导不计入总数)
+  // 2. 自动计算督导总记录数与时长 (自动汇总全系统个体督导与团体督导)
   let individualSupervisionCount = 0;
   let groupSupervisionCount = 0;
+  let individualSupervisionHours = 0;
+  let groupSupervisionHours = 0;
+
   (systemData.mentors || []).forEach((mentor) => {
     (mentor.records || []).forEach((r) => {
+      const dur = (r as any).durationMinutes ? (r as any).durationMinutes / 60 : 1;
       if (r.type === 'group') {
         groupSupervisionCount++;
+        groupSupervisionHours += dur;
       } else {
         individualSupervisionCount++;
+        individualSupervisionHours += dur;
       }
     });
   });
-  // 仅总计个体督导次数
-  const autoCalculatedSupervisionCount = individualSupervisionCount;
+  const autoCalculatedSupervisionHours = individualSupervisionHours + groupSupervisionHours;
+  const autoCalculatedSupervisionCount = individualSupervisionCount + groupSupervisionCount;
 
-  // 3. 自动计算个人体验总记录数与时长 (规则: 个人体验总时数仅计算“个体体验/个人体验”，团体体验仅展示不计入总数)
+  // 3. 自动计算个人体验总记录数与时长
   const personalRecords = systemData.personalExperience?.records || [];
   let individualPersonalHours = 0;
   let groupPersonalHours = 0;
@@ -65,16 +74,12 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
       individualPersonalHours += dur;
     }
   });
-  // 仅计算个人体验(个体体验)的总时数
-  const autoCalculatedPersonalHours = individualPersonalHours;
+  const autoCalculatedPersonalHours = individualPersonalHours + groupPersonalHours;
 
-  // 默认体验时数 (若有录入记录则取自动累加值，否则为50小时预设值)
-  const defaultPersonalExpHours = autoCalculatedPersonalHours > 0 ? autoCalculatedPersonalHours : (individualPersonalHours || 50);
-
-  // 实际展示值（优先取用户手动设置，否则取自动统计）
-  const caseHours = overrides.caseHours !== undefined ? overrides.caseHours : autoCalculatedCaseCount;
-  const supervisionHours = overrides.supervisionHours !== undefined ? overrides.supervisionHours : autoCalculatedSupervisionCount;
-  const personalHours = overrides.personalExperienceHours !== undefined ? overrides.personalExperienceHours : defaultPersonalExpHours;
+  // 实际展示值（优先取用户手动微调设置，否则根据系统所有实际记录全自动计算累加总和）
+  const caseHours = overrides.caseHours !== undefined ? overrides.caseHours : (autoCalculatedCaseHours || autoCalculatedCaseCount);
+  const supervisionHours = overrides.supervisionHours !== undefined ? overrides.supervisionHours : (autoCalculatedSupervisionHours || autoCalculatedSupervisionCount);
+  const personalHours = overrides.personalExperienceHours !== undefined ? overrides.personalExperienceHours : autoCalculatedPersonalHours;
 
   // 编辑模态/行内弹窗状态
   const [editingKey, setEditingKey] = useState<'case' | 'supervision' | 'personal' | null>(null);

@@ -116,8 +116,8 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     if (activeTypeFilter !== 'all') {
       const records = mentor.records || [];
       const hasTypeRecord = records.some((r) => r.type === activeTypeFilter);
-      if (!hasTypeRecord && records.length > 0) {
-        // If query doesn't match search either
+      if (!hasTypeRecord && records.length > 0 && !searchQuery.trim()) {
+        return false;
       }
     }
 
@@ -165,7 +165,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     setSupervisionModal({ mentorId, caseId });
     setSupSessionNum(1);
     setSupDate(new Date().toISOString().split('T')[0]);
-    setSupType('individual');
+    setSupType(activeTypeFilter === 'group' ? 'group' : 'individual');
     setSupStartTime('14:00');
     setSupEndTime('15:00');
     setSupReflection('');
@@ -286,14 +286,26 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
             <div className="flex items-center gap-2.5">
               <span className="text-2xl">🎓</span>
               <h2 className="text-2xl font-black text-zinc-800 dark:text-slate-100 tracking-tight">
-                督了个啥
+                {activeTypeFilter === 'individual'
+                  ? '督了个啥 · 个体督导'
+                  : activeTypeFilter === 'group'
+                  ? '督了个啥 · 团体督导'
+                  : '督了个啥'}
               </h2>
               <span className="text-xs font-bold px-2.5 py-0.5 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-full border border-rose-200 dark:border-rose-800">
-                导师与案例绑定
+                {activeTypeFilter === 'individual'
+                  ? '个体督导视图'
+                  : activeTypeFilter === 'group'
+                  ? '团体督导视图'
+                  : '导师与案例绑定'}
               </span>
             </div>
             <p className="text-xs text-zinc-500 dark:text-slate-400 mt-1 font-medium">
-              统一管理督导师档案、案例绑定、个体与团体督导反思逐字稿
+              {activeTypeFilter === 'individual'
+                ? '仅独立呈现个体督导记录、进度与反思逐字稿，不混入团体督导'
+                : activeTypeFilter === 'group'
+                ? '仅独立呈现团体督导记录、进度与反思逐字稿，不混入个体督导'
+                : '统一管理督导师档案、案例绑定、个体与团体督导反思逐字稿'}
             </p>
           </div>
 
@@ -587,13 +599,19 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                   const isExpanded = Boolean(expandedMentorSessions[mentor.id]);
                   const displayLimit = 15;
                   const isLongList = totalSup > displayLimit;
+                  const activeMentorRecords = activeTypeFilter === 'all'
+                    ? mentor.records
+                    : mentor.records.filter((r) => r.type === activeTypeFilter);
 
                   return (
                     <div className="bg-rose-50/50 dark:bg-slate-800/80 border border-rose-200/80 dark:border-slate-700/80 rounded-xl p-3 space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold text-zinc-800 dark:text-slate-100 flex items-center gap-1.5">
                           <Users className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                          <span>督导次数进度 (额度 {totalSup} 次，已记录 {mentor.records.length} 次):</span>
+                          <span>
+                            {activeTypeFilter === 'individual' ? '个体督导' : activeTypeFilter === 'group' ? '团体督导' : '督导'}
+                            次数进度 (额度 {totalSup} 次，已记录 {activeMentorRecords.length} 次):
+                          </span>
                         </span>
                         {isLongList && (
                           <button
@@ -619,7 +637,11 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                       <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-15 gap-1.5">
                         {Array.from({ length: totalSup }, (_, idx) => {
                           const supSessionNum = idx + 1;
-                          const matchedRecord = mentor.records.find((r) => r.sessionNum === supSessionNum);
+                          const matchedRecord = mentor.records.find((r) => {
+                            if (r.sessionNum !== supSessionNum) return false;
+                            if (activeTypeFilter !== 'all' && r.type !== activeTypeFilter) return false;
+                            return true;
+                          });
                           const hasRecord = Boolean(matchedRecord);
 
                           if (isLongList && !isExpanded && supSessionNum > displayLimit && !hasRecord) {
@@ -672,7 +694,11 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                     </div>
                   ) : (
                     boundCases.map((caseItem) => {
-                      const caseSupervisions = mentor.records.filter((r) => r.caseId === caseItem.id);
+                      const caseSupervisions = mentor.records.filter((r) => {
+                        if (r.caseId !== caseItem.id) return false;
+                        if (activeTypeFilter !== 'all' && r.type !== activeTypeFilter) return false;
+                        return true;
+                      });
                       const key = `${mentor.id}_${caseItem.id}`;
                       const isRecordsExpanded = Boolean(expandedCaseRecordLists[key]);
                       const recordLimit = 5;

@@ -439,6 +439,13 @@ export default function App() {
     }));
   };
 
+  const handleReorderCases = (newCases: CaseRecord[]) => {
+    setSystemData((prev) => ({
+      ...prev,
+      records: newCases,
+    }));
+  };
+
   const handleAddSchedule = (newItemData: Omit<ScheduleItem, 'id'> | ScheduleItem) => {
     const newItem: ScheduleItem = {
       ...newItemData,
@@ -613,6 +620,7 @@ export default function App() {
                 onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
                 onSaveToThinkingNotes={handleAddThinkingNote}
                 onTogglePinCase={handleTogglePinCase}
+                onReorderCases={handleReorderCases}
               />
             )}
 
@@ -635,6 +643,7 @@ export default function App() {
                 onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
                 onSaveToThinkingNotes={handleAddThinkingNote}
                 onTogglePinCase={handleTogglePinCase}
+                onReorderCases={handleReorderCases}
               />
             )}
 
@@ -657,6 +666,7 @@ export default function App() {
                 onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
                 onSaveToThinkingNotes={handleAddThinkingNote}
                 onTogglePinCase={handleTogglePinCase}
+                onReorderCases={handleReorderCases}
               />
             )}
 
