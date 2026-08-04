@@ -634,6 +634,7 @@ export default function App() {
             <TotalHoursOverview
               systemData={systemData}
               onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
+              onNavigateTab={(tab) => setActiveTab(tab as any)}
             />
 
             {/* 今日日程概览（精美紧凑顶置，方便在主界面自动筛选并快速查看所有安排好的咨询/督导任务） */}

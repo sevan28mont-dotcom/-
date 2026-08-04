@@ -1352,9 +1352,24 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
     return acc + completedCount + parentCount;
   }, 0);
 
-  const currentCategoryOverrideHours = category === 'longTerm'
-    ? totalHoursOverrides?.longTermCaseHours
-    : totalHoursOverrides?.shortTermCaseHours;
+  let currentCategoryOverrideHours: number | undefined;
+  if (category === 'shortTerm') {
+    if (shortTermSubtypeFilter === 'personal') {
+      currentCategoryOverrideHours = totalHoursOverrides?.shortTermPersonalCaseHours;
+    } else if (shortTermSubtypeFilter === 'agency') {
+      currentCategoryOverrideHours = totalHoursOverrides?.shortTermAgencyCaseHours;
+    } else {
+      currentCategoryOverrideHours = totalHoursOverrides?.shortTermCaseHours;
+    }
+  } else if (category === 'longTerm') {
+    if (internalStatusFilter === 'active') {
+      currentCategoryOverrideHours = totalHoursOverrides?.longTermActiveCaseHours;
+    } else if (internalStatusFilter === 'ended') {
+      currentCategoryOverrideHours = totalHoursOverrides?.longTermEndedCaseHours;
+    } else {
+      currentCategoryOverrideHours = totalHoursOverrides?.longTermCaseHours;
+    }
+  }
 
   const displayHours = currentCategoryOverrideHours !== undefined ? currentCategoryOverrideHours : autoCompletedHours;
 
@@ -2362,10 +2377,22 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                   const val = Number(hoursInputValue);
                   const num = isNaN(val) ? 0 : Math.max(0, val);
                   if (onUpdateTotalHoursOverrides) {
-                    if (category === 'longTerm') {
-                      onUpdateTotalHoursOverrides({ ...totalHoursOverrides, longTermCaseHours: num });
-                    } else {
-                      onUpdateTotalHoursOverrides({ ...totalHoursOverrides, shortTermCaseHours: num });
+                    if (category === 'shortTerm') {
+                      if (shortTermSubtypeFilter === 'personal') {
+                        onUpdateTotalHoursOverrides({ ...totalHoursOverrides, shortTermPersonalCaseHours: num });
+                      } else if (shortTermSubtypeFilter === 'agency') {
+                        onUpdateTotalHoursOverrides({ ...totalHoursOverrides, shortTermAgencyCaseHours: num });
+                      } else {
+                        onUpdateTotalHoursOverrides({ ...totalHoursOverrides, shortTermCaseHours: num });
+                      }
+                    } else if (category === 'longTerm') {
+                      if (internalStatusFilter === 'active') {
+                        onUpdateTotalHoursOverrides({ ...totalHoursOverrides, longTermActiveCaseHours: num });
+                      } else if (internalStatusFilter === 'ended') {
+                        onUpdateTotalHoursOverrides({ ...totalHoursOverrides, longTermEndedCaseHours: num });
+                      } else {
+                        onUpdateTotalHoursOverrides({ ...totalHoursOverrides, longTermCaseHours: num });
+                      }
                     }
                   }
                   setIsEditHoursModalOpen(false);

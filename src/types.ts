@@ -204,10 +204,15 @@ export interface SystemData {
     supervisionHours?: number;
     personalExperienceHours?: number;
     longTermCaseHours?: number;
+    longTermActiveCaseHours?: number;
+    longTermEndedCaseHours?: number;
     shortTermCaseHours?: number;
+    shortTermPersonalCaseHours?: number;
+    shortTermAgencyCaseHours?: number;
     individualSupervisionHours?: number;
     groupSupervisionHours?: number;
     individualExperienceHours?: number;
     groupExperienceHours?: number;
+    [key: string]: number | undefined;
   };
 }
