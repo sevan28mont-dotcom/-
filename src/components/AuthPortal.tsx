@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserAccount, loginUser, registerUser } from '../services/auth';
+import { UserAccount, loginUser, loginUserAsync, registerUserAsync } from '../services/auth';
 import { EMPTY_SYSTEM_DATA, getDefaultSampleSystemData, saveDataToLocalStorage } from '../services/storage';
 import {
   Lock,
@@ -41,6 +41,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
   // Load demo data by default
   const [includeDemoData, setIncludeDemoData] = useState(true);
 
+  const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -75,35 +76,47 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
       return;
     }
 
-    if (isRegister) {
-      // Validate Password Strength
-      if (password.length < 6) {
-        setErrorMsg('密码安全强度不足：密码长度至少需要 6 个字符！');
-        return;
-      }
+    setIsLoading(true);
 
-      const regRes = registerUser(trimmedUsername, password, title, avatar);
-      if (!regRes.success) {
-        setErrorMsg(regRes.error || '注册失败，该用户名已被使用！');
-        return;
+    try {
+      if (isRegister) {
+        // Validate Password Strength
+        if (password.length < 6) {
+          setErrorMsg('密码安全强度不足：密码长度至少需要 6 个字符！');
+          setIsLoading(false);
+          return;
+        }
+
+        const regRes = await registerUserAsync(trimmedUsername, password, title, avatar);
+        if (!regRes.success) {
+          setErrorMsg(regRes.error || '注册失败，该用户名已被使用！');
+          setIsLoading(false);
+          return;
+        }
+        if (regRes.user) {
+          saveDataToLocalStorage(
+            includeDemoData ? getDefaultSampleSystemData() : EMPTY_SYSTEM_DATA,
+            regRes.user.id
+          );
+          onLoginSuccess(regRes.user);
+        }
+      } else {
+        // Login flow with cross-device backend verification
+        const loginRes = await loginUserAsync(trimmedUsername, password);
+        if (!loginRes.success) {
+          setErrorMsg(loginRes.error || '登录失败！请检查账号或密码');
+          setIsLoading(false);
+          return;
+        }
+        if (loginRes.user) {
+          onLoginSuccess(loginRes.user);
+        }
       }
-      if (regRes.user) {
-        saveDataToLocalStorage(
-          includeDemoData ? getDefaultSampleSystemData() : EMPTY_SYSTEM_DATA,
-          regRes.user.id
-        );
-        onLoginSuccess(regRes.user);
-      }
-    } else {
-      // Login flow
-      const loginRes = loginUser(trimmedUsername, password);
-      if (!loginRes.success) {
-        setErrorMsg(loginRes.error || '登录失败！请检查账号或密码');
-        return;
-      }
-      if (loginRes.user) {
-        onLoginSuccess(loginRes.user);
-      }
+    } catch (err) {
+      console.error('Submit error:', err);
+      setErrorMsg('登录请求出现错误，请重试');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -344,10 +357,23 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
 
           <button
             type="submit"
-            className="w-full py-2.5 bg-zinc-800 dark:bg-rose-600 hover:bg-zinc-700 dark:hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition shadow-md cursor-pointer mt-1 flex items-center justify-center gap-2 active:scale-98"
+            disabled={isLoading}
+            className="w-full py-2.5 bg-zinc-800 dark:bg-rose-600 hover:bg-zinc-700 dark:hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition shadow-md cursor-pointer mt-1 flex items-center justify-center gap-2 active:scale-98"
           >
-            {isRegister ? <UserPlus className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
-            <span>{isRegister ? '完成注册并开启工作台' : '登 录 工作台'}</span>
+            {isLoading ? (
+              <span className="animate-spin text-sm">⏳</span>
+            ) : isRegister ? (
+              <UserPlus className="w-4 h-4" />
+            ) : (
+              <LogIn className="w-4 h-4" />
+            )}
+            <span>
+              {isLoading
+                ? '处理中...'
+                : isRegister
+                ? '完成注册并开启工作台'
+                : '登 录 工作台'}
+            </span>
           </button>
         </form>
 

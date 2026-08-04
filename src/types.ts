@@ -197,6 +197,7 @@ export interface SystemData {
   schedules: ScheduleItem[];
   reminders: ReminderItem[];
   personalExperience?: PersonalExperienceSetting;
+  experienceData?: any;
   trainings?: TrainingCourse[];
   totalHoursOverrides?: {
     caseHours?: number;

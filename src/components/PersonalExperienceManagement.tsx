@@ -140,11 +140,11 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
     { id: 'group_opt_2', name: '遇见团体', facilitator: '带领者 B', startDate: '2026-01-01', endDate: '2026-12-31', totalHours: 20 },
   ];
 
-  const individualTherapists = experienceData.individualTherapists && experienceData.individualTherapists.length > 0
+  const individualTherapists = Array.isArray(experienceData.individualTherapists)
     ? experienceData.individualTherapists
     : defaultIndividualTherapists;
 
-  const groupOptions = experienceData.groupOptions && experienceData.groupOptions.length > 0
+  const groupOptions = Array.isArray(experienceData.groupOptions)
     ? experienceData.groupOptions
     : defaultGroupOptions;
 
@@ -867,8 +867,14 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
 
                     <button
                       type="button"
-                      onClick={() => handleDeleteTherapistItem(therapist.id, therapist.name, 'individual')}
-                      className="px-2.5 py-1 text-xs font-bold bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-900/60 hover:border-rose-600 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1 active:scale-95 shadow-2xs group"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleDeleteTherapistItem(therapist.id, therapist.name, 'individual');
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className="px-2.5 py-1 text-xs font-bold bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-900/60 hover:border-rose-600 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1 active:scale-95 shadow-2xs group touch-manipulation select-none min-h-[36px]"
                       title="彻底删除此体验师名录及其所有体验记录"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-rose-500 group-hover:text-white transition-colors" />
@@ -989,8 +995,14 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
 
                     <button
                       type="button"
-                      onClick={() => handleDeleteTherapistItem(group.id, group.name, 'group')}
-                      className="px-2.5 py-1 text-xs font-bold bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-900/60 hover:border-rose-600 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1 active:scale-95 shadow-2xs group"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleDeleteTherapistItem(group.id, group.name, 'group');
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className="px-2.5 py-1 text-xs font-bold bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-900/60 hover:border-rose-600 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1 active:scale-95 shadow-2xs group touch-manipulation select-none min-h-[36px]"
                       title="彻底删除此团体选项及其所有体验记录"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-rose-500 group-hover:text-white transition-colors" />
@@ -1270,8 +1282,14 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
 
                     <button
                       type="button"
-                      onClick={() => handleDeleteRecord(rec.id)}
-                      className="text-xs font-bold px-2.5 py-1 bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/60 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-800 hover:border-rose-600 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1 active:scale-95 shadow-2xs group"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleDeleteRecord(rec.id);
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className="text-xs font-bold px-2.5 py-1 bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/60 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-800 hover:border-rose-600 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1 active:scale-95 shadow-2xs group touch-manipulation select-none min-h-[36px]"
                       title="彻底删除此条体验记录"
                     >
                       <Trash2 className="w-3 h-3 text-rose-500 group-hover:text-white transition-colors" />
@@ -1559,13 +1577,17 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                 {modalRecord.id && (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
                       if (window.confirm('⚠️ 确定要彻底删除此条体验记录及其所有的逐字稿和反思体悟吗？')) {
                         handleDeleteRecord(modalRecord.id!);
                         setModalRecord(null);
                       }
                     }}
-                    className="px-3.5 py-2 bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/60 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-800 hover:border-rose-600 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs group"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className="px-3.5 py-2 bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/60 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-800 hover:border-rose-600 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs group touch-manipulation select-none min-h-[36px]"
                   >
                     <Trash2 className="w-3.5 h-3.5 text-rose-500 group-hover:text-white transition-colors" />
                     <span>彻底删除此体验记录</span>
@@ -1948,11 +1970,15 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
                   handleDeleteTherapistItem(editingItemModal.id, editingItemModal.name, editingItemModal.type);
                   setEditingItemModal(null);
                 }}
-                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/50 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-900/60 hover:border-rose-600 rounded-xl font-bold text-xs transition-all duration-200 cursor-pointer flex items-center gap-1 active:scale-95 group shadow-2xs"
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/50 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-900/60 hover:border-rose-600 rounded-xl font-bold text-xs transition-all duration-200 cursor-pointer flex items-center gap-1 active:scale-95 group shadow-2xs touch-manipulation select-none min-h-[36px]"
               >
                 <Trash2 className="w-3.5 h-3.5 text-rose-500 group-hover:text-white transition-colors" />
                 <span>彻底删除此{editingItemModal.type === 'individual' ? '体验师' : '团体'}</span>

@@ -658,8 +658,17 @@ export const ThinkingNotes: React.FC<ThinkingNotesProps> = ({ notes, onAddNote, 
                   </button>
 
                   <button
-                    onClick={() => onDeleteNote(note.id)}
-                    className="p-1.5 text-zinc-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      if (window.confirm('确定要彻底删除这条随记灵感笔记吗？')) {
+                        onDeleteNote(note.id);
+                      }
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className="p-1.5 text-rose-600 dark:text-rose-400 hover:text-white bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-lg transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95 shadow-2xs"
                     title="删除此笔记"
                   >
                     <Trash2 className="w-4 h-4" />

@@ -240,6 +240,7 @@ export const TrainingManagement: React.FC<TrainingManagementProps> = ({
 
   // Delete Session
   const handleDeleteSession = (courseId: string, sessionId: string) => {
+    if (!confirm('确定要删除此打卡记录吗？')) return;
     const updated = trainings.map((c) => {
       if (c.id === courseId) {
         return { ...c, sessions: (c.sessions || []).filter((s) => s.id !== sessionId) };
@@ -473,8 +474,13 @@ export const TrainingManagement: React.FC<TrainingManagementProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => handleDeleteCourse(course.id, course.name)}
-                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCourse(course.id, course.name);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        className="p-2 text-rose-600 dark:text-rose-400 hover:text-white bg-rose-50 hover:bg-rose-600 dark:bg-slate-800 dark:hover:bg-rose-600 border border-rose-200 dark:border-slate-700 rounded-xl transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95 shadow-2xs"
                         title="删除此培训"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -596,8 +602,14 @@ export const TrainingManagement: React.FC<TrainingManagementProps> = ({
 
                               <button
                                 type="button"
-                                onClick={() => handleDeleteSession(course.id, s.id)}
-                                className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  handleDeleteSession(course.id, s.id);
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onTouchStart={(e) => e.stopPropagation()}
+                                className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800 p-1.5 rounded-lg cursor-pointer shrink-0 transition select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95"
                                 title="删除此打卡记录"
                               >
                                 <X className="w-3.5 h-3.5" />

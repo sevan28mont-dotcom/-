@@ -600,8 +600,18 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onDeleteMentor(mentor.id)}
-                      className="flex items-center gap-1 text-[11px] px-3 py-1.5 text-zinc-500 hover:text-rose-600 bg-zinc-50 hover:bg-rose-50 border border-zinc-200 hover:border-rose-200 rounded-xl transition cursor-pointer"
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        if (window.confirm(`确定要彻底删除导师【${mentor.name}】及其相关的督导记录吗？`)) {
+                          onDeleteMentor(mentor.id);
+                        }
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 text-rose-600 dark:text-rose-300 hover:text-white bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-xl transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] active:scale-95 shadow-2xs group"
+                      title="彻底删除导师及相关所有记录"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>删除导师</span>
@@ -749,8 +759,15 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
 
                               {/* 解绑关联按钮 */}
                               <button
-                                onClick={() => onUpdateMentorCaseBinding(mentor.id, caseItem.id, false)}
-                                className="text-[10px] uppercase font-bold px-2.5 py-1 bg-zinc-100 text-zinc-500 hover:bg-rose-500 hover:text-white border border-zinc-200 hover:border-rose-500 rounded-md transition flex items-center gap-1 cursor-pointer"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  onUpdateMentorCaseBinding(mentor.id, caseItem.id, false);
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onTouchStart={(e) => e.stopPropagation()}
+                                className="text-[10px] uppercase font-bold px-2.5 py-1.5 bg-zinc-100 text-zinc-600 hover:bg-rose-500 hover:text-white dark:bg-slate-800 dark:text-slate-300 border border-zinc-200 dark:border-slate-700 hover:border-rose-500 rounded-lg transition flex items-center gap-1 cursor-pointer select-none touch-manipulation min-h-[36px] active:scale-95 shadow-2xs"
                                 title="断开此个案与当前督导师的关联"
                               >
                                 <Unlink className="w-3 h-3" />
@@ -831,11 +848,20 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
 
                                         <button
                                           type="button"
-                                          onClick={() => onDeleteSupervisionRecord(mentor.id, sup.id)}
-                                          className="text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer p-0.5"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            if (window.confirm('确定要彻底删除这条督导会谈记录吗？')) {
+                                              onDeleteSupervisionRecord(mentor.id, sup.id);
+                                            }
+                                          }}
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                          onTouchStart={(e) => e.stopPropagation()}
+                                          className="flex items-center gap-1 text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-white bg-rose-50 hover:bg-rose-600 dark:bg-slate-800 dark:hover:bg-rose-600 border border-rose-200 dark:border-slate-700 px-3 py-1.5 rounded-lg transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95 shadow-2xs"
                                           title="删除此条记录"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" />
+                                          <span>删除</span>
                                         </button>
                                       </div>
                                     </div>

@@ -276,11 +276,20 @@ export const ReminderModal: React.FC<ReminderModalProps> = ({
                         </div>
 
                         <button
-                          onClick={() => onDeleteReminder(rem.id)}
-                          className="p-1 text-zinc-400 dark:text-slate-500 hover:text-rose-600 transition cursor-pointer"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (window.confirm('确定要删除此提醒项吗？')) {
+                              onDeleteReminder(rem.id);
+                            }
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onTouchStart={(e) => e.stopPropagation()}
+                          className="p-2 text-zinc-400 dark:text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95 shadow-2xs"
                           title="删除此提醒"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4 text-rose-500" />
                         </button>
                       </div>
                     ))}

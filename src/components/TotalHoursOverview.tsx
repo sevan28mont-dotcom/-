@@ -17,29 +17,47 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
 }) => {
   const overrides = systemData.totalHoursOverrides || {};
 
-  // 1. 自动计算个案总会谈数与时长 (精确计算所有已录入/已完成个体访谈与父母访谈之和)
-  const { autoCalculatedCaseCount, autoCalculatedCaseHours } = (systemData.records || []).reduce(
-    (acc, rec) => {
-      if (rec.sessions) {
-        Object.values(rec.sessions).forEach((s: SessionData) => {
-          if (s.completed || s.note || s.transcript) {
-            acc.autoCalculatedCaseCount++;
-            acc.autoCalculatedCaseHours += s.durationMinutes ? s.durationMinutes / 60 : 1;
-          }
-        });
-      }
-      if (rec.parentSessions) {
-        Object.values(rec.parentSessions).forEach((ps: ParentSessionData) => {
-          if (ps.completed || ps.note || ps.transcript || ps.date) {
-            acc.autoCalculatedCaseCount++;
-            acc.autoCalculatedCaseHours += ps.durationMinutes ? ps.durationMinutes / 60 : 1;
-          }
-        });
-      }
-      return acc;
-    },
-    { autoCalculatedCaseCount: 0, autoCalculatedCaseHours: 0 }
-  );
+  // 1. 自动计算个案总会谈数与时长 (按长程/短程及活跃/暂停分类精确计算)
+  const allRecords = systemData.records || [];
+  const longTermRecords = allRecords.filter((r) => r.category === 'longTerm' || !r.category);
+  const shortTermRecords = allRecords.filter((r) => r.category === 'shortTerm');
+
+  const longTermActiveCount = longTermRecords.filter((r) => r.status === 'active' || !r.status).length;
+  const longTermEndedCount = longTermRecords.filter((r) => r.status === 'ended').length;
+
+  const shortTermPersonalCount = shortTermRecords.filter((r) => r.subtype === 'personal' || !r.subtype).length;
+  const shortTermAgencyCount = shortTermRecords.filter((r) => r.subtype === 'agency').length;
+
+  const calcCaseStats = (recordsList: typeof allRecords) => {
+    return recordsList.reduce(
+      (acc, rec) => {
+        if (rec.sessions) {
+          Object.values(rec.sessions).forEach((s: SessionData) => {
+            if (s.completed || s.note || s.transcript) {
+              acc.count++;
+              acc.hours += s.durationMinutes ? s.durationMinutes / 60 : 1;
+            }
+          });
+        }
+        if (rec.parentSessions) {
+          Object.values(rec.parentSessions).forEach((ps: ParentSessionData) => {
+            if (ps.completed || ps.note || ps.transcript || ps.date) {
+              acc.count++;
+              acc.hours += ps.durationMinutes ? ps.durationMinutes / 60 : 1;
+            }
+          });
+        }
+        return acc;
+      },
+      { count: 0, hours: 0 }
+    );
+  };
+
+  const { count: longTermSessionsCount, hours: autoLongTermHours } = calcCaseStats(longTermRecords);
+  const { count: shortTermSessionsCount, hours: autoShortTermHours } = calcCaseStats(shortTermRecords);
+
+  const autoCalculatedCaseCount = longTermSessionsCount + shortTermSessionsCount;
+  const autoCalculatedCaseHours = autoLongTermHours + autoShortTermHours;
 
   // 2. 自动计算督导总记录数与时长 (自动汇总全系统个体督导与团体督导)
   let individualSupervisionCount = 0;
@@ -62,15 +80,20 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
   const autoCalculatedSupervisionHours = individualSupervisionHours + groupSupervisionHours;
   const autoCalculatedSupervisionCount = individualSupervisionCount + groupSupervisionCount;
 
-  // 3. 自动计算个人体验总记录数与时长
-  const personalRecords = systemData.personalExperience?.records || [];
+  // 3. 自动计算个人体验总记录数与时长 (自动汇总全系统个体体验与团体体验)
+  const personalRecords = systemData.experienceData?.records || systemData.personalExperience?.records || [];
+  let individualPersonalCount = 0;
+  let groupPersonalCount = 0;
   let individualPersonalHours = 0;
   let groupPersonalHours = 0;
-  personalRecords.forEach((r) => {
+
+  personalRecords.forEach((r: any) => {
     const dur = r.durationMinutes ? r.durationMinutes / 60 : 1;
     if (r.type === 'group') {
+      groupPersonalCount++;
       groupPersonalHours += dur;
     } else {
+      individualPersonalCount++;
       individualPersonalHours += dur;
     }
   });
@@ -225,14 +248,14 @@ ${n.content}
         </div>
       </div>
 
-      {/* 三大时数高亮卡片 Block Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 relative z-10">
-        {/* 1. 个案 */}
-        <div className="bg-white/85 dark:bg-slate-800/85 backdrop-blur-md border border-rose-200/80 dark:border-slate-700 rounded-xl p-3.5 flex flex-col justify-between hover:border-rose-300 dark:hover:border-slate-600 transition shadow-2xs group min-h-[105px]">
+      {/* 三大核心时数与统计高亮卡片 Block Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 relative z-10">
+        {/* 1. 个案总时数 */}
+        <div className="bg-white/85 dark:bg-slate-800/85 backdrop-blur-md border border-rose-200/80 dark:border-slate-700 rounded-xl p-3.5 flex flex-col justify-between hover:border-rose-300 dark:hover:border-slate-600 transition shadow-2xs group min-h-[125px]">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-bold text-rose-900 dark:text-rose-200 flex items-center gap-1.5 whitespace-nowrap">
               <Clock className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
-              <span>个案</span>
+              <span>个案总时数</span>
             </span>
             <button
               type="button"
@@ -267,13 +290,25 @@ ${n.content}
                 <div className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-rose-950 dark:text-white flex items-baseline gap-1">
                   {caseHours}<span className="text-xs font-extrabold italic text-rose-700 dark:text-rose-300">/小时</span>
                 </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300 pt-1.5 border-t border-rose-100/80 dark:border-slate-700/60">
+                  <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-300 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60">
+                    🟢 进行中: <strong className="font-mono">{longTermActiveCount}</strong>
+                  </span>
+                  <span className="flex items-center gap-1 text-amber-700 dark:text-amber-300 font-bold bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800/60">
+                    ⏸️ 终止/暂停: <strong className="font-mono">{longTermEndedCount}</strong>
+                  </span>
+                  <span className="flex items-center gap-1 text-purple-700 dark:text-purple-300 font-bold bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800/60">
+                    📁 短程个案: <strong className="font-mono">{shortTermRecords.length}</strong>
+                  </span>
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* 2. 督导 */}
-        <div className="bg-white/85 dark:bg-slate-800/85 backdrop-blur-md border border-indigo-200/80 dark:border-slate-700 rounded-xl p-3.5 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-slate-600 transition shadow-2xs group min-h-[105px]">
+        {/* 3. 督导 */}
+        <div className="bg-white/85 dark:bg-slate-800/85 backdrop-blur-md border border-indigo-200/80 dark:border-slate-700 rounded-xl p-3.5 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-slate-600 transition shadow-2xs group min-h-[125px]">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5 whitespace-nowrap">
               <UserCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
@@ -313,15 +348,12 @@ ${n.content}
                   {supervisionHours}<span className="text-xs font-extrabold italic text-indigo-700 dark:text-indigo-300">/小时</span>
                 </div>
 
-                <div className="flex items-center gap-3 text-[11px] font-medium text-slate-600 dark:text-slate-300 pt-1 border-t border-indigo-100/80 dark:border-slate-700/60">
-                  <span className="flex items-center gap-1.5 whitespace-nowrap">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 shrink-0" />
-                    <span>个体督导 <strong className="font-mono font-bold text-indigo-950 dark:text-indigo-200">{individualSupervisionCount}</strong>次</span>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-slate-600 dark:text-slate-300 pt-1.5 border-t border-indigo-100/80 dark:border-slate-700/60">
+                  <span className="flex items-center gap-1 text-indigo-800 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800/60">
+                    个体督导: <strong className="font-mono">{individualSupervisionCount}</strong>次 ({individualSupervisionHours}h)
                   </span>
-                  <span className="text-slate-300 dark:text-slate-600">|</span>
-                  <span className="flex items-center gap-1.5 whitespace-nowrap">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-300 dark:bg-indigo-600 shrink-0" />
-                    <span>团体督导 <strong className="font-mono font-bold text-indigo-950 dark:text-indigo-200">{groupSupervisionCount}</strong>次</span>
+                  <span className="flex items-center gap-1 text-indigo-800 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800/60">
+                    团体督导: <strong className="font-mono">{groupSupervisionCount}</strong>次 ({groupSupervisionHours}h)
                   </span>
                 </div>
               </div>
@@ -329,8 +361,8 @@ ${n.content}
           </div>
         </div>
 
-        {/* 3. 个人体验 */}
-        <div className="bg-white/85 dark:bg-slate-800/85 backdrop-blur-md border border-amber-200/80 dark:border-slate-700 rounded-xl p-3.5 flex flex-col justify-between hover:border-amber-300 dark:hover:border-slate-600 transition shadow-2xs group min-h-[105px]">
+        {/* 4. 个人体验 */}
+        <div className="bg-white/85 dark:bg-slate-800/85 backdrop-blur-md border border-amber-200/80 dark:border-slate-700 rounded-xl p-3.5 flex flex-col justify-between hover:border-amber-300 dark:hover:border-slate-600 transition shadow-2xs group min-h-[125px]">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5 whitespace-nowrap">
               <HeartHandshake className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -370,15 +402,12 @@ ${n.content}
                   {personalHours}<span className="text-xs font-extrabold italic text-amber-700 dark:text-amber-300">/小时</span>
                 </div>
 
-                <div className="flex items-center gap-3 text-[11px] font-medium text-slate-600 dark:text-slate-300 pt-1 border-t border-amber-100/80 dark:border-slate-700/60">
-                  <span className="flex items-center gap-1.5 whitespace-nowrap">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-600 dark:bg-amber-400 shrink-0" />
-                    <span>个体体验 <strong className="font-mono font-bold text-amber-950 dark:text-amber-200">{individualPersonalHours}</strong></span>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-slate-600 dark:text-slate-300 pt-1.5 border-t border-amber-100/80 dark:border-slate-700/60">
+                  <span className="flex items-center gap-1 text-amber-800 dark:text-amber-300 font-bold bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800/60">
+                    个体体验: <strong className="font-mono">{individualPersonalCount}</strong>次 ({individualPersonalHours}h)
                   </span>
-                  <span className="text-slate-300 dark:text-slate-600">|</span>
-                  <span className="flex items-center gap-1.5 whitespace-nowrap">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300 dark:bg-amber-600 shrink-0" />
-                    <span>团体体验 <strong className="font-mono font-bold text-amber-950 dark:text-amber-200">{groupPersonalHours}</strong></span>
+                  <span className="flex items-center gap-1 text-amber-800 dark:text-amber-300 font-bold bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800/60">
+                    团体体验: <strong className="font-mono">{groupPersonalCount}</strong>次 ({groupPersonalHours}h)
                   </span>
                 </div>
               </div>

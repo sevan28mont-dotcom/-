@@ -235,11 +235,19 @@ export const ResourceLinkSection: React.FC<ResourceLinkSectionProps> = ({
                   {!readOnly && (
                     <button
                       type="button"
-                      onClick={() => onDeleteResource(item.id)}
-                      className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-white dark:hover:bg-slate-800 rounded-md transition cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        if (window.confirm('确定要删除此资源链接/文档附件吗？')) {
+                          onDeleteResource(item.id);
+                        }
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95 shadow-2xs"
                       title="删除此资源"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                     </button>
                   )}
                 </div>

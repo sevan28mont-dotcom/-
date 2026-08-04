@@ -119,6 +119,91 @@ export function setCurrentUserSession(user: UserAccount | null): void {
   }
 }
 
+export async function loginUserAsync(
+  username: string,
+  password: string
+): Promise<{ success: boolean; user?: UserAccount; error?: string }> {
+  const trimmed = username.trim();
+  if (!trimmed) {
+    return { success: false, error: '请输入有效的账号名称/咨询师姓名' };
+  }
+
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: trimmed, password }),
+    });
+
+    const res = await response.json();
+    if (res.success && res.user) {
+      const accounts = getStoredAccounts();
+      const existingIdx = accounts.findIndex((a) => a.username.toLowerCase() === res.user.username.toLowerCase());
+      const updatedAccounts = [...accounts];
+      if (existingIdx !== -1) {
+        updatedAccounts[existingIdx] = res.user;
+      } else {
+        updatedAccounts.unshift(res.user);
+      }
+      saveAccounts(updatedAccounts);
+      setCurrentUserSession(res.user);
+      return { success: true, user: res.user };
+    } else if (res.error) {
+      // Fallback: check local storage if server returned negative response
+      const localRes = loginUser(trimmed, password);
+      if (localRes.success) return localRes;
+      return { success: false, error: res.error };
+    }
+  } catch (err) {
+    console.warn('Network login failed, falling back to local storage:', err);
+  }
+
+  // Fallback to local storage if network request failed
+  return loginUser(trimmed, password);
+}
+
+export async function registerUserAsync(
+  username: string,
+  password: string,
+  title: string = '心理咨询师',
+  avatar: string = '🩺',
+  name?: string
+): Promise<{ success: boolean; user?: UserAccount; error?: string }> {
+  const trimmedUser = username.trim();
+
+  if (!trimmedUser || trimmedUser.length < 2) {
+    return { success: false, error: '账号/姓名长度至少2个字符' };
+  }
+
+  if (!password || password.length < 6) {
+    return { success: false, error: '密码长度至少为6位' };
+  }
+
+  try {
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: trimmedUser, password, title, avatar, name }),
+    });
+
+    const res = await response.json();
+    if (res.success && res.user) {
+      const accounts = getStoredAccounts();
+      const updatedAccounts = [res.user, ...accounts.filter((a) => a.username.toLowerCase() !== res.user.username.toLowerCase())];
+      saveAccounts(updatedAccounts);
+      setCurrentUserSession(res.user);
+      return { success: true, user: res.user };
+    } else if (res.error) {
+      return { success: false, error: res.error };
+    }
+  } catch (err) {
+    console.warn('Network register failed, falling back to local storage:', err);
+  }
+
+  // Local fallback
+  return registerUser(trimmedUser, password, title, avatar, name);
+}
+
 export function loginUser(
   username: string,
   password: string
@@ -131,11 +216,11 @@ export function loginUser(
   );
 
   if (!found) {
-    return { success: false, error: '账号不存在，请先点击“注册新账号”' };
+    return { success: false, error: '账号不存在，请输入6位以上密码自动创建，或点击“用户注册”' };
   }
 
   if (found.password && found.password !== password) {
-    return { success: false, error: '密码错误，默认演示账号密码为 123456' };
+    return { success: false, error: '密码错误，演示账号密码为 123456' };
   }
 
   setCurrentUserSession(found);

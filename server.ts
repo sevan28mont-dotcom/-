@@ -1,7 +1,76 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+
+// Server-side persistent file database
+const SERVER_DB_FILE = path.join(process.cwd(), "psy_app_server_db.json");
+
+interface UserAccountServer {
+  id: string;
+  username: string;
+  password?: string;
+  name?: string;
+  title: string;
+  avatar: string;
+  createdAt: string;
+}
+
+interface ServerDb {
+  accounts: UserAccountServer[];
+  userStore: Record<string, { data: any; updatedAt: string }>;
+}
+
+const DEFAULT_SERVER_ACCOUNTS: UserAccountServer[] = [
+  {
+    id: "u_default",
+    username: "林心理咨询师",
+    password: "123456",
+    name: "林心理咨询师",
+    title: "国家二级心理咨询师 · 督导师",
+    avatar: "🩺",
+    createdAt: "2026-01-01",
+  },
+  {
+    id: "u_demo",
+    username: "counselor_demo",
+    password: "123456",
+    name: "张督导",
+    title: "高级心理咨询督导师",
+    avatar: "👩‍⚕️",
+    createdAt: "2026-01-01",
+  },
+];
+
+function loadServerDb(): ServerDb {
+  try {
+    if (fs.existsSync(SERVER_DB_FILE)) {
+      const raw = fs.readFileSync(SERVER_DB_FILE, "utf-8");
+      const parsed = JSON.parse(raw);
+      return {
+        accounts: Array.isArray(parsed.accounts) && parsed.accounts.length > 0 ? parsed.accounts : DEFAULT_SERVER_ACCOUNTS,
+        userStore: parsed.userStore || {},
+      };
+    }
+  } catch (err) {
+    console.error("Failed to read server DB file:", err);
+  }
+  return {
+    accounts: [...DEFAULT_SERVER_ACCOUNTS],
+    userStore: {},
+  };
+}
+
+const serverDb: ServerDb = loadServerDb();
+
+function saveServerDb() {
+  try {
+    fs.writeFileSync(SERVER_DB_FILE, JSON.stringify(serverDb, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Failed to save server DB file:", err);
+  }
+}
 
 // Local smart formatting fallback for speech text
 function localSmartFormat(str: string): string {
@@ -176,8 +245,110 @@ ${content}
     }
   });
 
-  // In-memory cloud sync storage keyed by user ID / username
-  const userCloudStore: Record<string, any> = {};
+  // API Route: Cross-Device Account Login
+  app.post("/api/auth/login", (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || typeof username !== "string" || !username.trim()) {
+        return res.status(400).json({ success: false, error: "请输入账号名称" });
+      }
+
+      const trimmed = username.trim().toLowerCase();
+      let found = serverDb.accounts.find((a) => a.username.toLowerCase() === trimmed);
+
+      // If user exists on server
+      if (found) {
+        if (found.password && password && found.password !== password) {
+          return res.status(401).json({ success: false, error: "密码错误，请核对后重试" });
+        }
+        return res.json({ success: true, user: found });
+      }
+
+      // If account not found on server yet, but user supplied a valid username and password (>= 6 chars),
+      // auto-create/sync account seamlessly so login across phone & PC works flawlessly!
+      if (password && String(password).length >= 6) {
+        const newUser: UserAccountServer = {
+          id: "u_" + Date.now(),
+          username: username.trim(),
+          password: String(password),
+          name: username.trim(),
+          title: "心理咨询师",
+          avatar: "🩺",
+          createdAt: new Date().toISOString().split("T")[0],
+        };
+        serverDb.accounts.unshift(newUser);
+        saveServerDb();
+        return res.json({
+          success: true,
+          user: newUser,
+          message: "跨设备账号智能创建并成功登录",
+        });
+      }
+
+      return res.status(404).json({
+        success: false,
+        error: "账号不存在，请输入6位以上密码自动注册并登录，或点击“用户注册”",
+      });
+    } catch (err) {
+      console.error("Auth login endpoint error:", err);
+      return res.status(500).json({ success: false, error: "登录服务出现异常" });
+    }
+  });
+
+  // API Route: Cross-Device Account Registration
+  app.post("/api/auth/register", (req, res) => {
+    try {
+      const { username, password, title, avatar, name } = req.body;
+      const trimmedUser = String(username || "").trim();
+
+      if (!trimmedUser || trimmedUser.length < 2) {
+        return res.status(400).json({ success: false, error: "账号/咨询师姓名至少需要 2 个字符" });
+      }
+      if (!password || String(password).length < 6) {
+        return res.status(400).json({ success: false, error: "密码长度至少需要 6 位" });
+      }
+
+      const existingIndex = serverDb.accounts.findIndex(
+        (a) => a.username.toLowerCase() === trimmedUser.toLowerCase()
+      );
+
+      if (existingIndex !== -1) {
+        const existing = serverDb.accounts[existingIndex];
+        if (existing.password === String(password)) {
+          return res.json({ success: true, user: existing, message: "该账号已注册，已为您直接完成登录" });
+        }
+        return res.status(400).json({ success: false, error: "该账号名称已被注册，请输入已有密码登录" });
+      }
+
+      const newUser: UserAccountServer = {
+        id: "u_" + Date.now(),
+        username: trimmedUser,
+        password: String(password),
+        name: name ? String(name).trim() : trimmedUser,
+        title: title ? String(title).trim() : "心理咨询师",
+        avatar: avatar || "🩺",
+        createdAt: new Date().toISOString().split("T")[0],
+      };
+
+      serverDb.accounts.unshift(newUser);
+      saveServerDb();
+
+      return res.json({ success: true, user: newUser });
+    } catch (err) {
+      console.error("Auth register endpoint error:", err);
+      return res.status(500).json({ success: false, error: "注册服务出现异常" });
+    }
+  });
+
+  // API Route: Fetch All Registered Accounts for Sync
+  app.get("/api/auth/accounts", (req, res) => {
+    try {
+      const safeAccounts = serverDb.accounts.map(({ password, ...acc }) => acc);
+      return res.json({ success: true, accounts: safeAccounts });
+    } catch (err) {
+      return res.status(500).json({ success: false, error: "获取账号信息失败" });
+    }
+  });
 
   // API Route: Account Data Sync - Save
   app.post("/api/sync/save", (req, res) => {
@@ -186,14 +357,20 @@ ${content}
       if (!userId) {
         return res.status(400).json({ success: false, error: "Missing userId" });
       }
-      userCloudStore[userId] = {
+      const account = serverDb.accounts.find(
+        (a) => a.id === userId || a.username.toLowerCase() === String(userId).toLowerCase()
+      );
+      const canonicalId = account ? account.id : userId;
+
+      serverDb.userStore[canonicalId] = {
         data,
         updatedAt: new Date().toISOString(),
       };
+      saveServerDb();
       return res.json({
         success: true,
         timestamp: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
-        message: "账号数据已同步至云端",
+        message: "账号数据已同步至多设备云端",
       });
     } catch (err) {
       console.error("Sync save error:", err);
@@ -205,13 +382,21 @@ ${content}
   app.post("/api/sync/get", (req, res) => {
     try {
       const { userId } = req.body;
-      if (!userId || !userCloudStore[userId]) {
+      if (!userId) {
+        return res.json({ success: false, data: null });
+      }
+      const account = serverDb.accounts.find(
+        (a) => a.id === userId || a.username.toLowerCase() === String(userId).toLowerCase()
+      );
+      const canonicalId = account ? account.id : userId;
+
+      if (!serverDb.userStore[canonicalId]) {
         return res.json({ success: false, data: null });
       }
       return res.json({
         success: true,
-        data: userCloudStore[userId].data,
-        updatedAt: userCloudStore[userId].updatedAt,
+        data: serverDb.userStore[canonicalId].data,
+        updatedAt: serverDb.userStore[canonicalId].updatedAt,
       });
     } catch (err) {
       console.error("Sync get error:", err);

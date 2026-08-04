@@ -448,7 +448,14 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
       <div
         key={item.id}
         draggable
-        onDragStart={(e) => handleDragStart(e, item.id)}
+        onDragStart={(e) => {
+          const target = e.target as HTMLElement;
+          if (target && target.closest('button, input, select, textarea, a, .no-drag')) {
+            e.preventDefault();
+            return;
+          }
+          handleDragStart(e, item.id);
+        }}
         onDragOver={(e) => handleDragOver(e, item.id)}
         onDragLeave={() => setDragOverCaseId(null)}
         onDrop={(e) => handleDrop(e, item.id)}
@@ -531,14 +538,16 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                 <span className="font-bold text-zinc-800 dark:text-slate-100 text-base">
                   {item.caseNum} {item.name}
                 </span>
-                {item.status === 'active' ? (
-                  <span className="text-[11px] font-bold px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-200 dark:border-emerald-800">
-                    进行中
-                  </span>
-                ) : (
-                  <span className="text-[11px] font-bold px-2.5 py-0.5 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-md border border-rose-200 dark:border-rose-800">
-                    已结案 ({item.endDate || '未设'})
-                  </span>
+                {category === 'longTerm' && (
+                  item.status === 'active' ? (
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-200 dark:border-emerald-800">
+                      进行中
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-md border border-rose-200 dark:border-rose-800">
+                      已结案 ({item.endDate || '未设'})
+                    </span>
+                  )
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500 dark:text-slate-400 mt-1.5">
@@ -719,15 +728,19 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
             <button
               type="button"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 if (window.confirm(`确定要彻底删除 ${item.caseNum} ${item.name} 的个案档案及其所有会谈记录吗？`)) {
                   onDeleteCase(item.id);
                 }
               }}
-              className="flex items-center gap-1 text-[11px] px-2.5 py-1.5 text-zinc-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 bg-zinc-50 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-zinc-200 dark:border-slate-700 rounded-lg transition cursor-pointer"
-              title="删除个案记录"
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 text-rose-600 dark:text-rose-300 hover:text-white bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-600 border border-rose-200 dark:border-rose-900/60 hover:border-rose-600 rounded-xl transition-all duration-200 cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] active:scale-95 shadow-2xs group"
+              title="彻底删除此个案档案"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5 text-rose-500 group-hover:text-white transition-colors" />
+              <span>删除档案</span>
             </button>
 
             <button
@@ -788,10 +801,16 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                 {parentTotalCount > 0 && (
                   <button
                     type="button"
-                    onClick={() => {
-                      onUpdateParentSessionNote?.(item.id, -1, null);
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      if (window.confirm('确定要清空当前个案的所有父母访谈记录吗？此操作不可撤销！')) {
+                        onUpdateParentSessionNote?.(item.id, -1, null);
+                      }
                     }}
-                    className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 rounded-lg text-xs font-bold transition border border-rose-200 dark:border-rose-800 cursor-pointer flex items-center gap-1 shadow-2xs"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold transition border border-rose-200 dark:border-rose-800 cursor-pointer flex items-center gap-1 shadow-2xs select-none touch-manipulation min-h-[36px] active:scale-95"
                     title="点击直接清空当前个案的所有父母访谈记录"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -846,9 +865,14 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onUpdateParentSessionNote?.(item.id, pNum, null);
+                          e.preventDefault();
+                          if (window.confirm(`确定要删除第 ${pNum} 次父母访谈记录吗？`)) {
+                            onUpdateParentSessionNote?.(item.id, pNum, null);
+                          }
                         }}
-                        className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-100 dark:hover:bg-slate-800 rounded-md transition cursor-pointer"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95"
                         title="直接删除此父母访谈"
                       >
                         <X className="w-3.5 h-3.5 text-rose-500" />
@@ -1321,8 +1345,8 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
   const currentCase = records.find((r) => r.id === selectedCaseId);
 
-  // 计算当前模块 (长程或短程) 自动累计的时数
-  const autoCompletedHours = categoryRecords.reduce((acc, rec) => {
+  // 计算当前视图筛选下的自动累计时数
+  const autoCompletedHours = statusFilteredRecords.reduce((acc, rec) => {
     const completedCount = Object.values(rec.sessions || {}).filter((s: any) => s.completed).length;
     const parentCount = Object.values(rec.parentSessions || {}).filter((p: any) => p.completed !== false && Boolean(p.date)).length;
     return acc + completedCount + parentCount;
@@ -1335,14 +1359,29 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   const displayHours = currentCategoryOverrideHours !== undefined ? currentCategoryOverrideHours : autoCompletedHours;
 
   let titleText = category === 'longTerm' ? '长程个案' : '短程个案';
+  let hoursLabel = '个案累计';
   if (category === 'longTerm') {
-    if (internalStatusFilter === 'active') titleText = '长程个案 · 正在进行';
-    else if (internalStatusFilter === 'ended') titleText = '长程个案 · 终止和暂停';
-    else titleText = '长程个案 · 全部档案';
+    if (internalStatusFilter === 'active') {
+      titleText = '长程个案 · 正在进行';
+      hoursLabel = '正在进行个案累计';
+    } else if (internalStatusFilter === 'ended') {
+      titleText = '长程个案 · 终止和暂停';
+      hoursLabel = '终止暂停个案累计实数';
+    } else {
+      titleText = '长程个案 · 全部档案';
+      hoursLabel = '长程个案累计';
+    }
   } else {
-    if (shortTermSubtypeFilter === 'personal') titleText = '短程个案 · 个人短程案例';
-    else if (shortTermSubtypeFilter === 'agency') titleText = '短程个案 · 医院或机构短程案例';
-    else titleText = '短程个案';
+    if (shortTermSubtypeFilter === 'personal') {
+      titleText = '短程个案 · 个人短程案例';
+      hoursLabel = '个人短程案例累计';
+    } else if (shortTermSubtypeFilter === 'agency') {
+      titleText = '短程个案 · 医院或机构短程案例';
+      hoursLabel = '医院机构短程案例累计';
+    } else {
+      titleText = '短程个案';
+      hoursLabel = '短程个案累计';
+    }
   }
 
   return (
@@ -1365,7 +1404,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             title="点击手动编辑/修改当前模块的累计时数"
           >
             <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>{category === 'longTerm' ? '长程个案累计' : '短程个案累计'}: <strong>{displayHours}</strong> 小时</span>
+            <span>{hoursLabel}: <strong>{displayHours}</strong> 小时</span>
             <Pencil className="w-3 h-3 text-amber-600 dark:text-amber-400 opacity-80 shrink-0" />
           </button>
 
@@ -1502,17 +1541,19 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-zinc-600 dark:text-slate-300 mb-1">状态</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as 'active' | 'ended')}
-              className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400"
-            >
-              <option value="active">正在进行中</option>
-              <option value="ended">暂停/终止/已结案</option>
-            </select>
-          </div>
+          {category === 'longTerm' && (
+            <div>
+              <label className="block text-xs font-semibold text-zinc-600 dark:text-slate-300 mb-1">状态</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as 'active' | 'ended')}
+                className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400"
+              >
+                <option value="active">正在进行中</option>
+                <option value="ended">暂停/终止/已结案</option>
+              </select>
+            </div>
+          )}
 
           <div>
             <button
@@ -1679,9 +1720,15 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
               </button>
               <button
                 type="button"
-                onClick={handleBatchDeleteSelectedCases}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleBatchDeleteSelectedCases();
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 disabled={selectedCaseIds.length === 0}
-                className="px-3 py-1.5 bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white font-bold rounded-xl text-xs cursor-pointer shadow-2xs flex items-center gap-1"
+                className="px-3.5 py-2 bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white font-bold rounded-xl text-xs cursor-pointer shadow-2xs flex items-center gap-1 select-none touch-manipulation min-h-[36px] active:scale-95"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 批量删除
@@ -1722,23 +1769,34 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
               </button>
             </div>
 
-            {/* 小标题 1: 正在进行中 */}
-            {(internalStatusFilter === 'active' || internalStatusFilter === 'all') && (
-              <div className="space-y-3">
-                {internalStatusFilter === 'all' && (
-                  <div className="flex items-center justify-between bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 px-4 py-2.5 rounded-xl shadow-2xs">
-                    <div className="flex items-center gap-2.5 font-bold text-emerald-900 dark:text-emerald-300 text-sm">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                      <h3>1. 正在进行中</h3>
-                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-200/60 dark:bg-emerald-900/80 text-emerald-950 dark:text-emerald-200 font-bold border border-emerald-300 dark:border-emerald-700">
-                        {activeRecords.length} 项
-                      </span>
-                    </div>
+            {/* 短程个案直通渲染列表 (不区分进行中/结案限制) */}
+            {category === 'shortTerm' && (
+              <div className="space-y-4">
+                {filteredRecords.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-slate-400 bg-white/60 dark:bg-slate-900/60 rounded-xl border border-dashed border-rose-200 dark:border-slate-800">
+                    暂无短程个案记录，请在上方“动态新增个案档案”中添加
                   </div>
+                ) : (
+                  filteredRecords.map((item) => renderCaseCard(item))
                 )}
+              </div>
+            )}
+
+            {/* 长程个案: 小标题 1 - 正在进行中 */}
+            {category === 'longTerm' && (internalStatusFilter === 'active' || internalStatusFilter === 'all') && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 px-4 py-2.5 rounded-xl shadow-2xs">
+                  <div className="flex items-center gap-2.5 font-bold text-emerald-900 dark:text-emerald-300 text-sm">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    <h3>1. 长程个案正在进行中</h3>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-200/60 dark:bg-emerald-900/80 text-emerald-950 dark:text-emerald-200 font-bold border border-emerald-300 dark:border-emerald-700">
+                      共 {activeRecords.length} 名个案
+                    </span>
+                  </div>
+                </div>
                 {activeRecords.length === 0 ? (
                   <div className="p-4 text-center text-xs text-slate-400 bg-white/60 dark:bg-slate-900/60 rounded-xl border border-dashed border-rose-200 dark:border-slate-800">
-                    暂无进行中的个案记录
+                    暂无进行中的长程个案记录
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -1751,20 +1809,18 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             {/* 小标题 2: 暂停或终止的长程个案 (短程个案不显示此区块) */}
             {category === 'longTerm' && (internalStatusFilter === 'ended' || internalStatusFilter === 'all') && (
               <div className="space-y-3 pt-3">
-                {internalStatusFilter === 'all' && (
-                  <div className="flex items-center justify-between bg-zinc-100/80 dark:bg-slate-800/80 border border-zinc-200 dark:border-slate-700 px-4 py-2.5 rounded-xl shadow-2xs">
-                    <div className="flex items-center gap-2.5 font-bold text-zinc-800 dark:text-slate-200 text-sm">
-                      <span className="w-2.5 h-2.5 rounded-full bg-zinc-400 shrink-0" />
-                      <h3>2. {category === 'longTerm' ? '暂停或终止的长程个案' : '暂停或终止的短程个案'}</h3>
-                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-zinc-200 dark:bg-slate-700 text-zinc-700 dark:text-slate-300 font-bold border border-zinc-300 dark:border-slate-600">
-                        {endedRecords.length} 项
-                      </span>
-                    </div>
+                <div className="flex items-center justify-between bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 px-4 py-2.5 rounded-xl shadow-2xs">
+                  <div className="flex items-center gap-2.5 font-bold text-amber-900 dark:text-amber-300 text-sm">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                    <h3>2. 暂停或终止的长程个案</h3>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-200/60 dark:bg-amber-900/80 text-amber-950 dark:text-amber-200 font-bold border border-amber-300 dark:border-amber-700">
+                      共 {endedRecords.length} 名个案
+                    </span>
                   </div>
-                )}
+                </div>
                 {endedRecords.length === 0 ? (
                   <div className="p-4 text-center text-xs text-slate-400 bg-white/60 dark:bg-slate-900/60 rounded-xl border border-dashed border-rose-200 dark:border-slate-800">
-                    暂无暂停或终止的个案记录
+                    暂无暂停或终止的长程个案记录
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -2194,13 +2250,19 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             <div className="flex items-center justify-between border-t border-indigo-100 dark:border-indigo-800 pt-3 mt-3">
               <button
                 type="button"
-                onClick={() => {
-                  if (onUpdateParentSessionNote && selectedParentCaseId && selectedParentSessionNum !== null) {
-                    onUpdateParentSessionNote(selectedParentCaseId, selectedParentSessionNum, null);
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  if (window.confirm('确定要删除此父母访谈记录吗？')) {
+                    if (onUpdateParentSessionNote && selectedParentCaseId && selectedParentSessionNum !== null) {
+                      onUpdateParentSessionNote(selectedParentCaseId, selectedParentSessionNum, null);
+                    }
+                    closeParentSessionModal();
                   }
-                  closeParentSessionModal();
                 }}
-                className="px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl cursor-pointer flex items-center gap-1 transition"
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                className="px-3.5 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl cursor-pointer flex items-center gap-1 transition border border-rose-200/80 dark:border-rose-900/60 select-none touch-manipulation min-h-[36px] active:scale-95 shadow-2xs"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>删除此父母访谈</span>
@@ -2234,7 +2296,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             <div className="flex items-center justify-between border-b border-amber-100 dark:border-slate-800 pb-2">
               <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-500" />
-                <span>编辑 {category === 'longTerm' ? '长程个案' : '短程咨询'} 累计时数</span>
+                <span>编辑 {hoursLabel}</span>
               </h3>
               <button
                 type="button"

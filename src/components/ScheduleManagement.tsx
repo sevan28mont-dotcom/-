@@ -1076,11 +1076,14 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        e.preventDefault();
                                         if (window.confirm(`确定要删除日程 “${label}: ${item.clientName || '自定对象'}” 吗？`)) {
                                           onDeleteSchedule(item.id);
                                         }
                                       }}
-                                      className="p-1 rounded-lg bg-white/90 dark:bg-slate-800/90 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-600 hover:text-rose-700 border border-black/10 shadow-2xs transition cursor-pointer"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onTouchStart={(e) => e.stopPropagation()}
+                                      className="p-1.5 rounded-lg bg-white/90 dark:bg-slate-800/90 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-600 hover:text-rose-700 border border-black/10 shadow-2xs transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95"
                                       title="删除日程"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
@@ -1230,7 +1233,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                                             onDeleteSchedule(item.id);
                                           }
                                         }}
-                                        className="p-0.5 rounded bg-white/80 hover:bg-rose-100 text-rose-600 hover:text-rose-800 transition cursor-pointer"
+                                        className="p-1 rounded bg-white/90 hover:bg-rose-100 text-rose-600 hover:text-rose-800 transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95 shadow-2xs"
                                         title="删除"
                                       >
                                         <Trash2 className="w-2.5 h-2.5" />
@@ -1366,7 +1369,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                                   onDeleteSchedule(item.id);
                                 }
                               }}
-                              className="p-0.5 rounded hover:bg-rose-100 text-rose-600 transition cursor-pointer"
+                              className="p-1 rounded hover:bg-rose-100 text-rose-600 transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95 shadow-2xs"
                               title="删除"
                             >
                               <Trash2 className="w-2.5 h-2.5" />
@@ -2685,8 +2688,13 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
               {selectedScheduleId ? (
                 <button
                   type="button"
-                  onClick={handleDeleteCurrentModalSchedule}
-                  className="px-3.5 py-2 text-xs font-bold text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl border border-rose-200 dark:border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteCurrentModalSchedule();
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  className="px-3.5 py-2 text-xs font-bold text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl border border-rose-200 dark:border-slate-700 transition flex items-center gap-1.5 cursor-pointer select-none touch-manipulation active:scale-95 shadow-2xs"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>删除日程</span>
@@ -2751,8 +2759,15 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                       <span>{label}</span>
                       {!cat.isSystem && (
                         <button
-                          onClick={() => handleDeleteCategory(cat.id)}
-                          className="text-slate-600 hover:text-rose-900 p-0.5 rounded-full hover:bg-white/80 transition cursor-pointer"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleDeleteCategory(cat.id);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onTouchStart={(e) => e.stopPropagation()}
+                          className="text-slate-600 hover:text-rose-900 p-1 rounded-full hover:bg-white/80 transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95"
                           title="删除此分类"
                         >
                           <X className="w-3.5 h-3.5" />

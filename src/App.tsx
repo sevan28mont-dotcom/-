@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SystemData, CaseRecord, Supervisor, ScheduleItem, ThinkingNote, ReminderItem, SessionData, SupervisionRecord, ParentSessionData } from './types';
-import { loadDataFromLocalStorage, saveDataToLocalStorage, saveDataToBackend, fetchBackendData } from './services/storage';
+import { loadDataFromLocalStorage, saveDataToLocalStorage, saveDataToBackend, fetchBackendData, getDefaultSampleSystemData } from './services/storage';
 import { getCurrentUser, logoutUser, UserAccount } from './services/auth';
 import { loadWorkspaceLayout, saveWorkspaceLayout, WorkspaceLayoutConfig } from './services/layout';
 import { AuthPortal } from './components/AuthPortal';
@@ -66,31 +66,59 @@ export default function App() {
     setIsDarkMode((prev) => !prev);
   };
 
+  const [isCloudSyncDone, setIsCloudSyncDone] = useState<boolean>(false);
+  const hasUserMutatedInSessionRef = useRef<boolean>(false);
+
   const handleLoginSuccess = (user: UserAccount) => {
     setCurrentUser(user);
+    setIsCloudSyncDone(false);
+    hasUserMutatedInSessionRef.current = false;
     const localData = loadDataFromLocalStorage(user.id);
     setSystemData(localData);
-
-    // Attempt fetching cloud data
-    fetchBackendData(user.id).then((cloudData) => {
-      if (cloudData && (cloudData.records?.length > 0 || cloudData.mentors?.length > 0)) {
-        setSystemData(cloudData);
-      }
-    });
   };
 
   const handleLogout = () => {
     logoutUser();
     setCurrentUser(null);
+    setIsCloudSyncDone(false);
+    hasUserMutatedInSessionRef.current = false;
+    setSystemData(getDefaultSampleSystemData());
   };
 
-  // Auto save to LocalStorage whenever systemData or currentUser changes
+  // Sync cloud data when user logs in or mounts
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setIsCloudSyncDone(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsCloudSyncDone(false);
+
+    fetchBackendData(currentUser.id).then((cloudData) => {
+      if (!isMounted) return;
+      if (cloudData && !hasUserMutatedInSessionRef.current) {
+        setSystemData(cloudData);
+        saveDataToLocalStorage(cloudData, currentUser.id);
+      } else if (!cloudData) {
+        // If user has no data on backend yet, upload current local state once
+        saveDataToBackend(systemData, currentUser.id);
+      }
+      setIsCloudSyncDone(true);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser?.id]);
+
+  // Auto save to LocalStorage & Backend whenever systemData or currentUser changes (AFTER cloud sync is done)
   useEffect(() => {
     saveDataToLocalStorage(systemData, currentUser?.id);
-    if (currentUser) {
+    if (currentUser?.id && isCloudSyncDone) {
       saveDataToBackend(systemData, currentUser.id);
     }
-  }, [systemData, currentUser]);
+  }, [systemData, currentUser?.id, isCloudSyncDone]);
 
   const handleUpdateWorkspaceLayout = (newLayout: WorkspaceLayoutConfig) => {
     setWorkspaceLayout(newLayout);
@@ -172,6 +200,7 @@ export default function App() {
   };
 
   const handleDeleteCase = (id: string) => {
+    hasUserMutatedInSessionRef.current = true;
     setSystemData((prev) => ({
       ...prev,
       records: (prev.records || []).filter((r) => r.id !== id),
@@ -305,6 +334,7 @@ export default function App() {
   };
 
   const handleBatchDeleteCases = (ids: string[]) => {
+    hasUserMutatedInSessionRef.current = true;
     const idSet = new Set(ids);
     setSystemData((prev) => ({
       ...prev,
@@ -338,6 +368,7 @@ export default function App() {
   };
 
   const handleDeleteMentor = (id: string) => {
+    hasUserMutatedInSessionRef.current = true;
     setSystemData((prev) => ({
       ...prev,
       mentors: (prev.mentors || []).filter((m) => m.id !== id),
@@ -389,6 +420,7 @@ export default function App() {
   };
 
   const handleDeleteSupervisionRecord = (mentorId: string, recordId: string) => {
+    hasUserMutatedInSessionRef.current = true;
     setSystemData((prev) => ({
       ...prev,
       mentors: prev.mentors.map((m) => {
@@ -433,6 +465,7 @@ export default function App() {
   };
 
   const handleDeleteThinkingNote = (id: string) => {
+    hasUserMutatedInSessionRef.current = true;
     setSystemData((prev) => ({
       ...prev,
       thinking: prev.thinking.filter((t) => t.id !== id),
@@ -492,6 +525,7 @@ export default function App() {
 
   const handleDeleteSchedule = (id: string) => {
     if (!id) return;
+    hasUserMutatedInSessionRef.current = true;
     setSystemData((prev) => ({
       ...prev,
       schedules: (prev.schedules || []).filter((s) => s && typeof s === 'object' && s.id && s.id !== id),
@@ -536,6 +570,7 @@ export default function App() {
   };
 
   const handleDeleteReminder = (id: string) => {
+    hasUserMutatedInSessionRef.current = true;
     setSystemData((prev) => ({
       ...prev,
       reminders: (prev.reminders || []).filter((r) => r.id !== id),
@@ -701,12 +736,13 @@ export default function App() {
                 experienceData={systemData.personalExperience}
                 totalHoursOverrides={systemData.totalHoursOverrides}
                 onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
-                onUpdateExperienceData={(updated) =>
+                onUpdateExperienceData={(updated) => {
+                  hasUserMutatedInSessionRef.current = true;
                   setSystemData((prev) => ({
                     ...prev,
                     personalExperience: updated,
-                  }))
-                }
+                  }));
+                }}
                 experienceTypeFilter={personalExperienceFilter}
                 onTypeFilterChange={setPersonalExperienceFilter}
               />
@@ -715,12 +751,13 @@ export default function App() {
             {(activeTab === 'training' || activeTab === 'trainingPsychodynamics' || activeTab === 'trainingLongShort' || activeTab === 'trainingOtherSchools' || activeTab === 'trainingEthicsCrisis') && (
               <TrainingManagement
                 trainings={systemData.trainings || []}
-                onUpdateTrainings={(updatedTrainings) =>
+                onUpdateTrainings={(updatedTrainings) => {
+                  hasUserMutatedInSessionRef.current = true;
                   setSystemData((prev) => ({
                     ...prev,
                     trainings: updatedTrainings,
-                  }))
-                }
+                  }));
+                }}
                 trainingTypeFilter={trainingTypeFilter}
                 onTypeFilterChange={setTrainingTypeFilter}
                 activeTab={activeTab}
