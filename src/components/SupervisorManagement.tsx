@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Supervisor, CaseRecord, SupervisionRecord, ResourceLink } from '../types';
-import { Plus, Trash2, Calendar as CalendarIcon, Clock, CheckSquare, Square, Unlink, FileText, X, ChevronDown, ChevronUp, Search, Pencil, Link as LinkIcon, Lightbulb, Mic, Printer, User, Users, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Calendar as CalendarIcon, Clock, CheckSquare, Square, Unlink, FileText, X, ChevronDown, ChevronUp, Search, Pencil, Link as LinkIcon, Lightbulb, Mic, Printer, User, Users, Sparkles, CheckCircle2 } from 'lucide-react';
 import { VoiceInputButton } from './VoiceInputButton';
 import { ResourceLinkSection } from './ResourceLinkSection';
 import { IdeasSection } from './IdeasSection';
@@ -55,6 +55,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   const [startDate, setStartDate] = useState('2026-01-01');
   const [endDate, setEndDate] = useState('2026-12-31');
   const [totalSupervisions, setTotalSupervisions] = useState<number | string>(20);
+  const [newMentorType, setNewMentorType] = useState<'individual' | 'group'>('individual');
 
   // Manage Case Selection Modal for a Supervisor
   const [activeManageMentorId, setActiveManageMentorId] = useState<string | null>(null);
@@ -120,9 +121,11 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   const filteredMentors = mentors.filter((mentor) => {
     // 严格按个体督导 vs 团体督导隔离呈现
     if (activeTypeFilter === 'individual') {
-      const isIndiv = mentor.type === 'individual' || mentor.type === 'both' || !mentor.type || (mentor.records || []).some((r) => r.type === 'individual') || (mentor.records || []).length === 0;
+      if (mentor.type === 'group') return false;
+      const isIndiv = mentor.type === 'individual' || mentor.type === 'both' || !mentor.type || (mentor.records || []).some((r) => r.type === 'individual' || !r.type);
       if (!isIndiv) return false;
     } else if (activeTypeFilter === 'group') {
+      if (mentor.type === 'individual') return false;
       const isGrp = mentor.type === 'group' || mentor.type === 'both' || (mentor.records || []).some((r) => r.type === 'group');
       if (!isGrp) return false;
     }
@@ -149,13 +152,15 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
       return;
     }
 
+    const createdType = activeTypeFilter === 'group' ? 'group' : (newMentorType || 'individual');
+
     onAddMentor({
       name: name.trim(),
       gender,
       startDate: startDate || '2026-01-01',
       endDate: endDate || '2026-12-31',
       totalSupervisions: Number(totalSupervisions) || 20,
-      type: activeTypeFilter === 'group' ? 'group' : 'individual',
+      type: createdType,
     });
 
     setName('');
@@ -169,10 +174,11 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   };
 
   const handleOpenSupervisionModal = (mentorId: string, caseId: string) => {
+    const targetMentor = mentors.find((m) => m.id === mentorId);
     setSupervisionModal({ mentorId, caseId });
     setSupSessionNum(1);
     setSupDate(new Date().toISOString().split('T')[0]);
-    setSupType(activeTypeFilter === 'group' ? 'group' : 'individual');
+    setSupType(targetMentor?.type === 'group' || activeTypeFilter === 'group' ? 'group' : 'individual');
     setSupStartTime('14:00');
     setSupEndTime('15:00');
     setSupReflection('');
@@ -196,6 +202,47 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
       resources: supResources,
     });
     setSupervisionModal(null);
+  };
+
+  const handleQuickCompleteAllForMentor = (mentorId: string, mentorName: string, totalHours: number, type: 'individual' | 'group') => {
+    const targetMentor = mentors.find((m) => m.id === mentorId);
+    if (!targetMentor) return;
+
+    const baseDate = new Date();
+    for (let i = 1; i <= totalHours; i++) {
+      const existing = targetMentor.records.find((r) => r.sessionNum === i);
+      const targetDate = new Date(baseDate);
+      targetDate.setDate(baseDate.getDate() - (totalHours - i) * 7);
+      const dateStr = targetDate.toISOString().split('T')[0];
+
+      if (existing) {
+        if (onUpdateSupervisionRecord) {
+          onUpdateSupervisionRecord(targetMentor.id, existing.id, {
+            type,
+            date: existing.date || dateStr,
+            reflection: existing.reflection || `第 ${i} 次${type === 'group' ? '团体' : '个体'}督导打卡记录 (已完成)`,
+          });
+        }
+      } else {
+        onAddSupervisionRecord(targetMentor.id, {
+          caseId: targetMentor.boundCaseIds[0] || '',
+          sessionNum: i,
+          date: dateStr,
+          timeRange: '14:00-15:00',
+          type,
+          reflection: `第 ${i} 次${type === 'group' ? '团体' : '个体'}督导打卡记录 (已完成)`,
+          transcript: '',
+          ideas: [],
+          resources: [],
+        });
+      }
+    }
+
+    if (onUpdateMentorTotalSupervisions) {
+      onUpdateMentorTotalSupervisions(targetMentor.id, totalHours);
+    }
+
+    alert(`🎉 已成功将【${mentorName}】的 ${totalHours} 次${type === 'group' ? '团体' : '个体'}督导全部标记为【已完成/已录入】，现已完全计入累计${type === 'group' ? '团体' : '个体'}督导总数！`);
   };
 
   const handleOpenEditModal = (mentorId: string, record: SupervisionRecord) => {
@@ -256,6 +303,11 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
       }
     });
 
+    const maxSelected = Math.max(0, ...batchSupSelectedNums);
+    if (maxSelected > (mentor.totalSupervisions || 0) && onUpdateMentorTotalSupervisions) {
+      onUpdateMentorTotalSupervisions(mentor.id, maxSelected);
+    }
+
     alert(`已为导师【${mentor.name}】成功批量操作 ${batchSupSelectedNums.length} 次督导记录！`);
     setBatchSupervisionMentorId(null);
     setBatchSupSelectedNums([]);
@@ -266,14 +318,29 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   let autoGroupSupervisionHours = 0;
 
   mentors.forEach((m) => {
+    const isGroupMentor = m.type === 'group';
+    let mGroupHours = 0;
+    let mIndivHours = 0;
+
     (m.records || []).forEach((r) => {
-      const dur = Number(r.durationHours) || 1;
-      if (r.type === 'group') {
-        autoGroupSupervisionHours += dur;
+      const dur = Number((r as any).durationHours) || 1;
+      if (r.type === 'group' || isGroupMentor) {
+        mGroupHours += dur;
       } else {
-        autoIndividualSupervisionHours += dur;
+        mIndivHours += dur;
       }
     });
+
+    if (isGroupMentor) {
+      autoGroupSupervisionHours += Math.max(mGroupHours, m.totalSupervisions || 0);
+      autoIndividualSupervisionHours += mIndivHours;
+    } else if (m.type === 'individual' || !m.type) {
+      autoIndividualSupervisionHours += Math.max(mIndivHours, m.totalSupervisions || 0);
+      autoGroupSupervisionHours += mGroupHours;
+    } else {
+      autoIndividualSupervisionHours += mIndivHours;
+      autoGroupSupervisionHours += mGroupHours;
+    }
   });
 
   const displayIndivHours = totalHoursOverrides?.individualSupervisionHours !== undefined
@@ -431,6 +498,18 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
           </div>
 
           <div>
+            <label className="block text-xs font-semibold text-zinc-600 mb-1">督导类型</label>
+            <select
+              value={newMentorType}
+              onChange={(e) => setNewMentorType(e.target.value as 'individual' | 'group')}
+              className="w-full text-xs p-2.5 bg-rose-50/40 border border-rose-200 rounded-xl text-zinc-800 focus:outline-none focus:ring-1 focus:ring-rose-400 font-bold"
+            >
+              <option value="individual">👤 个体督导</option>
+              <option value="group">👥 团体督导</option>
+            </select>
+          </div>
+
+          <div>
             <label className="block text-xs font-semibold text-zinc-600 mb-1">督导实数 (0.5h起)</label>
             <input
               type="number"
@@ -578,7 +657,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                         setBatchSupervisionMentorId(mentor.id);
                         setBatchSupSelectedNums([]);
                         setBatchSupCaseId(boundCases[0]?.id || '');
-                        setBatchSupType('individual');
+                        setBatchSupType(mentor.type === 'group' || activeTypeFilter === 'group' ? 'group' : 'individual');
                         setBatchSupStartDate(new Date().toISOString().split('T')[0]);
                         setBatchSupIntervalDays(7);
                         setBatchSupNote('');
@@ -588,6 +667,23 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                     >
                       <Sparkles className="w-3.5 h-3.5 text-rose-200" />
                       <span>⚡ 批量管理督导次数</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const supType = mentor.type === 'group' || activeTypeFilter === 'group' ? 'group' : 'individual';
+                        handleQuickCompleteAllForMentor(mentor.id, mentor.name, mentor.totalSupervisions || 20, supType);
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className="px-2.5 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95 touch-manipulation select-none min-h-[36px]"
+                      title="一键将该导师的全部督导额度打卡标记为已完成并计入总额"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>已全部完成</span>
                     </button>
 
                     <button

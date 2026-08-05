@@ -80,16 +80,45 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
   let groupSupervisionHours = 0;
 
   (systemData.mentors || []).forEach((mentor) => {
+    const isGroupMentor = mentor.type === 'group';
+    let mGroupCount = 0;
+    let mGroupHours = 0;
+    let mIndivCount = 0;
+    let mIndivHours = 0;
+
     (mentor.records || []).forEach((r) => {
-      const dur = (r as any).durationMinutes ? (r as any).durationMinutes / 60 : 1;
-      if (r.type === 'group') {
-        groupSupervisionCount++;
-        groupSupervisionHours += dur;
+      const dur = (r as any).durationMinutes ? (r as any).durationMinutes / 60 : ((r as any).durationHours ? Number((r as any).durationHours) : 1);
+      if (r.type === 'group' || isGroupMentor) {
+        mGroupCount++;
+        mGroupHours += dur;
       } else {
-        individualSupervisionCount++;
-        individualSupervisionHours += dur;
+        mIndivCount++;
+        mIndivHours += dur;
       }
     });
+
+    if (isGroupMentor) {
+      const targetHours = mentor.totalSupervisions || 0;
+      const effectiveGroupHours = Math.max(mGroupHours, targetHours);
+      const effectiveGroupCount = Math.max(mGroupCount, targetHours);
+      groupSupervisionHours += effectiveGroupHours;
+      groupSupervisionCount += effectiveGroupCount;
+      individualSupervisionHours += mIndivHours;
+      individualSupervisionCount += mIndivCount;
+    } else if (mentor.type === 'individual' || !mentor.type) {
+      const targetHours = mentor.totalSupervisions || 0;
+      const effectiveIndivHours = Math.max(mIndivHours, targetHours);
+      const effectiveIndivCount = Math.max(mIndivCount, targetHours);
+      individualSupervisionHours += effectiveIndivHours;
+      individualSupervisionCount += effectiveIndivCount;
+      groupSupervisionHours += mGroupHours;
+      groupSupervisionCount += mGroupCount;
+    } else {
+      individualSupervisionHours += mIndivHours;
+      individualSupervisionCount += mIndivCount;
+      groupSupervisionHours += mGroupHours;
+      groupSupervisionCount += mGroupCount;
+    }
   });
   const autoCalculatedSupervisionHours = individualSupervisionHours + groupSupervisionHours;
   const autoCalculatedSupervisionCount = individualSupervisionCount + groupSupervisionCount;
