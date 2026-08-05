@@ -73,25 +73,25 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
   const autoCalculatedCaseCount = longTermActiveSessionsCount + longTermEndedSessionsCount + shortTermPersonalSessionsCount + shortTermAgencySessionsCount;
   const autoCalculatedCaseHours = autoLongTermHours + autoShortTermHours;
 
-  // 2. 自动计算督导总记录数与时长
+  // 2. 自动计算督导总记录数与时长 (严格区分个体与团体督导类型)
   let individualSupervisionCount = 0;
   let groupSupervisionCount = 0;
   let individualSupervisionHours = 0;
   let groupSupervisionHours = 0;
 
   (systemData.mentors || []).forEach((mentor) => {
-    const hasGroupRecords = (mentor.records || []).some((r) => r.type === 'group');
-    const hasIndivRecords = (mentor.records || []).some((r) => r.type === 'individual');
-    const isGroupMentor = mentor.type === 'group' || (hasGroupRecords && !hasIndivRecords && mentor.type !== 'individual');
-
     let mGroupCount = 0;
     let mGroupHours = 0;
     let mIndivCount = 0;
     let mIndivHours = 0;
 
     (mentor.records || []).forEach((r) => {
-      const dur = (r as any).durationMinutes ? (r as any).durationMinutes / 60 : ((r as any).durationHours ? Number((r as any).durationHours) : 1);
-      if (r.type === 'group' || (isGroupMentor && r.type !== 'individual')) {
+      const dur = (r as any).durationMinutes
+        ? (r as any).durationMinutes / 60
+        : ((r as any).durationHours ? Number((r as any).durationHours) : 1);
+
+      const isGroupRecord = r.type === 'group' || (!r.type && mentor.type === 'group');
+      if (isGroupRecord) {
         mGroupCount++;
         mGroupHours += dur;
       } else {
@@ -100,22 +100,30 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
       }
     });
 
-    const targetHours = mentor.totalSupervisions || 0;
+    const targetQuota = mentor.totalSupervisions || 0;
+    const hasRecords = (mentor.records || []).length > 0;
 
-    if (isGroupMentor) {
-      const effectiveGroupHours = Math.max(mGroupHours, targetHours);
-      const effectiveGroupCount = Math.max(mGroupCount, targetHours);
-      groupSupervisionHours += effectiveGroupHours;
-      groupSupervisionCount += effectiveGroupCount;
-      individualSupervisionHours += mIndivHours;
-      individualSupervisionCount += mIndivCount;
+    if (!hasRecords) {
+      if (mentor.type === 'group') {
+        groupSupervisionCount += targetQuota;
+        groupSupervisionHours += targetQuota;
+      } else {
+        individualSupervisionCount += targetQuota;
+        individualSupervisionHours += targetQuota;
+      }
     } else {
-      const effectiveIndivHours = Math.max(mIndivHours, targetHours);
-      const effectiveIndivCount = Math.max(mIndivCount, targetHours);
-      individualSupervisionHours += effectiveIndivHours;
-      individualSupervisionCount += effectiveIndivCount;
-      groupSupervisionHours += mGroupHours;
-      groupSupervisionCount += mGroupCount;
+      if (mGroupCount > 0) {
+        const effGroupCount = mentor.type === 'group' ? Math.max(mGroupCount, targetQuota) : mGroupCount;
+        const effGroupHours = mentor.type === 'group' ? Math.max(mGroupHours, targetQuota) : mGroupHours;
+        groupSupervisionCount += effGroupCount;
+        groupSupervisionHours += effGroupHours;
+      }
+      if (mIndivCount > 0) {
+        const effIndivCount = mentor.type !== 'group' ? Math.max(mIndivCount, targetQuota) : mIndivCount;
+        const effIndivHours = mentor.type !== 'group' ? Math.max(mIndivHours, targetQuota) : mIndivHours;
+        individualSupervisionCount += effIndivCount;
+        individualSupervisionHours += effIndivHours;
+      }
     }
   });
   const autoCalculatedSupervisionHours = individualSupervisionHours + groupSupervisionHours;
