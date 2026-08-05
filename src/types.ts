@@ -46,6 +46,9 @@ export interface CaseRecord {
   parentSessions?: Record<number, ParentSessionData>; // 父母访谈记录 (独立统计，不占用个体访谈总次数)
   shortTermType?: 'personal' | 'agency'; // 1. 个人短程案例 2. 医院或机构短程案例
   agencyName?: string; // 医院或机构名称
+  diagnosis?: string;
+  code?: string;
+  type?: string;
 }
 
 export interface SupervisionRecord {
@@ -60,6 +63,7 @@ export interface SupervisionRecord {
   transcript?: string; // 督导逐字稿
   ideas?: string[]; // 督导想法/建议
   resources?: ResourceLink[]; // 关联WPS文档、微信公众号、小红书博文等
+  completed?: boolean;
 }
 
 export interface Supervisor {

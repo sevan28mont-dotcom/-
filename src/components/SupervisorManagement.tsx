@@ -123,6 +123,40 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     onTypeFilterChange?.(filter);
   };
 
+  React.useEffect(() => {
+    if (editingRecordModal) {
+      const mentor = mentors.find((m) => m && m.id === editingRecordModal.mentorId);
+      if (!mentor || !mentor.records.some((r) => r && r.id === editingRecordModal.record.id)) {
+        setEditingRecordModal(null);
+      }
+    }
+    if (editingMentorModal) {
+      if (!mentors.some((m) => m && m.id === editingMentorModal.id)) {
+        setEditingMentorModal(null);
+      }
+    }
+    if (batchSupervisionMentorId) {
+      if (!mentors.some((m) => m && m.id === batchSupervisionMentorId)) {
+        setBatchSupervisionMentorId(null);
+      }
+    }
+    if (activeManageMentorId) {
+      if (!mentors.some((m) => m && m.id === activeManageMentorId)) {
+        setActiveManageMentorId(null);
+      }
+    }
+    if (exportingPdfSupervisorModal) {
+      if (!mentors.some((m) => m && m.id === exportingPdfSupervisorModal.supervisor.id)) {
+        setExportingPdfSupervisorModal(null);
+      }
+    }
+    if (selectedMentorFilter) {
+      if (!mentors.some((m) => m && m.id === selectedMentorFilter)) {
+        setSelectedMentorFilter('');
+      }
+    }
+  }, [mentors, editingRecordModal, editingMentorModal, batchSupervisionMentorId, activeManageMentorId, exportingPdfSupervisorModal, selectedMentorFilter]);
+
   // Helper: Determine if a single supervision record matches active filters
   const isRecordMatching = (
     r: SupervisionRecord,
@@ -133,6 +167,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     caseFilter: string,
     typeFilter: 'all' | 'individual' | 'group'
   ) => {
+    if (!r || !mentor) return false;
     // Type filter: 严格按打卡记录本身的 type 进行隔离
     const recType = r.type || (mentor.type === 'group' ? 'group' : 'individual');
     if (typeFilter === 'individual') {
@@ -151,26 +186,26 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     // Search query
     if (query) {
       const q = query.toLowerCase().trim();
-      const matchMentorName = mentor.name.toLowerCase().includes(q);
+      const matchMentorName = (mentor.name || '').toLowerCase().includes(q);
       if (matchMentorName) return true;
 
       const matchDate = (r.date || '').toLowerCase().includes(q);
       const matchTime = (r.timeRange || '').toLowerCase().includes(q);
       const matchReflection = (r.reflection || '').toLowerCase().includes(q);
       const matchTranscript = (r.transcript || '').toLowerCase().includes(q);
-      const matchIdeas = (r.ideas || []).some((i) => i.toLowerCase().includes(q));
+      const matchIdeas = (r.ideas || []).some((i) => i && i.toLowerCase().includes(q));
       const matchResources = (r.resources || []).some(
-        (res) => res.title.toLowerCase().includes(q) || res.url.toLowerCase().includes(q)
+        (res) => res && ((res.title || '').toLowerCase().includes(q) || (res.url || '').toLowerCase().includes(q))
       );
 
-      const matchedCaseObj = cases.find((c) => c.id === r.caseId);
+      const matchedCaseObj = cases.find((c) => c && c.id === r.caseId);
       const matchCaseName = matchedCaseObj
-        ? matchedCaseObj.name.toLowerCase().includes(q) || matchedCaseObj.caseNum.toLowerCase().includes(q)
+        ? (matchedCaseObj.name || '').toLowerCase().includes(q) || (matchedCaseObj.caseNum || '').toLowerCase().includes(q)
         : false;
 
-      const boundCases = cases.filter((c) => (mentor.boundCaseIds || []).includes(c.id));
+      const boundCases = cases.filter((c) => c && (mentor.boundCaseIds || []).includes(c.id));
       const matchBoundCase = boundCases.some(
-        (c) => c.name.toLowerCase().includes(q) || c.caseNum.toLowerCase().includes(q)
+        (c) => c && ((c.name || '').toLowerCase().includes(q) || (c.caseNum || '').toLowerCase().includes(q))
       );
 
       return (
@@ -188,7 +223,8 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     return true;
   };
 
-  const filteredMentors = mentors.filter((mentor) => {
+  const filteredMentors = (mentors || []).filter((mentor) => {
+    if (!mentor) return false;
     // Supervisor Dropdown Filter
     if (selectedMentorFilter && mentor.id !== selectedMentorFilter) {
       return false;
@@ -197,11 +233,11 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     // 严格按个体督导 vs 团体督导隔离呈现
     if (activeTypeFilter === 'individual') {
       if (mentor.type === 'group') return false;
-      const isIndiv = mentor.type === 'individual' || mentor.type === 'both' || !mentor.type || (mentor.records || []).some((r) => r.type === 'individual' || !r.type);
+      const isIndiv = mentor.type === 'individual' || mentor.type === 'both' || !mentor.type || (mentor.records || []).some((r) => r && (r.type === 'individual' || !r.type));
       if (!isIndiv) return false;
     } else if (activeTypeFilter === 'group') {
       if (mentor.type === 'individual') return false;
-      const isGrp = mentor.type === 'group' || mentor.type === 'both' || (mentor.records || []).some((r) => r.type === 'group');
+      const isGrp = mentor.type === 'group' || mentor.type === 'both' || (mentor.records || []).some((r) => r && r.type === 'group');
       if (!isGrp) return false;
     }
 
@@ -213,7 +249,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     }
 
     // Direct match on supervisor name without other strict record filters
-    if (q && mentor.name.toLowerCase().includes(q) && !recordStartDate && !recordEndDate && !selectedCaseFilter) {
+    if (q && (mentor.name || '').toLowerCase().includes(q) && !recordStartDate && !recordEndDate && !selectedCaseFilter) {
       return true;
     }
 
@@ -224,7 +260,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
 
     if (matchingRecords.length > 0) return true;
 
-    if (q && mentor.name.toLowerCase().includes(q)) {
+    if (q && (mentor.name || '').toLowerCase().includes(q)) {
       if (selectedCaseFilter && !(mentor.boundCaseIds || []).includes(selectedCaseFilter)) {
         return false;
       }
@@ -876,8 +912,41 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
       {/* 督导师列表 */}
       <div className="space-y-5">
         {filteredMentors.length === 0 ? (
-          <div className="bg-white border border-rose-200 rounded-2xl p-8 text-center text-zinc-500 text-xs">
-            {searchQuery ? '未找到符合检索条件的督导师。' : '暂无督导师信息，请在上方添加。'}
+          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-2xl p-10 text-center text-zinc-500 dark:text-slate-400 text-xs space-y-3 shadow-2xs">
+            <div className="w-12 h-12 rounded-full bg-rose-50 dark:bg-slate-800 text-rose-500 flex items-center justify-center mx-auto mb-1">
+              <Users className="w-6 h-6" />
+            </div>
+            <p className="font-bold text-sm text-slate-800 dark:text-slate-200">
+              {searchQuery.trim()
+                ? '未找到符合检索条件的督导师'
+                : selectedMentorFilter
+                ? '所选督导师暂无对应分类记录'
+                : activeTypeFilter === 'individual'
+                ? '暂无个体督导导师档案记录'
+                : activeTypeFilter === 'group'
+                ? '暂无团体督导导师档案记录'
+                : '暂无督导导师档案记录'}
+            </p>
+            <p className="text-slate-400 max-w-md mx-auto">
+              {searchQuery.trim() || selectedMentorFilter || recordStartDate || recordEndDate || selectedCaseFilter
+                ? '您可以尝试重置筛选条件或清空搜索关键字'
+                : '请在上方输入督导师姓名与性称，点击“添加督导师”即可开始新建。'}
+            </p>
+            {(searchQuery.trim() || selectedMentorFilter || recordStartDate || recordEndDate || selectedCaseFilter) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedMentorFilter('');
+                  setRecordStartDate('');
+                  setRecordEndDate('');
+                  setSelectedCaseFilter('');
+                }}
+                className="mt-2 px-3.5 py-1.5 text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-slate-800 hover:bg-rose-100 border border-rose-200 dark:border-slate-700 rounded-xl transition cursor-pointer"
+              >
+                重置所有筛选条件
+              </button>
+            )}
           </div>
         ) : (
           filteredMentors.map((mentor) => {
@@ -1001,9 +1070,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        if (window.confirm(`确定要彻底删除导师【${mentor.name}】及其相关的督导记录吗？`)) {
-                          onDeleteMentor(mentor.id);
-                        }
+                        onDeleteMentor(mentor.id);
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
                       onTouchStart={(e) => e.stopPropagation()}

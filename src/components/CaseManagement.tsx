@@ -24,7 +24,7 @@ interface CaseManagementProps {
   onAddCase: (newCase: Omit<CaseRecord, 'id' | 'sessions'>) => void;
   onDeleteCase: (id: string) => void;
   onUpdateSessionNote: (caseId: string, sessionNum: number, sessionData: SessionData) => void;
-  onUpdateParentSessionNote?: (caseId: string, parentSessionNum: number, parentSessionData: ParentSessionData | null) => void;
+  onUpdateParentSessionNote?: (caseId: string, parentSessionNum: number, parentSessionData: Partial<ParentSessionData> | null) => void;
   onBatchUpdateSessions?: (caseId: string, updates: { sessionNum: number; sessionData: Partial<SessionData> }[]) => void;
   onBatchUpdateCases?: (updates: { id: string; status?: 'active' | 'ended'; totalSessions?: number }[]) => void;
   onBatchDeleteCases?: (ids: string[]) => void;
@@ -200,9 +200,6 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
   const handleBatchChangeCasesStatus = (targetStatus: 'active' | 'ended') => {
     if (selectedCaseIds.length === 0) return;
-    const statusText = targetStatus === 'active' ? '【正在进行】' : '【终止和暂停】';
-    if (!window.confirm(`确定要将选中的 ${selectedCaseIds.length} 个个案档案批量设置为 ${statusText} 状态吗？`)) return;
-
     if (onBatchUpdateCases) {
       onBatchUpdateCases(selectedCaseIds.map((id) => ({ id, status: targetStatus })));
     }
@@ -226,11 +223,37 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
   const handleBatchDeleteSelectedCases = () => {
     if (selectedCaseIds.length === 0) return;
-    if (!window.confirm(`⚠️ 危险操作警告：确定要彻底删除选中的 ${selectedCaseIds.length} 个个案档案及其所有会谈数据吗？`)) return;
+    if (selectedCaseId && selectedCaseIds.includes(selectedCaseId)) {
+      setSelectedCaseId(null);
+      setSelectedSessionNum(null);
+    }
+    if (summaryModalCase && selectedCaseIds.includes(summaryModalCase.id)) setSummaryModalCase(null);
+    if (exportingPdfCase && selectedCaseIds.includes(exportingPdfCase.id)) setExportingPdfCase(null);
+    if (showChartsCaseId && selectedCaseIds.includes(showChartsCaseId)) setShowChartsCaseId(null);
+    if (editingTotalCaseId && selectedCaseIds.includes(editingTotalCaseId)) setEditingTotalCaseId(null);
     if (onBatchDeleteCases) {
       onBatchDeleteCases(selectedCaseIds);
     } else {
       selectedCaseIds.forEach((id) => onDeleteCase(id));
+    }
+    setSelectedCaseIds([]);
+  };
+
+  const handleDeleteAllCasesInView = () => {
+    const allIds = categoryRecords.map((r) => r.id);
+    if (allIds.length === 0) return;
+    if (selectedCaseId && allIds.includes(selectedCaseId)) {
+      setSelectedCaseId(null);
+      setSelectedSessionNum(null);
+    }
+    if (summaryModalCase && allIds.includes(summaryModalCase.id)) setSummaryModalCase(null);
+    if (exportingPdfCase && allIds.includes(exportingPdfCase.id)) setExportingPdfCase(null);
+    if (showChartsCaseId && allIds.includes(showChartsCaseId)) setShowChartsCaseId(null);
+    if (editingTotalCaseId && allIds.includes(editingTotalCaseId)) setEditingTotalCaseId(null);
+    if (onBatchDeleteCases) {
+      onBatchDeleteCases(allIds);
+    } else {
+      allIds.forEach((id) => onDeleteCase(id));
     }
     setSelectedCaseIds([]);
   };
@@ -272,21 +295,23 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   });
 
   const filteredRecords = statusFilteredRecords.filter((item) => {
+    if (!item) return false;
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
-    const matchName = item.name.toLowerCase().includes(q);
-    const matchNum = item.caseNum.toLowerCase().includes(q);
+    const matchName = (item.name || '').toLowerCase().includes(q);
+    const matchNum = (item.caseNum || '').toLowerCase().includes(q);
     const matchDiagnosis = (item.diagnosis || '').toLowerCase().includes(q);
-    const matchNotes = Object.values(item.sessions || {}).some((s: SessionData) => s.note?.toLowerCase().includes(q));
-    const matchTranscript = Object.values(item.sessions || {}).some((s: SessionData) => s.transcript?.toLowerCase().includes(q));
-    const matchIdeas = Object.values(item.sessions || {}).some((s: SessionData) => s.ideas?.some((idea) => idea.toLowerCase().includes(q)));
-    const matchResources = Object.values(item.sessions || {}).some((s: SessionData) => s.resources?.some((res) => res.title.toLowerCase().includes(q) || res.url.toLowerCase().includes(q)));
+    const matchNotes = Object.values(item.sessions || {}).some((s: SessionData) => s && s.note?.toLowerCase().includes(q));
+    const matchTranscript = Object.values(item.sessions || {}).some((s: SessionData) => s && s.transcript?.toLowerCase().includes(q));
+    const matchIdeas = Object.values(item.sessions || {}).some((s: SessionData) => s && s.ideas?.some((idea) => idea && idea.toLowerCase().includes(q)));
+    const matchResources = Object.values(item.sessions || {}).some((s: SessionData) => s && s.resources?.some((res) => res && ((res.title || '').toLowerCase().includes(q) || (res.url || '').toLowerCase().includes(q))));
     const matchDate = (item.startDate || '').includes(q) || (item.endDate && item.endDate.includes(q));
     return matchName || matchNum || matchDiagnosis || matchNotes || matchTranscript || matchIdeas || matchResources || matchDate;
   });
 
   // 重要个案优先置顶
   const sortedRecords = [...filteredRecords].sort((a, b) => {
+    if (!a || !b) return 0;
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
     return 0;
@@ -405,10 +430,30 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   const [editingTotalCaseId, setEditingTotalCaseId] = useState<string | null>(null);
   const [editingTotalValue, setEditingTotalValue] = useState<number | string>(30);
 
-  const activeRecords = sortedRecords.filter((item) => item.status === 'active' || !item.status);
-  const endedRecords = sortedRecords.filter((item) => item.status === 'ended');
+  React.useEffect(() => {
+    if (selectedCaseId && !records.some((r) => r && r.id === selectedCaseId)) {
+      setSelectedCaseId(null);
+      setSelectedSessionNum(null);
+    }
+    if (summaryModalCase && !records.some((r) => r && r.id === summaryModalCase.id)) {
+      setSummaryModalCase(null);
+    }
+    if (exportingPdfCase && !records.some((r) => r && r.id === exportingPdfCase.id)) {
+      setExportingPdfCase(null);
+    }
+    if (showChartsCaseId && !records.some((r) => r && r.id === showChartsCaseId)) {
+      setShowChartsCaseId(null);
+    }
+    if (editingTotalCaseId && !records.some((r) => r && r.id === editingTotalCaseId)) {
+      setEditingTotalCaseId(null);
+    }
+  }, [records, selectedCaseId, summaryModalCase, exportingPdfCase, showChartsCaseId, editingTotalCaseId]);
+
+  const activeRecords = sortedRecords.filter((item) => item && (item.status === 'active' || !item.status));
+  const endedRecords = sortedRecords.filter((item) => item && item.status === 'ended');
 
   const renderCaseCard = (item: CaseRecord) => {
+    if (!item) return null;
     const sessions = item.sessions || {};
     let completedCount = 0;
     let recordedCount = 0;
@@ -730,17 +775,13 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                const cNum = item.caseNum || '';
-                const cName = item.name || '';
-                if (window.confirm(`确定要彻底删除 ${cNum} ${cName} 的个案档案及其所有会谈记录吗？`)) {
-                  if (selectedCaseId === item.id) setSelectedCaseId(null);
-                  if (summaryModalCase?.id === item.id) setSummaryModalCase(null);
-                  if (exportingPdfCase?.id === item.id) setExportingPdfCase(null);
-                  if (showChartsCaseId === item.id) setShowChartsCaseId(null);
-                  if (editingTotalCaseId === item.id) setEditingTotalCaseId(null);
-                  setSelectedCaseIds((prev) => prev.filter((cid) => cid !== item.id));
-                  onDeleteCase(item.id);
-                }
+                if (selectedCaseId === item.id) setSelectedCaseId(null);
+                if (summaryModalCase?.id === item.id) setSummaryModalCase(null);
+                if (exportingPdfCase?.id === item.id) setExportingPdfCase(null);
+                if (showChartsCaseId === item.id) setShowChartsCaseId(null);
+                if (editingTotalCaseId === item.id) setEditingTotalCaseId(null);
+                setSelectedCaseIds((prev) => prev.filter((cid) => cid !== item.id));
+                onDeleteCase(item.id);
               }}
               onMouseDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
@@ -1171,13 +1212,13 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                               />
                             )}
                             {hasTranscript && (
-                              <Mic className={`w-2.5 h-2.5 ${isSessionCompleted ? 'text-white' : 'text-emerald-600'}`} title="包含逐字稿" />
+                              <span title="包含逐字稿"><Mic className={`w-2.5 h-2.5 ${isSessionCompleted ? 'text-white' : 'text-emerald-600'}`} /></span>
                             )}
                             {hasIdeas && (
-                              <Lightbulb className={`w-2.5 h-2.5 ${isSessionCompleted ? 'text-amber-200' : 'text-amber-500'}`} title="包含随记想法" />
+                              <span title="包含随记想法"><Lightbulb className={`w-2.5 h-2.5 ${isSessionCompleted ? 'text-amber-200' : 'text-amber-500'}`} /></span>
                             )}
                             {hasResources && (
-                              <LinkIcon className={`w-2.5 h-2.5 ${isSessionCompleted ? 'text-white' : 'text-blue-500'}`} title="包含WPS/公众号/小红书外链" />
+                              <span title="包含WPS/公众号/小红书外链"><LinkIcon className={`w-2.5 h-2.5 ${isSessionCompleted ? 'text-white' : 'text-blue-500'}`} /></span>
                             )}
                           </div>
                         </button>
@@ -1773,7 +1814,21 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                 className="px-3.5 py-2 bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white font-bold rounded-xl text-xs cursor-pointer shadow-2xs flex items-center gap-1 select-none touch-manipulation min-h-[36px] active:scale-95"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                批量删除
+                批量删除 ({selectedCaseIds.length})
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleDeleteAllCasesInView();
+                }}
+                disabled={categoryRecords.length === 0}
+                className="px-3.5 py-2 bg-rose-900 hover:bg-rose-950 disabled:opacity-50 text-white font-bold rounded-xl text-xs cursor-pointer shadow-2xs flex items-center gap-1 select-none touch-manipulation min-h-[36px] active:scale-95"
+                title="直接一键删除当前板块下的所有案例，无需弹窗确认"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                直接删除全部案例 ({categoryRecords.length})
               </button>
             </div>
           </div>
@@ -1782,8 +1837,24 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                 {/* 个案档案列表 */}
       <div className="space-y-6">
         {sortedRecords.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-2xl p-8 text-center text-zinc-500 dark:text-slate-400 text-xs space-y-3">
-            <p>暂无此分类下的个案档案。请在上方表单输入代号/名称直接“新建个案”。</p>
+          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-2xl p-10 text-center text-zinc-500 dark:text-slate-400 text-xs space-y-3 shadow-2xs">
+            <div className="w-12 h-12 rounded-full bg-rose-50 dark:bg-slate-800 text-rose-500 flex items-center justify-center mx-auto mb-1">
+              <FolderOpen className="w-6 h-6" />
+            </div>
+            <p className="font-bold text-sm text-slate-800 dark:text-slate-200">
+              {searchQuery.trim()
+                ? '未找到符合检索条件的个案档案'
+                : internalStatusFilter === 'ended'
+                ? '暂无暂停或终止的个案档案记录'
+                : internalStatusFilter === 'active'
+                ? '暂无进行中的长程个案记录'
+                : '暂无个案档案记录'}
+            </p>
+            <p className="text-slate-400 max-w-md mx-auto">
+              {searchQuery.trim()
+                ? '您可以尝试清空搜索关键字或调整筛选条件'
+                : '请在上方输入个案代号/名称直接“新建个案档案”即可开始录入。'}
+            </p>
           </div>
         ) : (
           <>

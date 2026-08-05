@@ -662,9 +662,7 @@ export const ThinkingNotes: React.FC<ThinkingNotesProps> = ({ notes, onAddNote, 
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      if (window.confirm('确定要彻底删除这条随记灵感笔记吗？')) {
-                        onDeleteNote(note.id);
-                      }
+                      onDeleteNote(note.id);
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onTouchStart={(e) => e.stopPropagation()}

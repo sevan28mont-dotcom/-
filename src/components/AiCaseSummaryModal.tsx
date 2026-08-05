@@ -261,7 +261,7 @@ export const AiCaseSummaryModal: React.FC<AiCaseSummaryModalProps> = ({
               />
               <button
                 type="button"
-                onClick={() => handleGenerateSummary(customFocus)}
+                onClick={() => handleGenerateSummary(selectedProvider, customFocus)}
                 disabled={loading}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer shrink-0 disabled:opacity-50"
               >

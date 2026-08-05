@@ -17,6 +17,7 @@ import { PrivacySecurityModal } from './components/PrivacySecurityModal';
 import { ReminderModal } from './components/ReminderModal';
 import { TodayScheduleOverview } from './components/TodayScheduleOverview';
 import { TotalHoursOverview } from './components/TotalHoursOverview';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
@@ -226,6 +227,8 @@ export default function App() {
         const currentSessions = r.sessions || {};
         const currentSession = currentSessions[sessionNum] || {};
         const updatedSession: SessionData = {
+          completed: false,
+          note: '',
           ...currentSession,
           ...sessionData,
         };
@@ -304,6 +307,8 @@ export default function App() {
         sessionUpdates.forEach(({ sessionNum, sessionData }) => {
           const current = currentSessions[sessionNum] || {};
           currentSessions[sessionNum] = {
+            completed: false,
+            note: '',
             ...current,
             ...sessionData,
           };
@@ -376,10 +381,20 @@ export default function App() {
     }));
   };
 
-  const handleUpdateMentorCaseBinding = (mentorId: string, boundCaseIds: string[]) => {
+  const handleUpdateMentorCaseBinding = (mentorId: string, caseId: string | string[], bind?: boolean) => {
     setSystemData((prev) => ({
       ...prev,
-      mentors: (prev.mentors || []).map((m) => (m.id === mentorId ? { ...m, boundCaseIds } : m)),
+      mentors: (prev.mentors || []).map((m) => {
+        if (m.id !== mentorId) return m;
+        if (Array.isArray(caseId)) {
+          return { ...m, boundCaseIds: caseId };
+        }
+        const currentBound = m.boundCaseIds || [];
+        const nextBound = bind !== false
+          ? Array.from(new Set([...currentBound, caseId]))
+          : currentBound.filter((id) => id !== caseId);
+        return { ...m, boundCaseIds: nextBound };
+      }),
     }));
   };
 
@@ -672,88 +687,94 @@ export default function App() {
         {/* 主内容展示区 */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-6 md:p-8 bg-rose-50/40 dark:bg-slate-900/60 transition-colors duration-300">
           <div className="max-w-7xl mx-auto">
-            {/* 顶置：个案总时数、督导总时数、个人体验总时数统计板 */}
-            <TotalHoursOverview
-              systemData={systemData}
-              onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
-              onNavigateTab={(tab) => setActiveTab(tab as any)}
-            />
-
-            {/* 今日日程概览（精美紧凑顶置，方便在主界面自动筛选并快速查看所有安排好的咨询/督导任务） */}
-            <TodayScheduleOverview
-              schedules={systemData.schedules || []}
-              onNavigateTab={(tab) => setActiveTab(tab)}
-              onToggleComplete={handleToggleScheduleComplete}
-            />
-
-            {(activeTab === 'longTerm' || activeTab === 'longTermActive') && (
-              <CaseManagement
-                category="longTerm"
-                statusFilter="active"
-                records={systemData.records}
-                mentors={systemData.mentors}
-                thinkingNotes={systemData.thinking}
-                totalHoursOverrides={systemData.totalHoursOverrides}
+            <ErrorBoundary fallbackTitle="统计面板加载异常">
+              {/* 顶置：个案总时数、督导总时数、个人体验总时数统计板 */}
+              <TotalHoursOverview
+                systemData={systemData}
                 onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
-                onAddCase={handleAddCase}
-                onDeleteCase={handleDeleteCase}
-                onUpdateSessionNote={handleUpdateSessionNote}
-                onUpdateParentSessionNote={handleUpdateParentSessionNote}
-                onBatchUpdateSessions={handleBatchUpdateSessions}
-                onBatchUpdateCases={handleBatchUpdateCases}
-                onBatchDeleteCases={handleBatchDeleteCases}
-                onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
-                onSaveToThinkingNotes={handleAddThinkingNote}
-                onTogglePinCase={handleTogglePinCase}
-                onReorderCases={handleReorderCases}
+                onNavigateTab={(tab) => setActiveTab(tab as any)}
               />
-            )}
+            </ErrorBoundary>
 
-            {activeTab === 'longTermEnded' && (
-              <CaseManagement
-                category="longTerm"
-                statusFilter="ended"
-                records={systemData.records}
-                mentors={systemData.mentors}
-                thinkingNotes={systemData.thinking}
-                totalHoursOverrides={systemData.totalHoursOverrides}
-                onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
-                onAddCase={handleAddCase}
-                onDeleteCase={handleDeleteCase}
-                onUpdateSessionNote={handleUpdateSessionNote}
-                onUpdateParentSessionNote={handleUpdateParentSessionNote}
-                onBatchUpdateSessions={handleBatchUpdateSessions}
-                onBatchUpdateCases={handleBatchUpdateCases}
-                onBatchDeleteCases={handleBatchDeleteCases}
-                onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
-                onSaveToThinkingNotes={handleAddThinkingNote}
-                onTogglePinCase={handleTogglePinCase}
-                onReorderCases={handleReorderCases}
+            <ErrorBoundary fallbackTitle="日程概览加载异常">
+              {/* 今日日程概览（精美紧凑顶置，方便在主界面自动筛选并快速查看所有安排好的咨询/督导任务） */}
+              <TodayScheduleOverview
+                schedules={systemData.schedules || []}
+                onNavigateTab={(tab) => setActiveTab(tab)}
+                onToggleComplete={handleToggleScheduleComplete}
               />
-            )}
+            </ErrorBoundary>
 
-            {(activeTab === 'shortTerm' || activeTab === 'shortTermPersonal' || activeTab === 'shortTermAgency') && (
-              <CaseManagement
-                category="shortTerm"
-                shortTermSubtypeFilter={activeTab === 'shortTermPersonal' ? 'personal' : activeTab === 'shortTermAgency' ? 'agency' : 'all'}
-                records={systemData.records}
-                mentors={systemData.mentors}
-                thinkingNotes={systemData.thinking}
-                totalHoursOverrides={systemData.totalHoursOverrides}
-                onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
-                onAddCase={handleAddCase}
-                onDeleteCase={handleDeleteCase}
-                onUpdateSessionNote={handleUpdateSessionNote}
-                onUpdateParentSessionNote={handleUpdateParentSessionNote}
-                onBatchUpdateSessions={handleBatchUpdateSessions}
-                onBatchUpdateCases={handleBatchUpdateCases}
-                onBatchDeleteCases={handleBatchDeleteCases}
-                onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
-                onSaveToThinkingNotes={handleAddThinkingNote}
-                onTogglePinCase={handleTogglePinCase}
-                onReorderCases={handleReorderCases}
-              />
-            )}
+            <ErrorBoundary fallbackTitle="个案管理模块加载异常">
+              {(activeTab === 'longTerm' || activeTab === 'longTermActive') && (
+                <CaseManagement
+                  category="longTerm"
+                  statusFilter="active"
+                  records={systemData.records}
+                  mentors={systemData.mentors}
+                  thinkingNotes={systemData.thinking}
+                  totalHoursOverrides={systemData.totalHoursOverrides}
+                  onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
+                  onAddCase={handleAddCase}
+                  onDeleteCase={handleDeleteCase}
+                  onUpdateSessionNote={handleUpdateSessionNote}
+                  onUpdateParentSessionNote={handleUpdateParentSessionNote}
+                  onBatchUpdateSessions={handleBatchUpdateSessions}
+                  onBatchUpdateCases={handleBatchUpdateCases}
+                  onBatchDeleteCases={handleBatchDeleteCases}
+                  onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
+                  onSaveToThinkingNotes={handleAddThinkingNote}
+                  onTogglePinCase={handleTogglePinCase}
+                  onReorderCases={handleReorderCases}
+                />
+              )}
+
+              {activeTab === 'longTermEnded' && (
+                <CaseManagement
+                  category="longTerm"
+                  statusFilter="ended"
+                  records={systemData.records}
+                  mentors={systemData.mentors}
+                  thinkingNotes={systemData.thinking}
+                  totalHoursOverrides={systemData.totalHoursOverrides}
+                  onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
+                  onAddCase={handleAddCase}
+                  onDeleteCase={handleDeleteCase}
+                  onUpdateSessionNote={handleUpdateSessionNote}
+                  onUpdateParentSessionNote={handleUpdateParentSessionNote}
+                  onBatchUpdateSessions={handleBatchUpdateSessions}
+                  onBatchUpdateCases={handleBatchUpdateCases}
+                  onBatchDeleteCases={handleBatchDeleteCases}
+                  onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
+                  onSaveToThinkingNotes={handleAddThinkingNote}
+                  onTogglePinCase={handleTogglePinCase}
+                  onReorderCases={handleReorderCases}
+                />
+              )}
+
+              {(activeTab === 'shortTerm' || activeTab === 'shortTermPersonal' || activeTab === 'shortTermAgency') && (
+                <CaseManagement
+                  category="shortTerm"
+                  shortTermSubtypeFilter={activeTab === 'shortTermPersonal' ? 'personal' : activeTab === 'shortTermAgency' ? 'agency' : 'all'}
+                  records={systemData.records}
+                  mentors={systemData.mentors}
+                  thinkingNotes={systemData.thinking}
+                  totalHoursOverrides={systemData.totalHoursOverrides}
+                  onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
+                  onAddCase={handleAddCase}
+                  onDeleteCase={handleDeleteCase}
+                  onUpdateSessionNote={handleUpdateSessionNote}
+                  onUpdateParentSessionNote={handleUpdateParentSessionNote}
+                  onBatchUpdateSessions={handleBatchUpdateSessions}
+                  onBatchUpdateCases={handleBatchUpdateCases}
+                  onBatchDeleteCases={handleBatchDeleteCases}
+                  onUpdateCaseTotalSessions={handleUpdateCaseTotalSessions}
+                  onSaveToThinkingNotes={handleAddThinkingNote}
+                  onTogglePinCase={handleTogglePinCase}
+                  onReorderCases={handleReorderCases}
+                />
+              )}
+            </ErrorBoundary>
 
             {activeTab === 'mentor' && (
               <SupervisorManagement
@@ -803,7 +824,6 @@ export default function App() {
                 }}
                 trainingTypeFilter={trainingTypeFilter}
                 onTypeFilterChange={setTrainingTypeFilter}
-                activeTab={activeTab}
               />
             )}
 

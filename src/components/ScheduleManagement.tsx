@@ -561,16 +561,18 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
     const categoryInfo = getTypeStyleAndLabel(s.type);
     const typeMatch = categoryInfo.label.toLowerCase().includes(q) || s.type.toLowerCase().includes(q);
 
-    const caseMatch = cases.some(
+    const caseMatch = (cases || []).some(
       (c) =>
-        (c.name.toLowerCase().includes(q) || c.caseNum.toLowerCase().includes(q)) &&
-        s.clientName?.includes(c.name)
+        c &&
+        (((c.name || '').toLowerCase().includes(q) || (c.caseNum || '').toLowerCase().includes(q))) &&
+        Boolean(s.clientName && c.name && s.clientName.includes(c.name))
     );
 
-    const mentorMatch = mentors.some(
+    const mentorMatch = (mentors || []).some(
       (m) =>
-        m.name.toLowerCase().includes(q) &&
-        (s.clientName?.includes(m.name) || s.detail?.includes(m.name))
+        m &&
+        (m.name || '').toLowerCase().includes(q) &&
+        (Boolean(s.clientName && m.name && s.clientName.includes(m.name)) || Boolean(s.detail && m.name && s.detail.includes(m.name)))
     );
 
     return clientNameMatch || detailMatch || typeMatch || caseMatch || mentorMatch;
@@ -1212,7 +1214,11 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
                                         <GripVertical className="w-2.5 h-2.5" />
                                       </span>
                                       <span className="truncate font-bold">[{label}]</span>
-                                      {item.repeatRule && item.repeatRule !== 'none' && <Repeat className="w-2.5 h-2.5 shrink-0 text-amber-700 dark:text-amber-300" title={`重复: ${item.repeatRule}`} />}
+                                      {item.repeatRule && item.repeatRule !== 'none' && (
+                                        <span title={`重复: ${item.repeatRule}`}>
+                                          <Repeat className="w-2.5 h-2.5 shrink-0 text-amber-700 dark:text-amber-300" />
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="flex items-center gap-0.5 shrink-0">
                                       <span className="shrink-0 font-bold">{displayTime}</span>

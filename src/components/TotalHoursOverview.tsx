@@ -46,6 +46,7 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
 
         if (rec.sessions) {
           Object.values(rec.sessions).forEach((s: SessionData) => {
+            if (!s) return;
             if (s.completed || (s.note && s.note.trim()) || (s.transcript && s.transcript.trim()) || (s.ideas && s.ideas.length > 0) || (s.resources && s.resources.length > 0)) {
               recSessionCount++;
               recSessionHours += s.durationMinutes ? s.durationMinutes / 60 : 1;
@@ -57,6 +58,7 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
         let parentSessionHours = 0;
         if (rec.parentSessions) {
           Object.values(rec.parentSessions).forEach((ps: ParentSessionData) => {
+            if (!ps) return;
             if (ps.completed !== false && (ps.date || (ps.note && ps.note.trim()) || (ps.transcript && ps.transcript.trim()))) {
               parentSessionCount++;
               parentSessionHours += ps.durationMinutes ? ps.durationMinutes / 60 : 1;
