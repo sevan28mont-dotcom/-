@@ -410,12 +410,23 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-600 mb-1">督导终止时间 (YYYY-MM-DD)</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-zinc-600">督导终止时间</label>
+              <button
+                type="button"
+                onClick={() => setEndDate('正在持续中')}
+                className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200 rounded-md border border-emerald-300 dark:border-emerald-700 transition cursor-pointer flex items-center gap-0.5"
+                title="点击快速设定为【正在持续中】"
+              >
+                <span>⚡ 正在持续中</span>
+              </button>
+            </div>
             <input
-              type="date"
+              type="text"
+              placeholder="YYYY-MM-DD 或 正在持续中"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full text-xs p-2.5 bg-white border border-rose-200 rounded-xl text-zinc-800 focus:outline-none focus:ring-1 focus:ring-rose-400"
+              className="w-full text-xs p-2.5 bg-white border border-rose-200 rounded-xl text-zinc-800 focus:outline-none focus:ring-1 focus:ring-rose-400 font-medium"
             />
           </div>
 
@@ -527,8 +538,14 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                     <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500 mt-1">
                       <span className="flex items-center gap-1 font-medium">
                         <CalendarIcon className="w-3.5 h-3.5 text-rose-400" />
-                        督导周期 (YYYY-MM-DD): <strong className="text-zinc-800">{mentor.startDate}</strong> 至{' '}
-                        <strong className="text-zinc-800">{mentor.endDate}</strong>
+                        督导周期: <strong className="text-zinc-800">{mentor.startDate}</strong> 至{' '}
+                        {(!mentor.endDate || mentor.endDate.includes('持续') || mentor.endDate === '正在持续中') ? (
+                          <span className="inline-flex items-center gap-1 font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 rounded-md border border-emerald-300 dark:border-emerald-700 animate-pulse">
+                            🔥 正在持续中
+                          </span>
+                        ) : (
+                          <strong className="text-zinc-800">{mentor.endDate}</strong>
+                        )}
                       </span>
                       <span className="flex items-center gap-1.5 font-medium">
                         <span>督导总额度: <strong className="text-rose-600 font-bold">{mentor.totalSupervisions || 20} 次</strong></span>
@@ -1793,12 +1810,22 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">结束时间</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-zinc-700 dark:text-slate-300">结束时间</label>
+                    <button
+                      type="button"
+                      onClick={() => setEditingMentorModal({ ...editingMentorModal, endDate: '正在持续中' })}
+                      className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200 rounded-md border border-emerald-300 dark:border-emerald-700 transition cursor-pointer"
+                    >
+                      ⚡ 正在持续中
+                    </button>
+                  </div>
                   <input
-                    type="date"
+                    type="text"
+                    placeholder="YYYY-MM-DD 或 正在持续中"
                     value={editingMentorModal.endDate || ''}
                     onChange={(e) => setEditingMentorModal({ ...editingMentorModal, endDate: e.target.value })}
-                    className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                    className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-medium"
                   />
                 </div>
               </div>

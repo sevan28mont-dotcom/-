@@ -683,24 +683,36 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
             </div>
 
             <div className="lg:col-span-1">
-              <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">
-                体验终止时间
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-bold text-zinc-700 dark:text-slate-300">
+                  体验终止时间
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setNewIndivEndDate('正在持续中')}
+                  className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200 rounded-md border border-emerald-300 dark:border-emerald-700 transition cursor-pointer"
+                  title="设定为正在持续中"
+                >
+                  ⚡ 正在持续中
+                </button>
+              </div>
               <input
-                type="date"
+                type="text"
+                placeholder="YYYY-MM-DD 或 正在持续中"
                 value={newIndivEndDate}
                 onChange={(e) => setNewIndivEndDate(e.target.value)}
-                className="w-full p-2 bg-white dark:bg-slate-800 border border-sky-200 dark:border-slate-700 rounded-xl"
+                className="w-full p-2 bg-white dark:bg-slate-800 border border-sky-200 dark:border-slate-700 rounded-xl font-medium"
               />
             </div>
 
             <div className="lg:col-span-1">
               <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">
-                体验总次数额度
+                体验总小时额度 (0.5h起)
               </label>
               <input
                 type="number"
-                min={1}
+                step="0.5"
+                min={0.5}
                 value={newIndivTotalHours}
                 onChange={(e) => setNewIndivTotalHours(e.target.value)}
                 className="w-full p-2 bg-white dark:bg-slate-800 border border-sky-200 dark:border-slate-700 rounded-xl font-bold"
@@ -769,24 +781,36 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
             </div>
 
             <div className="lg:col-span-1">
-              <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">
-                团体终止时间
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-bold text-zinc-700 dark:text-slate-300">
+                  团体终止时间
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setNewGroupEndDate('正在持续中')}
+                  className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200 rounded-md border border-emerald-300 dark:border-emerald-700 transition cursor-pointer"
+                  title="设定为正在持续中"
+                >
+                  ⚡ 正在持续中
+                </button>
+              </div>
               <input
-                type="date"
+                type="text"
+                placeholder="YYYY-MM-DD 或 正在持续中"
                 value={newGroupEndDate}
                 onChange={(e) => setNewGroupEndDate(e.target.value)}
-                className="w-full p-2 bg-white dark:bg-slate-800 border border-purple-200 dark:border-slate-700 rounded-xl"
+                className="w-full p-2 bg-white dark:bg-slate-800 border border-purple-200 dark:border-slate-700 rounded-xl font-medium"
               />
             </div>
 
             <div className="lg:col-span-1">
               <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">
-                团体总次数额度
+                团体总小时额度 (0.5h起)
               </label>
               <input
                 type="number"
-                min={1}
+                step="0.5"
+                min={0.5}
                 value={newGroupTotalHours}
                 onChange={(e) => setNewGroupTotalHours(e.target.value)}
                 className="w-full p-2 bg-white dark:bg-slate-800 border border-purple-200 dark:border-slate-700 rounded-xl font-bold"
@@ -835,12 +859,18 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                           {therapist.gender || therapist.title || '个人体验师'}
                         </span>
                       </div>
-                      <p className="text-xs text-zinc-500 dark:text-slate-400 mt-0.5 flex items-center gap-2">
-                        <span>🗓️ 时间范围: {therapist.startDate || '2026-01-01'} ~ {therapist.endDate || '2026-12-31'}</span>
+                      <p className="text-xs text-zinc-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                        <span>🗓️ 时间范围: {therapist.startDate || '2026-01-01'} ~ {(!therapist.endDate || therapist.endDate.includes('持续') || therapist.endDate === '正在持续中') ? (
+                          <span className="inline-flex items-center gap-1 font-bold px-1.5 py-0.2 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 rounded border border-emerald-300 dark:border-emerald-700 animate-pulse">
+                            🔥 正在持续中
+                          </span>
+                        ) : (
+                          therapist.endDate
+                        )}</span>
                         <span>•</span>
-                        <span>🎯 体验额度: 共 <strong>{totalHours}</strong> 次</span>
+                        <span>🎯 体验额度: 共 <strong>{totalHours}</strong> 小时</span>
                         <span>•</span>
-                        <span>已录入: <strong className="text-sky-600 dark:text-sky-400">{therapistRecords.length}</strong> / {totalHours} 次</span>
+                        <span>已录入: <strong className="text-sky-600 dark:text-sky-400">{therapistRecords.length}</strong> / {totalHours} 小时</span>
                       </p>
                     </div>
                   </div>
@@ -963,12 +993,18 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                           带领者: {group.facilitator || '未指定'}
                         </span>
                       </div>
-                      <p className="text-xs text-zinc-500 dark:text-slate-400 mt-0.5 flex items-center gap-2">
-                        <span>🗓️ 时间范围: {group.startDate || '2026-01-01'} ~ {group.endDate || '2026-12-31'}</span>
+                      <p className="text-xs text-zinc-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                        <span>🗓️ 时间范围: {group.startDate || '2026-01-01'} ~ {(!group.endDate || group.endDate.includes('持续') || group.endDate === '正在持续中') ? (
+                          <span className="inline-flex items-center gap-1 font-bold px-1.5 py-0.2 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 rounded border border-emerald-300 dark:border-emerald-700 animate-pulse">
+                            🔥 正在持续中
+                          </span>
+                        ) : (
+                          group.endDate
+                        )}</span>
                         <span>•</span>
-                        <span>🎯 团体额度: 共 <strong>{totalHours}</strong> 次</span>
+                        <span>🎯 团体额度: 共 <strong>{totalHours}</strong> 小时</span>
                         <span>•</span>
-                        <span>已录入: <strong className="text-purple-600 dark:text-purple-400">{groupRecordsList.length}</strong> / {totalHours} 次</span>
+                        <span>已录入: <strong className="text-purple-600 dark:text-purple-400">{groupRecordsList.length}</strong> / {totalHours} 小时</span>
                       </p>
                     </div>
                   </div>
@@ -1935,27 +1971,38 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                 </div>
 
                 <div>
-                  <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">
-                    终止时间
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-zinc-700 dark:text-slate-300">
+                      终止时间
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setEditingItemModal((prev) => (prev ? { ...prev, endDate: '正在持续中' } : null))}
+                      className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200 rounded-md border border-emerald-300 dark:border-emerald-700 transition cursor-pointer"
+                    >
+                      ⚡ 正在持续中
+                    </button>
+                  </div>
                   <input
-                    type="date"
+                    type="text"
+                    placeholder="YYYY-MM-DD 或 正在持续中"
                     value={editingItemModal.endDate}
                     onChange={(e) =>
                       setEditingItemModal((prev) => (prev ? { ...prev, endDate: e.target.value } : null))
                     }
-                    className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                    className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-medium"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block font-bold text-zinc-700 dark:text-slate-300 mb-1">
-                  总次数 / 小时额度
+                  体验/团体总小时额度 (0.5h起)
                 </label>
                 <input
                   type="number"
-                  min={1}
+                  step="0.5"
+                  min={0.5}
                   value={editingItemModal.totalHours}
                   onChange={(e) =>
                     setEditingItemModal((prev) =>

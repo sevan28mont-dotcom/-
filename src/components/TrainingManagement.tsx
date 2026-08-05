@@ -692,14 +692,27 @@ export const TrainingManagement: React.FC<TrainingManagementProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    结业/预计结束时间:
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 dark:text-slate-300">
+                      结业/终止时间:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormEndDate('正在持续中');
+                        setFormStatus('ongoing');
+                      }}
+                      className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200 rounded-md border border-emerald-300 dark:border-emerald-700 transition cursor-pointer"
+                    >
+                      ⚡ 正在持续中
+                    </button>
+                  </div>
                   <input
-                    type="date"
+                    type="text"
+                    placeholder="YYYY-MM-DD 或 正在持续中"
                     value={formEndDate}
                     onChange={(e) => setFormEndDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
                   />
                 </div>
               </div>
@@ -708,14 +721,15 @@ export const TrainingManagement: React.FC<TrainingManagementProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    培训总时数 (小时):
+                    培训总小时数 (0.5h起):
                   </label>
                   <input
                     type="number"
-                    min="0"
+                    step="0.5"
+                    min="0.5"
                     value={formTotalHours}
                     onChange={(e) => setFormTotalHours(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
                   />
                 </div>
 
@@ -843,12 +857,27 @@ export const TrainingManagement: React.FC<TrainingManagementProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  本次课时 (小时):
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-700 dark:text-slate-300">
+                    本次课时 (小时):
+                  </label>
+                  <div className="flex items-center gap-1">
+                    {[0.5, 1, 1.5, 2, 3].map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => setSessionHours(String(h))}
+                        className="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-300 rounded font-bold text-[10px] border border-indigo-200 dark:border-slate-700 cursor-pointer"
+                      >
+                        {h}h
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <input
                   type="number"
-                  min="0"
+                  step="0.5"
+                  min="0.5"
                   value={sessionHours}
                   onChange={(e) => setSessionHours(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"

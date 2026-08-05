@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { ScheduleItem, ScheduleType, CaseRecord, Supervisor, ScheduleCategory, SessionData } from '../types';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Clock, X, Search, Tag, Settings, Sparkles, Palette, Users, UserCheck, ChevronDown, ChevronUp, Layers, Bookmark, CheckCircle2, Repeat, GripVertical, Pencil, Umbrella, CalendarX, CalendarCheck, Check } from 'lucide-react';
 import { COLOR_GROUPS, parseColorToStyle, getHexColor } from '../data/colorPalette';
@@ -314,6 +315,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
   const [dimension, setDimension] = useState<Dimension>('week');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [searchQuery, setSearchQuery] = useState('');
+  const wheelCooldownRef = useRef(false);
 
   // 拖拽排序状态与 Handler
   const [draggedScheduleId, setDraggedScheduleId] = useState<string | null>(null);
@@ -1563,19 +1565,55 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => navigatePeriod(-1)}
-            className="p-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-900 rounded-xl transition cursor-pointer"
+            className="p-2 bg-rose-50 hover:bg-rose-100 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 text-rose-900 dark:text-rose-200 rounded-xl transition cursor-pointer active:scale-95 flex items-center justify-center"
+            title="上一周期 (上一月 / 上一周 / 上一天)"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
 
+          {/* 快捷年份与月份选择下拉框 (极速跳转，无需频繁点击) */}
+          <div className="flex items-center gap-1 bg-rose-50/90 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 p-1 rounded-xl">
+            <select
+              value={currentDate.getFullYear()}
+              onChange={(e) => {
+                const newY = parseInt(e.target.value, 10);
+                const next = new Date(currentDate);
+                next.setFullYear(newY);
+                setCurrentDate(next);
+              }}
+              className="bg-white dark:bg-slate-900 text-rose-950 dark:text-rose-200 font-black text-xs px-2 py-1 rounded-lg border border-rose-200 dark:border-slate-700 focus:outline-none cursor-pointer"
+              title="选择年份"
+            >
+              {Array.from({ length: 13 }, (_, i) => 2020 + i).map((y) => (
+                <option key={y} value={y}>{y} 年</option>
+              ))}
+            </select>
+
+            <select
+              value={currentDate.getMonth()}
+              onChange={(e) => {
+                const newM = parseInt(e.target.value, 10);
+                const next = new Date(currentDate);
+                next.setMonth(newM);
+                setCurrentDate(next);
+              }}
+              className="bg-white dark:bg-slate-900 text-rose-950 dark:text-rose-200 font-black text-xs px-2 py-1 rounded-lg border border-rose-200 dark:border-slate-700 focus:outline-none cursor-pointer"
+              title="选择月份"
+            >
+              {Array.from({ length: 12 }, (_, i) => i).map((m) => (
+                <option key={m} value={m}>{m + 1} 月</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-center gap-1.5">
             <button
               onClick={handleGoToToday}
-              className="px-3.5 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-900 font-bold text-xs rounded-xl transition border border-rose-200 cursor-pointer"
+              className="px-3.5 py-1.5 bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/80 text-rose-900 dark:text-rose-200 font-bold text-xs rounded-xl transition border border-rose-300 dark:border-rose-800 cursor-pointer active:scale-95"
             >
               今天
             </button>
-            <span className="text-xs font-bold text-rose-900 bg-rose-50/80 border border-rose-200 px-2.5 py-1 rounded-lg">
+            <span className="text-xs font-bold text-rose-900 dark:text-rose-200 bg-rose-50/80 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 px-2.5 py-1 rounded-lg">
               {(() => {
                 const now = new Date();
                 const y = now.getFullYear();
@@ -1589,12 +1627,13 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
 
           <button
             onClick={() => navigatePeriod(1)}
-            className="p-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-900 rounded-xl transition cursor-pointer"
+            className="p-2 bg-rose-50 hover:bg-rose-100 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 text-rose-900 dark:text-rose-200 rounded-xl transition cursor-pointer active:scale-95 flex items-center justify-center"
+            title="下一周期 (下一月 / 下一周 / 下一天)"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
 
-          <span className="text-xs font-bold text-zinc-600 ml-1">
+          <span className="text-xs font-bold text-zinc-600 dark:text-slate-300 ml-1">
             ({formatDateKey(currentDate)})
           </span>
         </div>
@@ -1680,8 +1719,36 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({
         </div>
       </div>
 
-      {/* Render Active View */}
-      {renderScheduleGrid()}
+      {/* Render Active View with Smooth Scroll & Motion */}
+      <div
+        onWheel={(e) => {
+          if (wheelCooldownRef.current) return;
+          if (Math.abs(e.deltaY) > 35) {
+            wheelCooldownRef.current = true;
+            if (e.deltaY < 0) {
+              navigatePeriod(-1);
+            } else {
+              navigatePeriod(1);
+            }
+            setTimeout(() => {
+              wheelCooldownRef.current = false;
+            }, 300);
+          }
+        }}
+        className="relative"
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`${dimension}_${currentDate.getFullYear()}_${currentDate.getMonth()}_${currentDate.getDate()}`}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+          >
+            {renderScheduleGrid()}
+          </motion.div>
+        </AnimatePresence>
+      </div>
 
       {/* Schedule Edit / Create Modal */}
       {modalOpen && (
