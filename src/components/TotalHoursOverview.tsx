@@ -176,8 +176,16 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
 
   const autoCalculatedPersonalHours = individualPersonalHours + groupPersonalHours;
 
-  // 全局汇总展示值 (合并个案总时数，响应用户需求)
-  const caseHours = overrides.caseHours !== undefined ? overrides.caseHours : (autoCalculatedCaseHours || autoCalculatedCaseCount);
+  // 细分各类别显示时数
+  const displayLongTermActiveHours = overrides.longTermActiveCaseHours !== undefined ? overrides.longTermActiveCaseHours : (autoLongTermActiveHours || longTermActiveSessionsCount);
+  const displayLongTermEndedHours = overrides.longTermEndedCaseHours !== undefined ? overrides.longTermEndedCaseHours : (autoLongTermEndedHours || longTermEndedSessionsCount);
+  const displayShortTermPersonalHours = overrides.shortTermPersonalCaseHours !== undefined ? overrides.shortTermPersonalCaseHours : (autoShortTermPersonalHours || shortTermPersonalSessionsCount);
+  const displayShortTermAgencyHours = overrides.shortTermAgencyCaseHours !== undefined ? overrides.shortTermAgencyCaseHours : (autoShortTermAgencyHours || shortTermAgencySessionsCount);
+
+  const sumSubcategoryCaseHours = displayLongTermActiveHours + displayLongTermEndedHours + displayShortTermPersonalHours + displayShortTermAgencyHours;
+
+  // 全局汇总展示值 (合并个案总时数，精准对接细分页面累加)
+  const caseHours = overrides.caseHours !== undefined ? overrides.caseHours : sumSubcategoryCaseHours;
   const supervisionHours = overrides.supervisionHours !== undefined ? overrides.supervisionHours : (autoCalculatedSupervisionHours || autoCalculatedSupervisionCount);
   const personalHours = overrides.personalExperienceHours !== undefined ? overrides.personalExperienceHours : autoCalculatedPersonalHours;
 

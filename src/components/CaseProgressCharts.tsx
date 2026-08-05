@@ -48,7 +48,7 @@ export const CaseProgressCharts: React.FC<CaseProgressChartsProps> = ({ record, 
             <PieIcon className="w-4 h-4" />
           </div>
           <h4 className="font-bold text-xs sm:text-sm text-zinc-800 dark:text-slate-100">
-            个案咨询进度可视化面板 ({caseRecord.caseNum} {caseRecord.name})
+            个案咨询进度可视化面板 ({targetRecord.caseNum || ''} {targetRecord.name || ''})
           </h4>
         </div>
         <div className="flex items-center gap-2 text-xs font-semibold">

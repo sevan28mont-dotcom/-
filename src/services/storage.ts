@@ -1,4 +1,4 @@
-import { SystemData, CaseRecord, Supervisor, ThinkingNote, ScheduleItem, ReminderItem, CounselorCredential } from '../types';
+import { SystemData, CaseRecord, Supervisor, ThinkingNote, ScheduleItem, ReminderItem, CounselorCredential, PersonalExperienceSetting } from '../types';
 
 const STORAGE_KEYS = {
   RECORDS: 'psy_records_v8',
@@ -8,6 +8,60 @@ const STORAGE_KEYS = {
   REMINDERS: 'psy_reminders_v8',
   TRAININGS: 'psy_trainings_v8',
   CREDENTIALS: 'psy_credentials_v8',
+  EXPERIENCE: 'psy_experience_v8',
+};
+
+export const DEFAULT_EXPERIENCE: PersonalExperienceSetting = {
+  totalIndividualHours: 40,
+  totalGroupHours: 30,
+  records: [
+    {
+      id: 'pe_1',
+      sessionNum: 1,
+      date: '2026-01-15',
+      timeRange: '15:00-16:00',
+      type: 'individual',
+      therapistId: 'th_1',
+      facilitator: '陈教授 (资深精神分析取向体验师)',
+      note: '首次个体体验，探索早年成长经验与关系模式的重现。',
+      completed: true,
+      durationMinutes: 60,
+    },
+    {
+      id: 'pe_2',
+      sessionNum: 1,
+      date: '2026-02-10',
+      timeRange: '19:00-21:00',
+      type: 'group',
+      therapistId: 'grp_1',
+      facilitator: '王老师 (团体人际互动体验小组)',
+      note: '团体体验首次会谈，观察动力场在小组中的显现与人际位置。',
+      completed: true,
+      durationMinutes: 120,
+    },
+  ],
+  individualTherapists: [
+    {
+      id: 'th_1',
+      name: '陈教授 (资深精神分析取向体验师)',
+      gender: '👨‍🏫 男体验师',
+      title: '动力学取向个人体验',
+      startDate: '2026-01-01',
+      totalHours: 40,
+      type: 'individual',
+    },
+  ],
+  groupOptions: [
+    {
+      id: 'grp_1',
+      name: '王老师 (团体人际互动体验小组)',
+      facilitator: '王老师',
+      gender: '👩‍🏫 女体验师',
+      startDate: '2026-02-01',
+      totalHours: 30,
+      type: 'group',
+    },
+  ],
 };
 
 // Initial default seed data for demonstration and instant rich UX
@@ -267,9 +321,12 @@ export const EMPTY_SYSTEM_DATA: SystemData = {
   reminders: [],
   trainings: [],
   credentials: [],
+  personalExperience: { totalIndividualHours: 0, totalGroupHours: 0, records: [], individualTherapists: [], groupOptions: [] },
+  experienceData: { totalIndividualHours: 0, totalGroupHours: 0, records: [], individualTherapists: [], groupOptions: [] },
 };
 
 export function getDefaultSampleSystemData(): SystemData {
+  const defaultExp = JSON.parse(JSON.stringify(DEFAULT_EXPERIENCE));
   return {
     records: JSON.parse(JSON.stringify(DEFAULT_RECORDS)),
     mentors: JSON.parse(JSON.stringify(DEFAULT_MENTORS)),
@@ -278,6 +335,8 @@ export function getDefaultSampleSystemData(): SystemData {
     reminders: JSON.parse(JSON.stringify(DEFAULT_REMINDERS)),
     trainings: JSON.parse(JSON.stringify(DEFAULT_TRAININGS)),
     credentials: JSON.parse(JSON.stringify(DEFAULT_CREDENTIALS)),
+    personalExperience: defaultExp,
+    experienceData: defaultExp,
   };
 }
 
@@ -296,47 +355,8 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
       reminders: userId ? `${userPrefix}reminders` : STORAGE_KEYS.REMINDERS,
       trainings: userId ? `${userPrefix}trainings` : STORAGE_KEYS.TRAININGS,
       credentials: userId ? `${userPrefix}credentials` : STORAGE_KEYS.CREDENTIALS,
+      experience: userId ? `${userPrefix}experience` : STORAGE_KEYS.EXPERIENCE,
     };
-
-    // If userId is provided, check if user-specific local storage key exists
-    if (userId) {
-      const existingUserRecords = localStorage.getItem(primaryKeys.records);
-      if (existingUserRecords) {
-        try {
-          const records = JSON.parse(existingUserRecords).map((r: any) => ({
-            ...r,
-            isTeenager: typeof r.isTeenager === 'boolean'
-              ? r.isTeenager
-              : Boolean(
-                  r.avatar === '👦' ||
-                  r.avatar === '👧' ||
-                  r.avatar === '👶' ||
-                  (r.parentSessions && Object.keys(r.parentSessions).length > 0)
-                ),
-            parentSessions: r.parentSessions || {},
-          }));
-          const mentors = JSON.parse(localStorage.getItem(primaryKeys.mentors) || '[]');
-          const thinking = JSON.parse(localStorage.getItem(primaryKeys.thinking) || '[]');
-          const schedules = JSON.parse(localStorage.getItem(primaryKeys.schedules) || '[]');
-          const reminders = JSON.parse(localStorage.getItem(primaryKeys.reminders) || '[]');
-          const trainings = JSON.parse(localStorage.getItem(primaryKeys.trainings) || '[]');
-          const credentials = JSON.parse(localStorage.getItem(primaryKeys.credentials) || JSON.stringify(DEFAULT_CREDENTIALS));
-          const experienceData = JSON.parse(localStorage.getItem(`${userPrefix}experienceData`) || 'null');
-
-          return { records, mentors, thinking, schedules, reminders, trainings, credentials, experienceData };
-        } catch (e) {
-          console.error('Error parsing user local storage:', e);
-        }
-      }
-
-      // If user is u_default or u_demo, initialize with default sample data
-      if (userId === 'u_default' || userId === 'u_demo') {
-        return getDefaultSampleSystemData();
-      }
-
-      // For new custom user accounts, return empty system data so cloud fetch takes precedence
-      return { ...EMPTY_SYSTEM_DATA };
-    }
 
     // Helper to read from primary key or search legacy fallback keys
     const readWithFallback = (primaryKey: string, fallbackKeys: string[], defaultVal: any) => {
@@ -364,6 +384,49 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
     const legacyRemindersKeys = [STORAGE_KEYS.REMINDERS, 'psy_reminders_v8', 'psy_reminders_v7', 'psy_reminders_v6', 'psy_reminders_v5', 'psy_reminders', 'psy_master_backup_reminders'];
     const legacyTrainingsKeys = [STORAGE_KEYS.TRAININGS, 'psy_trainings_v8', 'psy_master_backup_trainings'];
     const legacyCredentialsKeys = [STORAGE_KEYS.CREDENTIALS, 'psy_credentials_v8', 'psy_master_backup_credentials'];
+    const legacyExperienceKeys = [STORAGE_KEYS.EXPERIENCE, 'psy_experience_v8', 'psy_master_backup_experience', `${userPrefix}experienceData`, `psy_u_${userId}_experienceData`];
+
+    // If userId is provided, check if user-specific local storage key exists
+    if (userId) {
+      const existingUserRecords = localStorage.getItem(primaryKeys.records);
+      if (existingUserRecords) {
+        try {
+          const records = JSON.parse(existingUserRecords).map((r: any) => ({
+            ...r,
+            isTeenager: typeof r.isTeenager === 'boolean'
+              ? r.isTeenager
+              : Boolean(
+                  r.avatar === '👦' ||
+                  r.avatar === '👧' ||
+                  r.avatar === '👶' ||
+                  (r.parentSessions && Object.keys(r.parentSessions).length > 0)
+                ),
+            parentSessions: r.parentSessions || {},
+          }));
+          const mentors = JSON.parse(localStorage.getItem(primaryKeys.mentors) || '[]');
+          const thinking = JSON.parse(localStorage.getItem(primaryKeys.thinking) || '[]');
+          const schedules = JSON.parse(localStorage.getItem(primaryKeys.schedules) || '[]');
+          const reminders = JSON.parse(localStorage.getItem(primaryKeys.reminders) || '[]');
+          const trainings = JSON.parse(localStorage.getItem(primaryKeys.trainings) || '[]');
+          const credentials = JSON.parse(localStorage.getItem(primaryKeys.credentials) || JSON.stringify(DEFAULT_CREDENTIALS));
+          const expRaw = localStorage.getItem(primaryKeys.experience) || localStorage.getItem(`${userPrefix}experienceData`) || localStorage.getItem('psy_master_backup_experience');
+          const experienceData = expRaw ? JSON.parse(expRaw) : DEFAULT_EXPERIENCE;
+
+          return { records, mentors, thinking, schedules, reminders, trainings, credentials, personalExperience: experienceData, experienceData };
+        } catch (e) {
+          console.error('Error parsing user local storage:', e);
+        }
+      }
+
+      // If user is u_default or u_demo, initialize with default sample data
+      if (userId === 'u_default' || userId === 'u_demo') {
+        return getDefaultSampleSystemData();
+      }
+
+      // For new custom user accounts, check if there is local experience or default data
+      const fallbackExp = readWithFallback(primaryKeys.experience, legacyExperienceKeys, DEFAULT_EXPERIENCE);
+      return { ...EMPTY_SYSTEM_DATA, personalExperience: fallbackExp, experienceData: fallbackExp };
+    }
 
     const rawRecords = readWithFallback(primaryKeys.records, legacyRecordsKeys, DEFAULT_RECORDS);
     const records = (Array.isArray(rawRecords) ? rawRecords : DEFAULT_RECORDS).map((r: any) => ({
@@ -384,8 +447,9 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
     const reminders = readWithFallback(primaryKeys.reminders, legacyRemindersKeys, DEFAULT_REMINDERS);
     const trainings = readWithFallback(primaryKeys.trainings, legacyTrainingsKeys, DEFAULT_TRAININGS);
     const credentials = readWithFallback(primaryKeys.credentials, legacyCredentialsKeys, DEFAULT_CREDENTIALS);
+    const experienceData = readWithFallback(primaryKeys.experience, legacyExperienceKeys, DEFAULT_EXPERIENCE);
 
-    return { records, mentors, thinking, schedules, reminders, trainings, credentials };
+    return { records, mentors, thinking, schedules, reminders, trainings, credentials, personalExperience: experienceData, experienceData };
   } catch (err) {
     console.error('Failed to load from localStorage:', err);
     return getDefaultSampleSystemData();
@@ -403,16 +467,18 @@ export function saveDataToLocalStorage(data: SystemData, userId?: string): void 
       reminders: userId ? `${userPrefix}reminders` : STORAGE_KEYS.REMINDERS,
       trainings: userId ? `${userPrefix}trainings` : STORAGE_KEYS.TRAININGS,
       credentials: userId ? `${userPrefix}credentials` : STORAGE_KEYS.CREDENTIALS,
+      experience: userId ? `${userPrefix}experience` : STORAGE_KEYS.EXPERIENCE,
     };
 
-    const recordsStr = JSON.stringify(data.records);
-    const mentorsStr = JSON.stringify(data.mentors);
-    const thinkingStr = JSON.stringify(data.thinking);
-    const schedulesStr = JSON.stringify(data.schedules);
+    const recordsStr = JSON.stringify(data.records || []);
+    const mentorsStr = JSON.stringify(data.mentors || []);
+    const thinkingStr = JSON.stringify(data.thinking || []);
+    const schedulesStr = JSON.stringify(data.schedules || []);
     const remindersStr = JSON.stringify(data.reminders || []);
     const trainingsStr = JSON.stringify(data.trainings || []);
     const credentialsStr = JSON.stringify(data.credentials || []);
-    const experienceDataStr = JSON.stringify(data.experienceData || null);
+    const expObj = data.personalExperience || data.experienceData || DEFAULT_EXPERIENCE;
+    const experienceDataStr = JSON.stringify(expObj);
 
     // Save to user / current key
     localStorage.setItem(keys.records, recordsStr);
@@ -422,8 +488,11 @@ export function saveDataToLocalStorage(data: SystemData, userId?: string): void 
     localStorage.setItem(keys.reminders, remindersStr);
     localStorage.setItem(keys.trainings, trainingsStr);
     localStorage.setItem(keys.credentials, credentialsStr);
+    localStorage.setItem(keys.experience, experienceDataStr);
+
     if (userId) {
       localStorage.setItem(`psy_u_${userId}_experienceData`, experienceDataStr);
+      localStorage.setItem(`psy_u_${userId}_experience`, experienceDataStr);
     }
 
     // Save mirror copies to master backup keys for version update durability
@@ -433,6 +502,7 @@ export function saveDataToLocalStorage(data: SystemData, userId?: string): void 
     localStorage.setItem('psy_master_backup_schedules', schedulesStr);
     localStorage.setItem('psy_master_backup_reminders', remindersStr);
     localStorage.setItem('psy_master_backup_trainings', trainingsStr);
+    localStorage.setItem('psy_master_backup_experience', experienceDataStr);
 
     if (userId) {
       localStorage.setItem(STORAGE_KEYS.RECORDS, recordsStr);
@@ -441,6 +511,7 @@ export function saveDataToLocalStorage(data: SystemData, userId?: string): void 
       localStorage.setItem(STORAGE_KEYS.SCHEDULES, schedulesStr);
       localStorage.setItem(STORAGE_KEYS.REMINDERS, remindersStr);
       localStorage.setItem(STORAGE_KEYS.TRAININGS, trainingsStr);
+      localStorage.setItem(STORAGE_KEYS.EXPERIENCE, experienceDataStr);
     }
   } catch (err) {
     console.error('Failed to save to localStorage:', err);
