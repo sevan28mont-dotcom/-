@@ -1341,8 +1341,15 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
   const handleSaveSession = () => {
     if (selectedCaseId && selectedSessionNum !== null) {
+      const hasContent = Boolean(
+        (modalNote && modalNote.trim()) ||
+        (modalTranscript && modalTranscript.trim()) ||
+        (modalIdeas && modalIdeas.length > 0) ||
+        (modalResources && modalResources.length > 0)
+      );
+
       onUpdateSessionNote(selectedCaseId, selectedSessionNum, {
-        completed: modalCompleted,
+        completed: hasContent ? modalCompleted : (modalCompleted && !hasContent ? false : false),
         note: modalNote,
         transcript: modalTranscript,
         ideas: modalIdeas,
@@ -2038,21 +2045,49 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-rose-100 dark:border-slate-800 mt-2">
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-rose-100 dark:border-slate-800 mt-2">
               <button
                 type="button"
-                onClick={closeSessionModal}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+                onClick={() => {
+                  setModalNote('');
+                  setModalTranscript('');
+                  setModalIdeas([]);
+                  setModalResources([]);
+                  setModalCompleted(false);
+                  if (selectedCaseId && selectedSessionNum !== null) {
+                    onUpdateSessionNote(selectedCaseId, selectedSessionNum, {
+                      completed: false,
+                      note: '',
+                      transcript: '',
+                      ideas: [],
+                      resources: [],
+                    });
+                  }
+                  closeSessionModal();
+                }}
+                className="px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 rounded-xl transition cursor-pointer flex items-center gap-1"
+                title="一键清空笔记、逐字稿与红点标记"
               >
-                取消
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>清空此记录 (清除红点与已完成)</span>
               </button>
-              <button
-                type="button"
-                onClick={handleSaveSession}
-                className="px-5 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition shadow-2xs cursor-pointer"
-              >
-                保存完整档案
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={closeSessionModal}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveSession}
+                  className="px-5 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition shadow-2xs cursor-pointer"
+                >
+                  保存完整档案
+                </button>
+              </div>
             </div>
           </div>
         </div>

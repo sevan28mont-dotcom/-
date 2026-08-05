@@ -378,40 +378,53 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
   const handleSaveModalRecord = () => {
     if (!modalRecord) return;
 
+    const hasContent = Boolean(
+      (modalRecord.note && modalRecord.note.trim()) ||
+      (modalRecord.transcript && modalRecord.transcript.trim()) ||
+      (modalRecord.ideas && modalRecord.ideas.length > 0) ||
+      (modalRecord.resources && modalRecord.resources.length > 0)
+    );
+
     let updatedList = [...records];
     if (modalRecord.id) {
-      updatedList = updatedList.map((r) =>
-        r.id === modalRecord.id
-          ? {
-              ...r,
-              sessionNum: modalRecord.sessionNum,
-              type: modalRecord.type,
-              date: modalRecord.date,
-              timeRange: modalRecord.timeRange,
-              facilitator: modalRecord.facilitator,
-              note: modalRecord.note,
-              transcript: modalRecord.transcript,
-              ideas: modalRecord.ideas,
-              resources: modalRecord.resources,
-              completed: modalRecord.completed !== false,
-            }
-          : r
-      );
+      if (!hasContent && modalRecord.completed === false) {
+        updatedList = updatedList.filter((r) => r.id !== modalRecord.id);
+      } else {
+        updatedList = updatedList.map((r) =>
+          r.id === modalRecord.id
+            ? {
+                ...r,
+                sessionNum: modalRecord.sessionNum,
+                type: modalRecord.type,
+                date: modalRecord.date,
+                timeRange: modalRecord.timeRange,
+                facilitator: modalRecord.facilitator,
+                note: modalRecord.note,
+                transcript: modalRecord.transcript,
+                ideas: modalRecord.ideas,
+                resources: modalRecord.resources,
+                completed: hasContent ? modalRecord.completed !== false : modalRecord.completed === true,
+              }
+            : r
+        );
+      }
     } else {
-      const newRec: PersonalExperienceRecord = {
-        id: `exp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        sessionNum: modalRecord.sessionNum,
-        type: modalRecord.type,
-        date: modalRecord.date || new Date().toISOString().split('T')[0],
-        timeRange: modalRecord.timeRange,
-        facilitator: modalRecord.facilitator,
-        note: modalRecord.note,
-        transcript: modalRecord.transcript,
-        ideas: modalRecord.ideas,
-        resources: modalRecord.resources,
-        completed: modalRecord.completed !== false,
-      };
-      updatedList.push(newRec);
+      if (hasContent || modalRecord.completed !== false) {
+        const newRec: PersonalExperienceRecord = {
+          id: `exp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          sessionNum: modalRecord.sessionNum,
+          type: modalRecord.type,
+          date: modalRecord.date || new Date().toISOString().split('T')[0],
+          timeRange: modalRecord.timeRange,
+          facilitator: modalRecord.facilitator,
+          note: modalRecord.note,
+          transcript: modalRecord.transcript,
+          ideas: modalRecord.ideas,
+          resources: modalRecord.resources,
+          completed: hasContent ? modalRecord.completed !== false : modalRecord.completed === true,
+        };
+        updatedList.push(newRec);
+      }
     }
 
     onUpdateExperienceData({
@@ -1563,25 +1576,20 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
             {/* Modal Footer */}
             <div className="flex items-center justify-between border-t border-purple-100 dark:border-slate-800 pt-3 mt-3">
               <div>
-                {modalRecord.id && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      if (window.confirm('⚠️ 确定要彻底删除此条体验记录及其所有的逐字稿和反思体悟吗？')) {
-                        handleDeleteRecord(modalRecord.id!);
-                        setModalRecord(null);
-                      }
-                    }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    className="px-3.5 py-2 bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/60 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-800 hover:border-rose-600 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs group touch-manipulation select-none min-h-[36px]"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-500 group-hover:text-white transition-colors" />
-                    <span>彻底删除此体验记录</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (modalRecord.id) {
+                      handleDeleteRecord(modalRecord.id);
+                    }
+                    setModalRecord(null);
+                  }}
+                  className="px-3.5 py-2 bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/60 dark:hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-300 dark:hover:text-white border border-rose-200 dark:border-rose-800 hover:border-rose-600 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs group touch-manipulation select-none min-h-[36px]"
+                  title="一键清空并移除此体验记录与小红点/完成标记"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-500 group-hover:text-white transition-colors" />
+                  <span>清空/删除此记录 (清除红点)</span>
+                </button>
               </div>
 
               <div className="flex items-center gap-3">

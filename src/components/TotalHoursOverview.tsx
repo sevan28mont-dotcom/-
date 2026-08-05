@@ -52,18 +52,21 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
             }
           });
         }
+
+        let parentSessionCount = 0;
+        let parentSessionHours = 0;
         if (rec.parentSessions) {
           Object.values(rec.parentSessions).forEach((ps: ParentSessionData) => {
             if (ps.completed !== false && (ps.date || (ps.note && ps.note.trim()) || (ps.transcript && ps.transcript.trim()))) {
-              recSessionCount++;
-              recSessionHours += ps.durationMinutes ? ps.durationMinutes / 60 : 1;
+              parentSessionCount++;
+              parentSessionHours += ps.durationMinutes ? ps.durationMinutes / 60 : 1;
             }
           });
         }
 
         const targetSessions = rec.totalSessions || 0;
-        const effectiveCount = Math.max(targetSessions, recSessionCount);
-        const effectiveHours = Math.max(targetSessions, recSessionHours);
+        const effectiveCount = Math.max(targetSessions, recSessionCount) + parentSessionCount;
+        const effectiveHours = Math.max(targetSessions, recSessionHours) + parentSessionHours;
 
         acc.count += effectiveCount;
         acc.hours += effectiveHours;
@@ -693,14 +696,14 @@ ${n.content}
                       onClick={() => setActiveViewCategory('individualSupervision')}
                       className="flex items-center gap-1 text-indigo-800 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 cursor-pointer"
                     >
-                      个体督导: <strong className="font-mono">{individualSupervisionCount}</strong>次 ({individualSupervisionHours}h)
+                      个体督导: <strong className="font-mono">{individualSupervisionCount}</strong>次 ({individualSupervisionHours}时)
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveViewCategory('groupSupervision')}
                       className="flex items-center gap-1 text-sky-800 dark:text-sky-300 font-bold bg-sky-50 dark:bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-200 dark:border-sky-800/60 hover:bg-sky-100 cursor-pointer"
                     >
-                      团体督导: <strong className="font-mono">{groupSupervisionCount}</strong>次 ({groupSupervisionHours}h)
+                      团体督导: <strong className="font-mono">{groupSupervisionCount}</strong>次 ({groupSupervisionHours}时)
                     </button>
                   </div>
                 </div>
@@ -755,14 +758,14 @@ ${n.content}
                       onClick={() => setActiveViewCategory('individualExperience')}
                       className="flex items-center gap-1 text-rose-800 dark:text-rose-300 font-bold bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-800/60 hover:bg-rose-100 cursor-pointer"
                     >
-                      个体体验: <strong className="font-mono">{individualPersonalCount}</strong>次 ({individualPersonalHours}h)
+                      个体体验: <strong className="font-mono">{individualPersonalCount}</strong>次 ({individualPersonalHours}时)
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveViewCategory('groupExperience')}
                       className="flex items-center gap-1 text-pink-800 dark:text-pink-300 font-bold bg-pink-50 dark:bg-pink-950/60 px-1.5 py-0.5 rounded border border-pink-200 dark:border-pink-800/60 hover:bg-pink-100 cursor-pointer"
                     >
-                      团体体验: <strong className="font-mono">{groupPersonalCount}</strong>次 ({groupPersonalHours}h)
+                      团体体验: <strong className="font-mono">{groupPersonalCount}</strong>次 ({groupPersonalHours}时)
                     </button>
                   </div>
                 </div>
@@ -918,7 +921,7 @@ ${n.content}
                     <span className="text-zinc-500 block">个人体验总时数</span>
                     <strong className="text-base text-amber-600 font-mono">{personalHours} 小时</strong>
                     <span className="text-[10px] text-zinc-400 block">
-                      (个体: {individualPersonalHours}h / 团体: {groupPersonalHours}h)
+                      (个体: {individualPersonalHours}时 / 团体: {groupPersonalHours}时)
                     </span>
                   </div>
                 </div>
