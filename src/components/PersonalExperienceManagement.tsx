@@ -279,23 +279,27 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
     new Set([...existingFacilitators, ...therapistNames, ...groupNames, '张体验师', '李带领者'])
   );
 
-  const completedIndividualCount = individualRecords.filter((r) => r.completed !== false && Boolean(r.date)).length;
-  const completedGroupCount = groupRecords.filter((r) => r.completed !== false && Boolean(r.date)).length;
+  const completedIndividualCount = individualRecords.filter((r) => r.completed !== false).length;
+  const completedGroupCount = groupRecords.filter((r) => r.completed !== false).length;
 
+  const sumTherapistsHours = individualTherapists.reduce((sum, t) => sum + (Number(t.totalHours) || 0), 0);
   const maxIndivTherapistHours = Math.max(0, ...individualTherapists.map((t) => t.totalHours || 0));
   const maxIndivRecNum = Math.max(0, ...individualRecords.map((r) => r.sessionNum || 0));
   const totalIndividualCount = Math.max(
     20,
     experienceData.totalIndividualHours || 0,
+    sumTherapistsHours,
     maxIndivTherapistHours,
     maxIndivRecNum
   );
 
+  const sumGroupHours = groupOptions.reduce((sum, g) => sum + (Number(g.totalHours) || 0), 0);
   const maxGroupOptionHours = Math.max(0, ...groupOptions.map((g) => g.totalHours || 0));
   const maxGroupRecNum = Math.max(0, ...groupRecords.map((r) => r.sessionNum || 0));
   const totalGroupCount = Math.max(
     30,
     experienceData.totalGroupHours || 0,
+    sumGroupHours,
     maxGroupOptionHours,
     maxGroupRecNum
   );
@@ -389,7 +393,7 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
               transcript: modalRecord.transcript,
               ideas: modalRecord.ideas,
               resources: modalRecord.resources,
-              completed: modalRecord.completed,
+              completed: modalRecord.completed !== false,
             }
           : r
       );
@@ -398,14 +402,14 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
         id: `exp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         sessionNum: modalRecord.sessionNum,
         type: modalRecord.type,
-        date: modalRecord.date,
+        date: modalRecord.date || new Date().toISOString().split('T')[0],
         timeRange: modalRecord.timeRange,
         facilitator: modalRecord.facilitator,
         note: modalRecord.note,
         transcript: modalRecord.transcript,
         ideas: modalRecord.ideas,
         resources: modalRecord.resources,
-        completed: modalRecord.completed,
+        completed: modalRecord.completed !== false,
       };
       updatedList.push(newRec);
     }
@@ -1064,7 +1068,7 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                   {Array.from({ length: totalHours }, (_, idx) => {
                     const num = idx + 1;
                     const rec = therapistRecords.find((r) => r.sessionNum === num);
-                    const hasRec = Boolean(rec);
+                    const hasRec = Boolean(rec && rec.completed !== false);
 
                     return (
                       <button
@@ -1214,7 +1218,7 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                   {Array.from({ length: totalHours }, (_, idx) => {
                     const num = idx + 1;
                     const rec = groupRecordsList.find((r) => r.sessionNum === num);
-                    const hasRec = Boolean(rec);
+                    const hasRec = Boolean(rec && rec.completed !== false);
 
                     return (
                       <button

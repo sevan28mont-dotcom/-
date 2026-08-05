@@ -730,7 +730,15 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                if (window.confirm(`确定要彻底删除 ${item.caseNum} ${item.name} 的个案档案及其所有会谈记录吗？`)) {
+                const cNum = item.caseNum || '';
+                const cName = item.name || '';
+                if (window.confirm(`确定要彻底删除 ${cNum} ${cName} 的个案档案及其所有会谈记录吗？`)) {
+                  if (selectedCaseId === item.id) setSelectedCaseId(null);
+                  if (summaryModalCase?.id === item.id) setSummaryModalCase(null);
+                  if (exportingPdfCase?.id === item.id) setExportingPdfCase(null);
+                  if (showChartsCaseId === item.id) setShowChartsCaseId(null);
+                  if (editingTotalCaseId === item.id) setEditingTotalCaseId(null);
+                  setSelectedCaseIds((prev) => prev.filter((cid) => cid !== item.id));
                   onDeleteCase(item.id);
                 }
               }}
@@ -1081,10 +1089,11 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                   const hasIdeas = Boolean(sessionData.ideas && sessionData.ideas.length > 0);
                   const resources = sessionData.resources || [];
                   const hasResources = resources.length > 0;
-                  const hasContent = sessionData.completed || hasNote || hasTranscript || hasIdeas || hasResources;
+                  const hasContent = hasNote || hasTranscript || hasIdeas || hasResources;
+                  const isSessionCompleted = Boolean(sessionData.completed);
 
-                  // 如果列表较长且处于折叠状态，隐藏15次之后未录入内容的空白按钮
-                  if (isLongList && !isExpanded && sessionNum > displayLimit && !hasContent) {
+                  // 如果列表较长且处于折叠状态，隐藏15次之后未录入内容且未完成的空白按钮
+                  if (isLongList && !isExpanded && sessionNum > displayLimit && !sessionData.completed && !hasContent) {
                     return null;
                   }
 
@@ -1135,7 +1144,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                           className={`w-full min-h-12 border rounded-xl flex flex-col items-center justify-center p-1 text-xs transition cursor-pointer relative ${
                             isSelected
                               ? 'ring-2 ring-rose-500 border-rose-600 bg-rose-100 dark:bg-rose-900/60 font-black'
-                              : sessionData.completed
+                              : isSessionCompleted
                               ? 'bg-rose-400 dark:bg-rose-600 border-rose-500 dark:border-rose-500 text-white font-bold shadow-2xs'
                               : 'bg-white dark:bg-slate-800 border-rose-200 dark:border-slate-700 hover:bg-rose-50 dark:hover:bg-slate-700 text-zinc-700 dark:text-slate-200'
                           }`}
@@ -1156,19 +1165,19 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                             {hasNote && (
                               <span
                                 className={`w-1.5 h-1.5 rounded-full ${
-                                  sessionData.completed ? 'bg-white' : 'bg-rose-500 dark:bg-rose-400'
+                                  isSessionCompleted ? 'bg-white' : 'bg-rose-500 dark:bg-rose-400'
                                 }`}
                                 title="包含笔记"
                               />
                             )}
                             {hasTranscript && (
-                              <Mic className={`w-2.5 h-2.5 ${sessionData.completed ? 'text-white' : 'text-emerald-600'}`} title="包含逐字稿" />
+                              <Mic className={`w-2.5 h-2.5 ${isSessionCompleted ? 'text-white' : 'text-emerald-600'}`} title="包含逐字稿" />
                             )}
                             {hasIdeas && (
-                              <Lightbulb className={`w-2.5 h-2.5 ${sessionData.completed ? 'text-amber-200' : 'text-amber-500'}`} title="包含随记想法" />
+                              <Lightbulb className={`w-2.5 h-2.5 ${isSessionCompleted ? 'text-amber-200' : 'text-amber-500'}`} title="包含随记想法" />
                             )}
                             {hasResources && (
-                              <LinkIcon className={`w-2.5 h-2.5 ${sessionData.completed ? 'text-white' : 'text-blue-500'}`} title="包含WPS/公众号/小红书外链" />
+                              <LinkIcon className={`w-2.5 h-2.5 ${isSessionCompleted ? 'text-white' : 'text-blue-500'}`} title="包含WPS/公众号/小红书外链" />
                             )}
                           </div>
                         </button>
@@ -1345,11 +1354,22 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
   const currentCase = records.find((r) => r.id === selectedCaseId);
 
-  // 计算当前视图筛选下的自动累计时数
+  // 计算当前视图筛选下的自动累计时数 (只要新建/设置了总额度，就计入总数)
   const autoCompletedHours = statusFilteredRecords.reduce((acc, rec) => {
-    const completedCount = Object.values(rec.sessions || {}).filter((s: any) => s.completed).length;
-    const parentCount = Object.values(rec.parentSessions || {}).filter((p: any) => p.completed !== false && Boolean(p.date)).length;
-    return acc + completedCount + parentCount;
+    let recordedSessCount = 0;
+    if (rec.sessions) {
+      Object.values(rec.sessions).forEach((s: any) => {
+        if (s.completed || (s.note && s.note.trim()) || (s.transcript && s.transcript.trim()) || (s.ideas && s.ideas.length > 0) || (s.resources && s.resources.length > 0)) {
+          recordedSessCount++;
+        }
+      });
+    }
+    let parentCount = 0;
+    if (rec.parentSessions) {
+      parentCount = Object.values(rec.parentSessions).filter((p: any) => p.completed !== false && (p.date || (p.note && p.note.trim()))).length;
+    }
+    const eff = Math.max(rec.totalSessions || 0, recordedSessCount) + parentCount;
+    return acc + eff;
   }, 0);
 
   let currentCategoryOverrideHours: number | undefined;

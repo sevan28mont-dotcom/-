@@ -41,22 +41,32 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
   const calcCaseStats = (recordsList: typeof allRecords) => {
     return recordsList.reduce(
       (acc, rec) => {
+        let recSessionCount = 0;
+        let recSessionHours = 0;
+
         if (rec.sessions) {
           Object.values(rec.sessions).forEach((s: SessionData) => {
-            if (s.completed || s.note || s.transcript) {
-              acc.count++;
-              acc.hours += s.durationMinutes ? s.durationMinutes / 60 : 1;
+            if (s.completed || (s.note && s.note.trim()) || (s.transcript && s.transcript.trim()) || (s.ideas && s.ideas.length > 0) || (s.resources && s.resources.length > 0)) {
+              recSessionCount++;
+              recSessionHours += s.durationMinutes ? s.durationMinutes / 60 : 1;
             }
           });
         }
         if (rec.parentSessions) {
           Object.values(rec.parentSessions).forEach((ps: ParentSessionData) => {
-            if (ps.completed || ps.note || ps.transcript || ps.date) {
-              acc.count++;
-              acc.hours += ps.durationMinutes ? ps.durationMinutes / 60 : 1;
+            if (ps.completed !== false && (ps.date || (ps.note && ps.note.trim()) || (ps.transcript && ps.transcript.trim()))) {
+              recSessionCount++;
+              recSessionHours += ps.durationMinutes ? ps.durationMinutes / 60 : 1;
             }
           });
         }
+
+        const targetSessions = rec.totalSessions || 0;
+        const effectiveCount = Math.max(targetSessions, recSessionCount);
+        const effectiveHours = Math.max(targetSessions, recSessionHours);
+
+        acc.count += effectiveCount;
+        acc.hours += effectiveHours;
         return acc;
       },
       { count: 0, hours: 0 }
@@ -129,23 +139,38 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
   const autoCalculatedSupervisionHours = individualSupervisionHours + groupSupervisionHours;
   const autoCalculatedSupervisionCount = individualSupervisionCount + groupSupervisionCount;
 
-  // 3. 自动计算个人体验总记录数与时长
-  const personalRecords = systemData.experienceData?.records || systemData.personalExperience?.records || [];
-  let individualPersonalCount = 0;
-  let groupPersonalCount = 0;
-  let individualPersonalHours = 0;
-  let groupPersonalHours = 0;
+  // 3. 自动计算个人体验与团体体验总记录数与时长
+  const expData = systemData.experienceData || systemData.personalExperience || {};
+  const personalRecords = expData.records || [];
+  const individualTherapists = expData.individualTherapists || [];
+  const groupOptions = expData.groupOptions || [];
+
+  let individualPunchedHours = 0;
+  let individualPunchedCount = 0;
+  let groupPunchedHours = 0;
+  let groupPunchedCount = 0;
 
   personalRecords.forEach((r: any) => {
     const dur = r.durationMinutes ? r.durationMinutes / 60 : 1;
     if (r.type === 'group') {
-      groupPersonalCount++;
-      groupPersonalHours += dur;
+      groupPunchedCount++;
+      groupPunchedHours += dur;
     } else {
-      individualPersonalCount++;
-      individualPersonalHours += dur;
+      individualPunchedCount++;
+      individualPunchedHours += dur;
     }
   });
+
+  const sumTherapistsHours = individualTherapists.reduce((sum: number, t: any) => sum + (Number(t.totalHours) || 0), 0);
+  const totalIndivQuota = Number(expData.totalIndividualHours) || 0;
+  const individualPersonalHours = Math.max(individualPunchedHours, sumTherapistsHours, totalIndivQuota);
+  const individualPersonalCount = Math.max(individualPunchedCount, sumTherapistsHours, totalIndivQuota);
+
+  const sumGroupHours = groupOptions.reduce((sum: number, g: any) => sum + (Number(g.totalHours) || 0), 0);
+  const totalGroupQuota = Number(expData.totalGroupHours) || 0;
+  const groupPersonalHours = Math.max(groupPunchedHours, sumGroupHours, totalGroupQuota);
+  const groupPersonalCount = Math.max(groupPunchedCount, sumGroupHours, totalGroupQuota);
+
   const autoCalculatedPersonalHours = individualPersonalHours + groupPersonalHours;
 
   // 全局汇总展示值 (合并个案总时数，响应用户需求)

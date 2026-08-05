@@ -376,7 +376,10 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     onUpdateSupervisionRecord(
       editingRecordModal.mentorId,
       editingRecordModal.record.id,
-      editingRecordModal.record
+      {
+        ...editingRecordModal.record,
+        completed: editingRecordModal.record.completed !== false,
+      }
     );
     setEditingRecordModal(null);
   };
@@ -1048,7 +1051,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                             if (activeTypeFilter !== 'all' && r.type !== activeTypeFilter) return false;
                             return true;
                           });
-                          const hasRecord = Boolean(matchedRecord);
+                          const hasRecord = Boolean(matchedRecord && matchedRecord.completed !== false);
 
                           if (isLongList && !isExpanded && supSessionNum > displayLimit && !hasRecord) {
                             return null;
