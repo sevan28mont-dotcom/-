@@ -190,6 +190,18 @@ export interface TrainingCourse {
   sessions?: TrainingSessionRecord[]; // 学习/出勤/讲座明细
 }
 
+export interface CounselorCredential {
+  id: string;
+  title: string; // 证件/资质名称, e.g. "心理治疗师", "CPS注册心理师"
+  category: 'psychotherapy' | 'socialWork' | 'cps' | 'national' | 'other'; // 类别
+  level?: string; // 级别/称号, e.g. "中级", "CPS 3级", "二级"
+  issuingBody?: string; // 颁发/认证机构
+  issueDate: string; // 获得时间 / 颁发日期 YYYY-MM-DD 或 YYYY-MM
+  certNumber?: string; // 证书编号/注册号
+  status?: 'valid' | 'renewing' | 'lifetime' | 'expired'; // 状态: 有效 / 正在续期 / 终身有效 / 已到期
+  note?: string; // 备注说明
+}
+
 export interface SystemData {
   records: CaseRecord[];
   mentors: Supervisor[];
@@ -199,6 +211,7 @@ export interface SystemData {
   personalExperience?: PersonalExperienceSetting;
   experienceData?: any;
   trainings?: TrainingCourse[];
+  credentials?: CounselorCredential[];
   totalHoursOverrides?: {
     caseHours?: number;
     supervisionHours?: number;

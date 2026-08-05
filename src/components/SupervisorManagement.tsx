@@ -431,23 +431,24 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-600 mb-1">督导总次数额度</label>
+            <label className="block text-xs font-semibold text-zinc-600 mb-1">督导实数 (0.5h起)</label>
             <input
               type="number"
-              min={1}
-              max={1000}
+              step="0.5"
+              min={0.5}
+              max={5000}
               value={totalSupervisions}
               onChange={(e) => {
                 const val = e.target.value;
                 if (val === '') {
                   setTotalSupervisions('');
                 } else {
-                  const num = parseInt(val, 10);
+                  const num = parseFloat(val);
                   setTotalSupervisions(isNaN(num) ? '' : num);
                 }
               }}
               onFocus={(e) => e.target.select()}
-              className="w-full text-xs p-2.5 bg-white border border-rose-200 rounded-xl text-zinc-800 focus:outline-none focus:ring-1 focus:ring-rose-400"
+              className="w-full text-xs p-2.5 bg-white border border-rose-200 rounded-xl text-zinc-800 focus:outline-none focus:ring-1 focus:ring-rose-400 font-bold"
             />
           </div>
 
@@ -548,23 +549,23 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                         )}
                       </span>
                       <span className="flex items-center gap-1.5 font-medium">
-                        <span>督导总额度: <strong className="text-rose-600 font-bold">{mentor.totalSupervisions || 20} 次</strong></span>
+                        <span>督导实数: <strong className="text-rose-600 font-bold">{mentor.totalSupervisions || 20} 小时</strong></span>
                         <button
                           type="button"
                           onClick={() => {
-                            const input = window.prompt(`请输入导师【${mentor.name}】的最新督导总额度次数:`, String(mentor.totalSupervisions || 20));
+                            const input = window.prompt(`请输入导师【${mentor.name}】的最新督导实数 (小时):`, String(mentor.totalSupervisions || 20));
                             if (input) {
-                              const num = parseInt(input, 10);
+                              const num = parseFloat(input);
                               if (!isNaN(num) && num > 0 && onUpdateMentorTotalSupervisions) {
                                 onUpdateMentorTotalSupervisions(mentor.id, num);
                               }
                             }
                           }}
                           className="px-2 py-0.5 text-[11px] font-bold bg-white dark:bg-slate-800 hover:bg-rose-100 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-slate-700 rounded-md transition cursor-pointer flex items-center gap-1 shadow-2xs"
-                          title="重新设置此导师的督导总额度次数"
+                          title="重新设置此导师的督导实数 (0.5h起)"
                         >
                           <Pencil className="w-2.5 h-2.5" />
-                          <span>设置额度</span>
+                          <span>设置实数</span>
                         </button>
                       </span>
                     </div>

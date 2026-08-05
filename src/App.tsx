@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SystemData, CaseRecord, Supervisor, ScheduleItem, ThinkingNote, ReminderItem, SessionData, SupervisionRecord, ParentSessionData } from './types';
+import { SystemData, CaseRecord, Supervisor, ScheduleItem, ThinkingNote, ReminderItem, SessionData, SupervisionRecord, ParentSessionData, CounselorCredential } from './types';
 import { loadDataFromLocalStorage, saveDataToLocalStorage, saveDataToBackend, fetchBackendData, getDefaultSampleSystemData } from './services/storage';
 import { getCurrentUser, logoutUser, UserAccount } from './services/auth';
 import { loadWorkspaceLayout, saveWorkspaceLayout, WorkspaceLayoutConfig } from './services/layout';
@@ -12,6 +12,7 @@ import { ScheduleManagement } from './components/ScheduleManagement';
 import { ThinkingNotes } from './components/ThinkingNotes';
 import { PersonalExperienceManagement } from './components/PersonalExperienceManagement';
 import { TrainingManagement } from './components/TrainingManagement';
+import { CredentialManagement } from './components/CredentialManagement';
 import { PrivacySecurityModal } from './components/PrivacySecurityModal';
 import { ReminderModal } from './components/ReminderModal';
 import { TodayScheduleOverview } from './components/TodayScheduleOverview';
@@ -577,6 +578,34 @@ export default function App() {
     }));
   };
 
+  const handleAddCredential = (cred: Omit<CounselorCredential, 'id'>) => {
+    hasUserMutatedInSessionRef.current = true;
+    const newCred: CounselorCredential = {
+      ...cred,
+      id: `cred_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    };
+    setSystemData((prev) => ({
+      ...prev,
+      credentials: [newCred, ...(prev.credentials || [])],
+    }));
+  };
+
+  const handleUpdateCredential = (id: string, updated: Partial<CounselorCredential>) => {
+    hasUserMutatedInSessionRef.current = true;
+    setSystemData((prev) => ({
+      ...prev,
+      credentials: (prev.credentials || []).map((c) => (c.id === id ? { ...c, ...updated } : c)),
+    }));
+  };
+
+  const handleDeleteCredential = (id: string) => {
+    hasUserMutatedInSessionRef.current = true;
+    setSystemData((prev) => ({
+      ...prev,
+      credentials: (prev.credentials || []).filter((c) => c.id !== id),
+    }));
+  };
+
   if (!currentUser) {
     return <AuthPortal onLoginSuccess={handleLoginSuccess} isDarkMode={isDarkMode} onToggleTheme={toggleDarkMode} />;
   }
@@ -762,6 +791,15 @@ export default function App() {
                 trainingTypeFilter={trainingTypeFilter}
                 onTypeFilterChange={setTrainingTypeFilter}
                 activeTab={activeTab}
+              />
+            )}
+
+            {activeTab === 'credentials' && (
+              <CredentialManagement
+                credentials={systemData.credentials || []}
+                onAddCredential={handleAddCredential}
+                onUpdateCredential={handleUpdateCredential}
+                onDeleteCredential={handleDeleteCredential}
               />
             )}
 

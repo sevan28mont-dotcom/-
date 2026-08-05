@@ -41,6 +41,7 @@ export type ActiveTab =
   | 'trainingLongShort'
   | 'trainingOtherSchools'
   | 'trainingEthicsCrisis'
+  | 'credentials'
   | 'thinking'
   | 'schedule';
 
@@ -675,7 +676,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </AnimatePresence>
                 </div>
 
-                {/* 3 & 4. 其余一级菜单项: 想出来个啥、出了个门儿 */}
+                {/* 5. 心理咨询师证件 (国家级资质、心理治疗、社工、CPS 3级/2级等) */}
+                <div className="rounded-xl border border-emerald-200/80 dark:border-slate-800 bg-emerald-50/40 dark:bg-slate-800/40 overflow-hidden transition-all shadow-2xs">
+                  <button
+                    onClick={() => {
+                      handleItemSelect(() => {
+                        setActiveTab('credentials');
+                      });
+                    }}
+                    className={`w-full flex items-center justify-between px-3.5 py-3 text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === 'credentials'
+                        ? 'bg-emerald-500 text-white dark:bg-emerald-600 font-black shadow-md shadow-emerald-200/80 dark:shadow-none'
+                        : 'text-zinc-700 dark:text-slate-200 hover:bg-emerald-100/60 dark:hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                          activeTab === 'credentials'
+                            ? 'bg-white/20 text-white'
+                            : 'bg-emerald-200/70 dark:bg-slate-700 text-emerald-800 dark:text-emerald-300'
+                        }`}
+                      >
+                        <ShieldCheck className="w-4 h-4" />
+                      </div>
+                      <span className="text-base sm:text-lg font-black tracking-wide text-zinc-900 dark:text-slate-100">
+                        心理咨询师证件
+                      </span>
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                        activeTab === 'credentials'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-emerald-200/60 dark:bg-slate-700 text-emerald-800 dark:text-emerald-300'
+                      }`}
+                    >
+                      国家资质
+                    </span>
+                  </button>
+                </div>
+
+                {/* 6. 其余一级菜单项: 想出来个啥、出了个门儿 */}
                 {otherNavItems.map((item) => {
                   const IconComponent = ICON_MAP[item.iconName] || FolderOpen;
                   const isActive = activeTab === item.id;
