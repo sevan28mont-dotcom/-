@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Supervisor, CaseRecord, SupervisionRecord, ResourceLink } from '../types';
-import { Plus, Trash2, Calendar as CalendarIcon, Clock, CheckSquare, Square, Unlink, FileText, X, ChevronDown, ChevronUp, Search, Pencil, Link as LinkIcon, Lightbulb, Mic, Printer, User, Users, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Calendar as CalendarIcon, Clock, CheckSquare, Square, Unlink, FileText, X, ChevronDown, ChevronUp, Search, Pencil, Link as LinkIcon, Lightbulb, Mic, Printer, User, Users, Sparkles, CheckCircle2, RotateCcw, AlertTriangle } from 'lucide-react';
 import { VoiceInputButton } from './VoiceInputButton';
 import { ResourceLinkSection } from './ResourceLinkSection';
 import { IdeasSection } from './IdeasSection';
@@ -66,6 +66,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     caseId: string;
   } | null>(null);
 
+  const [supCaseId, setSupCaseId] = useState('');
   const [supSessionNum, setSupSessionNum] = useState<number | string>(1);
   const [supDate, setSupDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [supType, setSupType] = useState<'individual' | 'group'>('individual');
@@ -98,8 +99,12 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     record?: SupervisionRecord;
   } | null>(null);
 
-  // Search state
+  // Search & Filter state for Supervision Records
   const [searchQuery, setSearchQuery] = useState('');
+  const [recordStartDate, setRecordStartDate] = useState('');
+  const [recordEndDate, setRecordEndDate] = useState('');
+  const [selectedCaseFilter, setSelectedCaseFilter] = useState('');
+  const [selectedMentorFilter, setSelectedMentorFilter] = useState('');
   // Local Supervision Type Filter state
   const [localSupervisionTypeFilter, setLocalSupervisionTypeFilter] = useState<'all' | 'individual' | 'group'>('all');
 
@@ -118,7 +123,76 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     onTypeFilterChange?.(filter);
   };
 
+  // Helper: Determine if a single supervision record matches active filters
+  const isRecordMatching = (
+    r: SupervisionRecord,
+    mentor: Supervisor,
+    query: string,
+    startDate: string,
+    endDate: string,
+    caseFilter: string,
+    typeFilter: 'all' | 'individual' | 'group'
+  ) => {
+    // Type filter
+    if (typeFilter === 'individual') {
+      if (r.type === 'group') return false;
+    } else if (typeFilter === 'group') {
+      if (r.type === 'individual' && mentor.type !== 'group') return false;
+    }
+
+    // Date range filter
+    if (startDate && r.date && r.date < startDate) return false;
+    if (endDate && r.date && r.date > endDate) return false;
+
+    // Associated case filter
+    if (caseFilter && r.caseId !== caseFilter) return false;
+
+    // Search query
+    if (query) {
+      const q = query.toLowerCase().trim();
+      const matchMentorName = mentor.name.toLowerCase().includes(q);
+      if (matchMentorName) return true;
+
+      const matchDate = (r.date || '').toLowerCase().includes(q);
+      const matchTime = (r.timeRange || '').toLowerCase().includes(q);
+      const matchReflection = (r.reflection || '').toLowerCase().includes(q);
+      const matchTranscript = (r.transcript || '').toLowerCase().includes(q);
+      const matchIdeas = (r.ideas || []).some((i) => i.toLowerCase().includes(q));
+      const matchResources = (r.resources || []).some(
+        (res) => res.title.toLowerCase().includes(q) || res.url.toLowerCase().includes(q)
+      );
+
+      const matchedCaseObj = cases.find((c) => c.id === r.caseId);
+      const matchCaseName = matchedCaseObj
+        ? matchedCaseObj.name.toLowerCase().includes(q) || matchedCaseObj.caseNum.toLowerCase().includes(q)
+        : false;
+
+      const boundCases = cases.filter((c) => (mentor.boundCaseIds || []).includes(c.id));
+      const matchBoundCase = boundCases.some(
+        (c) => c.name.toLowerCase().includes(q) || c.caseNum.toLowerCase().includes(q)
+      );
+
+      return (
+        matchDate ||
+        matchTime ||
+        matchReflection ||
+        matchTranscript ||
+        matchIdeas ||
+        matchResources ||
+        matchCaseName ||
+        matchBoundCase
+      );
+    }
+
+    return true;
+  };
+
   const filteredMentors = mentors.filter((mentor) => {
+    // Supervisor Dropdown Filter
+    if (selectedMentorFilter && mentor.id !== selectedMentorFilter) {
+      return false;
+    }
+
     // 严格按个体督导 vs 团体督导隔离呈现
     if (activeTypeFilter === 'individual') {
       if (mentor.type === 'group') return false;
@@ -130,20 +204,57 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
       if (!isGrp) return false;
     }
 
-    if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
-    const matchName = mentor.name.toLowerCase().includes(q);
-    const matchGender = mentor.gender.toLowerCase().includes(q);
-    const boundIds = mentor.boundCaseIds || [];
-    const boundCases = cases.filter((c) => boundIds.includes(c.id));
-    const matchCase = boundCases.some((c) => c.name.toLowerCase().includes(q) || c.caseNum.toLowerCase().includes(q));
-    const records = mentor.records || [];
-    const matchReflection = records.some((r) => r.reflection?.toLowerCase().includes(q) || r.transcript?.toLowerCase().includes(q));
-    const matchResources = records.some((r) => r.resources?.some((res) => res.title.toLowerCase().includes(q) || res.url.toLowerCase().includes(q)));
-    const matchIdeas = records.some((r) => r.ideas?.some((i) => i.toLowerCase().includes(q)));
-    const matchDate = (mentor.startDate || '').includes(q) || (mentor.endDate || '').includes(q);
-    return matchName || matchGender || matchCase || matchReflection || matchResources || matchIdeas || matchDate;
+    const hasActiveFilters = Boolean(q || recordStartDate || recordEndDate || selectedCaseFilter);
+
+    if (!hasActiveFilters) {
+      return true;
+    }
+
+    // Direct match on supervisor name without other strict record filters
+    if (q && mentor.name.toLowerCase().includes(q) && !recordStartDate && !recordEndDate && !selectedCaseFilter) {
+      return true;
+    }
+
+    // Check if mentor has any matching records
+    const matchingRecords = (mentor.records || []).filter((r) =>
+      isRecordMatching(r, mentor, q, recordStartDate, recordEndDate, selectedCaseFilter, activeTypeFilter)
+    );
+
+    if (matchingRecords.length > 0) return true;
+
+    if (q && mentor.name.toLowerCase().includes(q)) {
+      if (selectedCaseFilter && !(mentor.boundCaseIds || []).includes(selectedCaseFilter)) {
+        return false;
+      }
+      return true;
+    }
+
+    return false;
   });
+
+  const totalFilteredRecordsCount = filteredMentors.reduce((acc, m) => {
+    const matching = (m.records || []).filter((r) =>
+      isRecordMatching(r, m, searchQuery, recordStartDate, recordEndDate, selectedCaseFilter, activeTypeFilter)
+    );
+    return acc + matching.length;
+  }, 0);
+
+  const activeFilterCount = [
+    Boolean(searchQuery.trim()),
+    Boolean(recordStartDate),
+    Boolean(recordEndDate),
+    Boolean(selectedCaseFilter),
+    Boolean(selectedMentorFilter),
+  ].filter(Boolean).length;
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setRecordStartDate('');
+    setRecordEndDate('');
+    setSelectedCaseFilter('');
+    setSelectedMentorFilter('');
+  };
 
   const handleCreateMentor = (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,9 +284,11 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
     }));
   };
 
-  const handleOpenSupervisionModal = (mentorId: string, caseId: string) => {
+  const handleOpenSupervisionModal = (mentorId: string, initialCaseId?: string) => {
     const targetMentor = mentors.find((m) => m.id === mentorId);
-    setSupervisionModal({ mentorId, caseId });
+    const chosenCaseId = initialCaseId || targetMentor?.boundCaseIds[0] || cases[0]?.id || '';
+    setSupervisionModal({ mentorId, caseId: chosenCaseId });
+    setSupCaseId(chosenCaseId);
     setSupSessionNum(1);
     setSupDate(new Date().toISOString().split('T')[0]);
     setSupType(targetMentor?.type === 'group' || activeTypeFilter === 'group' ? 'group' : 'individual');
@@ -190,8 +303,9 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
 
   const handleSaveSupervisionRecord = () => {
     if (!supervisionModal) return;
+    const finalCaseId = supCaseId || supervisionModal.caseId || '';
     onAddSupervisionRecord(supervisionModal.mentorId, {
-      caseId: supervisionModal.caseId,
+      caseId: finalCaseId,
       sessionNum: Number(supSessionNum) || 1,
       date: supDate,
       timeRange: `${supStartTime}-${supEndTime}`,
@@ -201,6 +315,12 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
       ideas: supIdeas,
       resources: supResources,
     });
+    if (finalCaseId) {
+      const targetMentor = mentors.find((m) => m.id === supervisionModal.mentorId);
+      if (targetMentor && !targetMentor.boundCaseIds.includes(finalCaseId)) {
+        onUpdateMentorCaseBinding(supervisionModal.mentorId, finalCaseId, true);
+      }
+    }
     setSupervisionModal(null);
   };
 
@@ -318,27 +438,29 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
   let autoGroupSupervisionHours = 0;
 
   mentors.forEach((m) => {
-    const isGroupMentor = m.type === 'group';
+    const hasGroupRecords = (m.records || []).some((r) => r.type === 'group');
+    const hasIndivRecords = (m.records || []).some((r) => r.type === 'individual');
+    const isGroupMentor = m.type === 'group' || (hasGroupRecords && !hasIndivRecords && m.type !== 'individual');
+
     let mGroupHours = 0;
     let mIndivHours = 0;
 
     (m.records || []).forEach((r) => {
       const dur = Number((r as any).durationHours) || 1;
-      if (r.type === 'group' || isGroupMentor) {
+      if (r.type === 'group' || (isGroupMentor && r.type !== 'individual')) {
         mGroupHours += dur;
       } else {
         mIndivHours += dur;
       }
     });
 
+    const targetHours = m.totalSupervisions || 0;
+
     if (isGroupMentor) {
-      autoGroupSupervisionHours += Math.max(mGroupHours, m.totalSupervisions || 0);
+      autoGroupSupervisionHours += Math.max(mGroupHours, targetHours);
       autoIndividualSupervisionHours += mIndivHours;
-    } else if (m.type === 'individual' || !m.type) {
-      autoIndividualSupervisionHours += Math.max(mIndivHours, m.totalSupervisions || 0);
-      autoGroupSupervisionHours += mGroupHours;
     } else {
-      autoIndividualSupervisionHours += mIndivHours;
+      autoIndividualSupervisionHours += Math.max(mIndivHours, targetHours);
       autoGroupSupervisionHours += mGroupHours;
     }
   });
@@ -542,51 +664,182 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
         </form>
       </div>
 
-      {/* 搜索过滤栏 */}
-      <div className="bg-white border border-rose-200 rounded-2xl p-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="检索导师姓名、称谓、关联个案或督导反思..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full text-xs pl-9 pr-8 py-2 bg-rose-50/30 border border-rose-200 rounded-xl text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-rose-400"
-          />
-          {searchQuery && (
+      {/* 督导记录搜索与高级过滤栏 */}
+      <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-100 text-xs">
+            <Search className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+            <span>督导历史检索与高级过滤</span>
+            {activeFilterCount > 0 && (
+              <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 font-bold rounded-full text-[10px]">
+                已启 {activeFilterCount} 项筛选
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="px-2.5 py-1 bg-zinc-100 hover:bg-rose-100 text-zinc-600 hover:text-rose-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>重置筛选</span>
+              </button>
+            )}
+
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-0.5 rounded-full cursor-pointer"
+              type="button"
+              onClick={() => {
+                const allKeys = filteredMentors.flatMap((m) => m.records.map((r) => r.id));
+                const isAllExpanded = allKeys.length > 0 && allKeys.every((id) => expandedReflectionIds[id] !== false);
+                const nextState: Record<string, boolean> = {};
+                allKeys.forEach((id) => {
+                  nextState[id] = !isAllExpanded;
+                });
+                setExpandedReflectionIds(nextState);
+              }}
+              className="px-3 py-1 bg-rose-50 dark:bg-slate-800 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-slate-700 border border-rose-200 dark:border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+              title="一键展开或折叠所有关联个案下的督导反思与逐字稿文本"
             >
-              <X className="w-3.5 h-3.5" />
+              <ChevronDown className="w-3.5 h-3.5" />
+              <span>一键展开/折叠所有反思</span>
             </button>
-          )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-zinc-500 font-medium">
-          <button
-            type="button"
-            onClick={() => {
-              const allKeys = filteredMentors.flatMap((m) => m.records.map((r) => r.id));
-              const isAllExpanded = allKeys.length > 0 && allKeys.every((id) => expandedReflectionIds[id] !== false);
-              const nextState: Record<string, boolean> = {};
-              allKeys.forEach((id) => {
-                nextState[id] = !isAllExpanded;
-              });
-              setExpandedReflectionIds(nextState);
-            }}
-            className="px-3 py-1.5 bg-rose-50 dark:bg-slate-800 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-slate-700 border border-rose-200 dark:border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
-            title="一键展开或折叠所有关联个案下的督导反思与逐字稿文本"
-          >
-            <ChevronDown className="w-3.5 h-3.5" />
-            <span>一键展开/折叠所有反思</span>
-          </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+          {/* 1. 关键字搜索框 */}
+          <div className="relative col-span-1 sm:col-span-2 lg:col-span-1">
+            <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="搜索督导师姓名/个案/反思/逐字稿..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full text-xs pl-8 pr-7 py-2 bg-rose-50/30 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-rose-400 font-medium"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-slate-200 p-0.5 rounded-full cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
-          {searchQuery ? (
-            <span>检索结果: <strong className="text-rose-600 font-bold">{filteredMentors.length}</strong> / {mentors.length} 位</span>
-          ) : (
-            <span>当前包含 <strong className="text-zinc-800 font-bold">{mentors.length}</strong> 位督导师</span>
-          )}
+          {/* 2. 按督导师筛选 */}
+          <div>
+            <select
+              value={selectedMentorFilter}
+              onChange={(e) => setSelectedMentorFilter(e.target.value)}
+              className="w-full p-2 bg-rose-50/30 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400 font-semibold cursor-pointer"
+            >
+              <option value="">👨‍🏫 全部督导师 ({mentors.length}位)</option>
+              {mentors.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.gender.includes('女') ? '👩‍🏫' : '👨‍🏫'} {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 3. 按关联个案筛选 */}
+          <div>
+            <select
+              value={selectedCaseFilter}
+              onChange={(e) => setSelectedCaseFilter(e.target.value)}
+              className="w-full p-2 bg-rose-50/30 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400 font-semibold cursor-pointer"
+            >
+              <option value="">📁 全部关联个案 ({cases.length}个)</option>
+              {cases.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.avatar} {c.caseNum} {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 4. 日期范围选择 */}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={recordStartDate}
+              onChange={(e) => setRecordStartDate(e.target.value)}
+              className="w-full p-1.5 bg-rose-50/30 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-[11px] text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400 font-medium"
+              title="开始日期"
+            />
+            <span className="text-zinc-400 font-bold text-xs">至</span>
+            <input
+              type="date"
+              value={recordEndDate}
+              onChange={(e) => setRecordEndDate(e.target.value)}
+              className="w-full p-1.5 bg-rose-50/30 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-[11px] text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400 font-medium"
+              title="结束日期"
+            />
+          </div>
+        </div>
+
+        {/* 日期快捷选项与筛选结果汇总 */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-zinc-500 border-t border-rose-100 dark:border-slate-800">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-bold text-zinc-600 dark:text-slate-400">日期快捷:</span>
+            <button
+              type="button"
+              onClick={() => {
+                const today = new Date();
+                const past30 = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+                setRecordStartDate(past30.toISOString().split('T')[0]);
+                setRecordEndDate(today.toISOString().split('T')[0]);
+              }}
+              className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-rose-700 dark:text-rose-300 rounded-md transition font-medium cursor-pointer"
+            >
+              近30天
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const today = new Date();
+                const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                setRecordStartDate(firstDayOfMonth.toISOString().split('T')[0]);
+                setRecordEndDate(today.toISOString().split('T')[0]);
+              }}
+              className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-rose-700 dark:text-rose-300 rounded-md transition font-medium cursor-pointer"
+            >
+              本月
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const today = new Date();
+                const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
+                setRecordStartDate(firstDayOfYear.toISOString().split('T')[0]);
+                setRecordEndDate(today.toISOString().split('T')[0]);
+              }}
+              className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-rose-700 dark:text-rose-300 rounded-md transition font-medium cursor-pointer"
+            >
+              今年
+            </button>
+            {(recordStartDate || recordEndDate) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRecordStartDate('');
+                  setRecordEndDate('');
+                }}
+                className="px-2 py-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-slate-200 transition font-medium cursor-pointer underline"
+              >
+                清空日期
+              </button>
+            )}
+          </div>
+
+          <div>
+            筛选结果: 符合条件督导师 <strong className="text-rose-600 font-bold">{filteredMentors.length}</strong> / {mentors.length} 位
+            ，包含督导记录 <strong className="text-rose-600 font-bold">{totalFilteredRecordsCount}</strong> 条
+          </div>
         </div>
       </div>
 
@@ -795,11 +1048,9 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                               onClick={() => {
                                 if (matchedRecord) {
                                   handleOpenEditModal(mentor.id, matchedRecord);
-                                } else if (boundCases.length > 0) {
-                                  handleOpenSupervisionModal(mentor.id, boundCases[0].id);
-                                  setSupSessionNum(supSessionNum);
                                 } else {
-                                  alert('请先勾选关联至少一个个案后再录入督导记录！');
+                                  handleOpenSupervisionModal(mentor.id, cases[0]?.id || '');
+                                  setSupSessionNum(supSessionNum);
                                 }
                               }}
                               className={`p-1 min-h-10 border rounded-xl text-[11px] font-bold transition flex flex-col items-center justify-center cursor-pointer shadow-2xs ${
@@ -819,291 +1070,266 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                   );
                 })()}
 
-                {/* 仅在对应督导师下显示勾选的个案 */}
-                <div className="space-y-3">
-                  <div className="text-xs font-bold text-zinc-800 flex items-center justify-between">
-                    <span>已勾选关联个案 ({boundCases.length} 个):</span>
-                    <span className="text-[11px] font-normal text-zinc-500">
-                      (仅在此导师下展示勾选的个案，点击“删除关联”即可解绑)
-                    </span>
-                  </div>
+                {/* 督导记录列表，每一项均包含独立【关联个案】选择下拉框 */}
+                {(() => {
+                  const mentorRecords = mentor.records.filter((r) =>
+                    isRecordMatching(r, mentor, searchQuery, recordStartDate, recordEndDate, selectedCaseFilter, activeTypeFilter)
+                  );
 
-                  {boundCases.length === 0 ? (
-                    <div className="bg-rose-50/40 border border-dashed border-rose-200 rounded-xl p-4 text-center text-xs text-zinc-500">
-                      该导师下暂无关联的个案，请点击右上角【勾选/关联个案】进行勾选绑定。
-                    </div>
-                  ) : (
-                    boundCases.map((caseItem) => {
-                      const caseSupervisions = mentor.records.filter((r) => {
-                        if (r.caseId !== caseItem.id) return false;
-                        if (activeTypeFilter !== 'all' && r.type !== activeTypeFilter) return false;
-                        return true;
-                      });
-                      const key = `${mentor.id}_${caseItem.id}`;
-                      const isRecordsExpanded = Boolean(expandedCaseRecordLists[key]);
-                      const recordLimit = 5;
-                      const hasManyRecords = caseSupervisions.length > recordLimit;
-                      const displayedSupervisions = hasManyRecords && !isRecordsExpanded
-                        ? caseSupervisions.slice(0, recordLimit)
-                        : caseSupervisions;
-
-                      return (
-                        <div
-                          key={caseItem.id}
-                          className="border border-rose-200 rounded-xl bg-rose-50/30 p-3.5 space-y-2.5"
-                        >
-                          <div className="flex items-center justify-between gap-2 border-b border-rose-200/60 pb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">{caseItem.avatar}</span>
-                              <span className="font-bold text-zinc-800 text-sm">
-                                {caseItem.caseNum} {caseItem.name}
-                              </span>
-                              <span className="text-[11px] text-zinc-500">
-                                (已登记督导 {caseSupervisions.length} 次)
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleOpenSupervisionModal(mentor.id, caseItem.id)}
-                                className="text-xs font-bold px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition shadow-2xs cursor-pointer"
-                              >
-                                + 录入督导与反思
-                              </button>
-
-                              {/* 解绑关联按钮 */}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  onUpdateMentorCaseBinding(mentor.id, caseItem.id, false);
-                                }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                onTouchStart={(e) => e.stopPropagation()}
-                                className="text-[10px] uppercase font-bold px-2.5 py-1.5 bg-zinc-100 text-zinc-600 hover:bg-rose-500 hover:text-white dark:bg-slate-800 dark:text-slate-300 border border-zinc-200 dark:border-slate-700 hover:border-rose-500 rounded-lg transition flex items-center gap-1 cursor-pointer select-none touch-manipulation min-h-[36px] active:scale-95 shadow-2xs"
-                                title="断开此个案与当前督导师的关联"
-                              >
-                                <Unlink className="w-3 h-3" />
-                                <span>删除关联</span>
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* 对应个案下的督导记录列表 */}
-                          <div className="space-y-2 pl-1">
-                            {caseSupervisions.length === 0 ? (
-                              <div className="text-xs text-zinc-400 italic">暂无具体督导会谈记录</div>
-                            ) : (
-                              <>
-                                {displayedSupervisions.map((sup) => {
-                                  const isExpanded = expandedReflectionIds[sup.id] ?? true;
-                                  const hasTranscript = Boolean(sup.transcript && sup.transcript.trim());
-                                  const hasIdeas = Boolean(sup.ideas && sup.ideas.length > 0);
-                                  const hasResources = Boolean(sup.resources && sup.resources.length > 0);
-
-                                return (
-                                  <div
-                                    key={sup.id}
-                                    className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-xl p-3.5 text-xs space-y-2.5 shadow-2xs"
-                                  >
-                                    <div className="flex items-center justify-between font-medium text-zinc-700 dark:text-slate-200">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span className="font-bold text-rose-800 dark:text-rose-400">
-                                          📅 {sup.date} [{sup.timeRange}]
-                                        </span>
-                                        <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 font-bold rounded-md flex items-center gap-1 text-[11px]">
-                                          <span className="flex items-center justify-center w-4 h-4 bg-rose-200 dark:bg-rose-800 text-rose-900 dark:text-rose-100 rounded-full text-[10px] font-bold italic">
-                                            {sup.type === 'individual' ? '1' : '2'}
-                                          </span>
-                                          <span>{sup.type === 'individual' ? '1. 个体督导' : '2. 团体督导'}</span>
-                                        </span>
-                                        <span className="text-zinc-500 dark:text-slate-400">(针对第 {sup.sessionNum} 次咨询)</span>
-                                      </div>
-
-                                      <div className="flex items-center gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleReflectionExpand(sup.id)}
-                                          className="text-zinc-500 hover:text-zinc-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-0.5 cursor-pointer text-[11px]"
-                                        >
-                                          {isExpanded ? (
-                                            <>
-                                              <span>收起详情</span>
-                                              <ChevronUp className="w-3.5 h-3.5" />
-                                            </>
-                                          ) : (
-                                            <>
-                                              <span>展开详情</span>
-                                              <ChevronDown className="w-3.5 h-3.5" />
-                                            </>
-                                          )}
-                                        </button>
-
-                                        <button
-                                          type="button"
-                                          onClick={() => setExportingPdfSupervisorModal({ supervisor: mentor, record: sup })}
-                                          className="text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 flex items-center gap-1 font-bold text-[11px] bg-emerald-50 dark:bg-slate-800 hover:bg-emerald-100 dark:hover:bg-slate-700 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-slate-700 transition cursor-pointer"
-                                          title="导出当前此条督导会谈与逐字稿为 PDF"
-                                        >
-                                          <Printer className="w-3 h-3" />
-                                          <span>导出此条 PDF</span>
-                                        </button>
-
-                                        <button
-                                          type="button"
-                                          onClick={() => handleOpenEditModal(mentor.id, sup)}
-                                          className="text-rose-700 dark:text-rose-300 hover:text-rose-900 flex items-center gap-1 font-bold text-[11px] bg-rose-50 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-slate-700 px-2.5 py-1 rounded-lg border border-rose-200 dark:border-slate-700 transition cursor-pointer"
-                                          title="编辑反思、逐字稿、想法与WPS外链"
-                                        >
-                                          <Pencil className="w-3 h-3" />
-                                          <span>编辑全功能档案</span>
-                                        </button>
-
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            if (window.confirm('确定要彻底删除这条督导会谈记录吗？')) {
-                                              onDeleteSupervisionRecord(mentor.id, sup.id);
-                                            }
-                                          }}
-                                          onMouseDown={(e) => e.stopPropagation()}
-                                          onTouchStart={(e) => e.stopPropagation()}
-                                          className="flex items-center gap-1 text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-white bg-rose-50 hover:bg-rose-600 dark:bg-slate-800 dark:hover:bg-rose-600 border border-rose-200 dark:border-slate-700 px-3 py-1.5 rounded-lg transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95 shadow-2xs"
-                                          title="删除此条记录"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                          <span>删除</span>
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* 展开的主体内容 */}
-                                    <AnimatePresence initial={false}>
-                                      {isExpanded && (
-                                        <motion.div
-                                          key={`sup-detail-${sup.id}`}
-                                          initial={{ opacity: 0, height: 0 }}
-                                          animate={{ opacity: 1, height: 'auto' }}
-                                          exit={{ opacity: 0, height: 0 }}
-                                          transition={{ duration: 0.22, ease: 'easeInOut' }}
-                                          className="overflow-hidden space-y-2.5 pt-1"
-                                        >
-                                          {/* 💡 反思要点 */}
-                                        {sup.reflection ? (
-                                          <div className="bg-rose-50/80 dark:bg-slate-800/70 border-l-3 border-rose-400 dark:border-rose-500 p-2.5 text-zinc-800 dark:text-slate-200 rounded-r-xl text-xs leading-relaxed">
-                                            <strong className="text-rose-900 dark:text-rose-300 block font-bold mb-1">
-                                              💡 督导反思与要点:
-                                            </strong>
-                                            {/<[a-z][\s\S]*>/i.test(sup.reflection) ? (
-                                              <div dangerouslySetInnerHTML={{ __html: sup.reflection }} />
-                                            ) : (
-                                              <div className="whitespace-pre-wrap">{sup.reflection}</div>
-                                            )}
-                                          </div>
-                                        ) : null}
-
-                                        {/* 🎙️ 逐字稿 */}
-                                        {hasTranscript && (
-                                          <div className="bg-emerald-50/60 dark:bg-emerald-950/30 border-l-3 border-emerald-500 p-2.5 text-slate-800 dark:text-slate-200 rounded-r-xl text-xs space-y-1">
-                                            <strong className="text-emerald-900 dark:text-emerald-300 font-bold flex items-center gap-1 mb-1">
-                                              <Mic className="w-3.5 h-3.5 text-emerald-600" />
-                                              <span>督导会谈逐字稿:</span>
-                                            </strong>
-                                            {/<[a-z][\s\S]*>/i.test(sup.transcript || '') ? (
-                                              <div dangerouslySetInnerHTML={{ __html: sup.transcript || '' }} />
-                                            ) : (
-                                              <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
-                                                {sup.transcript}
-                                              </div>
-                                            )}
-                                          </div>
-                                        )}
-
-                                        {/* 💭 插入的想法随记 */}
-                                        {hasIdeas && (
-                                          <IdeasSection
-                                            ideas={sup.ideas || []}
-                                            onAddIdea={(newIdea) => {
-                                              if (onUpdateSupervisionRecord) {
-                                                onUpdateSupervisionRecord(mentor.id, sup.id, {
-                                                  ideas: [...(sup.ideas || []), newIdea],
-                                                });
-                                              }
-                                            }}
-                                            onDeleteIdea={(idx) => {
-                                              if (onUpdateSupervisionRecord) {
-                                                onUpdateSupervisionRecord(mentor.id, sup.id, {
-                                                  ideas: (sup.ideas || []).filter((_, i) => i !== idx),
-                                                });
-                                              }
-                                            }}
-                                          />
-                                        )}
-
-                                        {/* 📎 资源外链 (WPS / 微信 / 小红书) */}
-                                        {hasResources && (
-                                          <ResourceLinkSection
-                                            resources={sup.resources || []}
-                                            onAddResource={(newLink) => {
-                                              if (onUpdateSupervisionRecord) {
-                                                onUpdateSupervisionRecord(mentor.id, sup.id, {
-                                                  resources: [...(sup.resources || []), newLink],
-                                                });
-                                              }
-                                            }}
-                                            onDeleteResource={(id) => {
-                                              if (onUpdateSupervisionRecord) {
-                                                onUpdateSupervisionRecord(mentor.id, sup.id, {
-                                                  resources: (sup.resources || []).filter((r) => r.id !== id),
-                                                });
-                                              }
-                                            }}
-                                          />
-                                        )}
-                                        </motion.div>
-                                      )}
-                                    </AnimatePresence>
-                                  </div>
-                                );
-                              })}
-
-                              {hasManyRecords && (
-                                <div className="mt-2 flex justify-center">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setExpandedCaseRecordLists((prev) => ({
-                                        ...prev,
-                                        [key]: !prev[key],
-                                      }))
-                                    }
-                                    className="px-3 py-1 bg-white dark:bg-slate-800 hover:bg-rose-50 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
-                                  >
-                                    {isRecordsExpanded ? (
-                                      <>
-                                        <ChevronUp className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                                        <span>折叠督导记录 (已展全 {caseSupervisions.length} 条)</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <ChevronDown className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                                        <span>展开剩余 {caseSupervisions.length - recordLimit} 条督导记录 (共 {caseSupervisions.length} 条)</span>
-                                      </>
-                                    )}
-                                  </button>
-                                </div>
-                              )}
-                            </>
+                  return (
+                    <div className="space-y-3 pt-1">
+                      <div className="flex flex-wrap items-center justify-between text-xs font-bold text-zinc-800 dark:text-slate-200 border-b border-rose-200/60 dark:border-slate-700/60 pb-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                          <span>
+                            {activeTypeFilter === 'individual' ? '个体督导' : activeTypeFilter === 'group' ? '团体督导' : '督导'}
+                            记录列表 ({mentorRecords.length} 条)
+                          </span>
+                          {boundCases.length > 0 && (
+                            <span className="text-[11px] font-normal text-zinc-500 dark:text-slate-400">
+                              (导师关联个案: {boundCases.map((c) => c.name).join('、')})
+                            </span>
                           )}
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenSupervisionModal(mentor.id, cases[0]?.id || '')}
+                          className="text-xs font-bold px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition shadow-2xs cursor-pointer flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>+ 新增督导与反思</span>
+                        </button>
                       </div>
-                    );
-                    })
-                  )}
-                </div>
+
+                      {mentorRecords.length === 0 ? (
+                        <div className="bg-rose-50/40 dark:bg-slate-800/40 border border-dashed border-rose-200 dark:border-slate-700 rounded-xl p-4 text-center text-xs text-zinc-500 dark:text-slate-400 space-y-1">
+                          <div>该导师下暂无明细打卡记录。</div>
+                          <div className="text-[11px] text-rose-600 dark:text-rose-400">
+                            点击上方【+ 新增督导与反思】或上方【1~{mentor.totalSupervisions || 20}次进度按钮】即可直接录入！
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {mentorRecords.map((sup) => {
+                            const isExpanded = expandedReflectionIds[sup.id] ?? true;
+                            const hasTranscript = Boolean(sup.transcript && sup.transcript.trim());
+                            const hasIdeas = Boolean(sup.ideas && sup.ideas.length > 0);
+                            const hasResources = Boolean(sup.resources && sup.resources.length > 0);
+
+                            return (
+                              <div
+                                key={sup.id}
+                                className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-xl p-3.5 text-xs space-y-2.5 shadow-2xs"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-rose-100 dark:border-slate-800 pb-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-bold text-rose-800 dark:text-rose-400">
+                                      📅 {sup.date} [{sup.timeRange}]
+                                    </span>
+                                    <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 font-bold rounded-md flex items-center gap-1 text-[11px]">
+                                      <span className="flex items-center justify-center w-4 h-4 bg-rose-200 dark:bg-rose-800 text-rose-900 dark:text-rose-100 rounded-full text-[10px] font-bold italic">
+                                        {sup.type === 'group' ? '2' : '1'}
+                                      </span>
+                                      <span>{sup.type === 'group' ? '2. 团体督导' : '1. 个体督导'}</span>
+                                    </span>
+                                    <span className="text-zinc-500 dark:text-slate-400 font-bold">(第 {sup.sessionNum} 次)</span>
+
+                                    {/* 🎯 每一条记录独立的【关联个案】选择框 */}
+                                    <div className="flex items-center gap-1.5 bg-rose-50/80 dark:bg-slate-800/80 px-2 py-1 rounded-lg border border-rose-200/80 dark:border-slate-700 ml-1">
+                                      <User className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                                      <span className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">关联个案:</span>
+                                      <select
+                                        value={sup.caseId || ''}
+                                        onChange={(e) => {
+                                          const selectedCaseId = e.target.value;
+                                          if (onUpdateSupervisionRecord) {
+                                            onUpdateSupervisionRecord(mentor.id, sup.id, { caseId: selectedCaseId });
+                                          }
+                                          if (selectedCaseId && !mentor.boundCaseIds.includes(selectedCaseId)) {
+                                            onUpdateMentorCaseBinding(mentor.id, selectedCaseId, true);
+                                          }
+                                        }}
+                                        className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-700 rounded-md px-1.5 py-0.5 text-[11px] font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400 cursor-pointer"
+                                      >
+                                        <option value="">-- 选择关联个案 --</option>
+                                        {cases.map((c) => (
+                                          <option key={c.id} value={c.id}>
+                                            {c.avatar} {c.caseNum} {c.name}{c.status === 'ended' ? ' [已结案]' : ''}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      {(() => {
+                                        const linkedCase = cases.find((c) => c.id === sup.caseId);
+                                        if (linkedCase?.status === 'ended') {
+                                          return (
+                                            <span
+                                              className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 font-bold rounded text-[10px] border border-amber-300 dark:border-amber-700 flex items-center gap-1"
+                                              title="注意：关联个案处于已结案状态"
+                                            >
+                                              <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                                              <span>已结案</span>
+                                            </span>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleReflectionExpand(sup.id)}
+                                      className="text-zinc-500 hover:text-zinc-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-0.5 cursor-pointer text-[11px]"
+                                    >
+                                      {isExpanded ? (
+                                        <>
+                                          <span>收起详情</span>
+                                          <ChevronUp className="w-3.5 h-3.5" />
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span>展开详情</span>
+                                          <ChevronDown className="w-3.5 h-3.5" />
+                                        </>
+                                      )}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => setExportingPdfSupervisorModal({ supervisor: mentor, record: sup })}
+                                      className="text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 flex items-center gap-1 font-bold text-[11px] bg-emerald-50 dark:bg-slate-800 hover:bg-emerald-100 dark:hover:bg-slate-700 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-slate-700 transition cursor-pointer"
+                                      title="导出当前此条督导会谈与逐字稿为 PDF"
+                                    >
+                                      <Printer className="w-3 h-3" />
+                                      <span>导出 PDF</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditModal(mentor.id, sup)}
+                                      className="text-rose-700 dark:text-rose-300 hover:text-rose-900 flex items-center gap-1 font-bold text-[11px] bg-rose-50 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-slate-700 px-2.5 py-1 rounded-lg border border-rose-200 dark:border-slate-700 transition cursor-pointer"
+                                      title="编辑反思、逐字稿、关联个案、想法与WPS外链"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                      <span>编辑全功能档案</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        if (window.confirm('确定要彻底删除这条督导会谈记录吗？')) {
+                                          onDeleteSupervisionRecord(mentor.id, sup.id);
+                                        }
+                                      }}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onTouchStart={(e) => e.stopPropagation()}
+                                      className="flex items-center gap-1 text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-white bg-rose-50 hover:bg-rose-600 dark:bg-slate-800 dark:hover:bg-rose-600 border border-rose-200 dark:border-slate-700 px-3 py-1.5 rounded-lg transition cursor-pointer select-none touch-manipulation min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95 shadow-2xs"
+                                      title="删除此条记录"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span>删除</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* 展开的主体内容 */}
+                                <AnimatePresence initial={false}>
+                                  {isExpanded && (
+                                    <motion.div
+                                      key={`sup-detail-${sup.id}`}
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: 'auto' }}
+                                      exit={{ opacity: 0, height: 0 }}
+                                      transition={{ duration: 0.22, ease: 'easeInOut' }}
+                                      className="overflow-hidden space-y-2.5 pt-1"
+                                    >
+                                      {/* 💡 反思要点 */}
+                                      {sup.reflection ? (
+                                        <div className="bg-rose-50/80 dark:bg-slate-800/70 border-l-3 border-rose-400 dark:border-rose-500 p-2.5 text-zinc-800 dark:text-slate-200 rounded-r-xl text-xs leading-relaxed">
+                                          <strong className="text-rose-900 dark:text-rose-300 block font-bold mb-1">
+                                            💡 督导反思与要点:
+                                          </strong>
+                                          {/<[a-z][\s\S]*>/i.test(sup.reflection) ? (
+                                            <div dangerouslySetInnerHTML={{ __html: sup.reflection }} />
+                                          ) : (
+                                            <div className="whitespace-pre-wrap">{sup.reflection}</div>
+                                          )}
+                                        </div>
+                                      ) : null}
+
+                                      {/* 🎙️ 逐字稿 */}
+                                      {hasTranscript && (
+                                        <div className="bg-emerald-50/60 dark:bg-emerald-950/30 border-l-3 border-emerald-500 p-2.5 text-slate-800 dark:text-slate-200 rounded-r-xl text-xs space-y-1">
+                                          <strong className="text-emerald-900 dark:text-emerald-300 font-bold flex items-center gap-1 mb-1">
+                                            <Mic className="w-3.5 h-3.5 text-emerald-600" />
+                                            <span>督导会谈逐字稿:</span>
+                                          </strong>
+                                          {/<[a-z][\s\S]*>/i.test(sup.transcript || '') ? (
+                                            <div dangerouslySetInnerHTML={{ __html: sup.transcript || '' }} />
+                                          ) : (
+                                            <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
+                                              {sup.transcript}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {/* 💭 插入的想法随记 */}
+                                      {hasIdeas && (
+                                        <IdeasSection
+                                          ideas={sup.ideas || []}
+                                          onAddIdea={(newIdea) => {
+                                            if (onUpdateSupervisionRecord) {
+                                              onUpdateSupervisionRecord(mentor.id, sup.id, {
+                                                ideas: [...(sup.ideas || []), newIdea],
+                                              });
+                                            }
+                                          }}
+                                          onDeleteIdea={(idx) => {
+                                            if (onUpdateSupervisionRecord) {
+                                              onUpdateSupervisionRecord(mentor.id, sup.id, {
+                                                ideas: (sup.ideas || []).filter((_, i) => i !== idx),
+                                              });
+                                            }
+                                          }}
+                                        />
+                                      )}
+
+                                      {/* 📎 资源外链 (WPS / 微信 / 小红书) */}
+                                      {hasResources && (
+                                        <ResourceLinkSection
+                                          resources={sup.resources || []}
+                                          onAddResource={(newLink) => {
+                                            if (onUpdateSupervisionRecord) {
+                                              onUpdateSupervisionRecord(mentor.id, sup.id, {
+                                                resources: [...(sup.resources || []), newLink],
+                                              });
+                                            }
+                                          }}
+                                          onDeleteResource={(id) => {
+                                            if (onUpdateSupervisionRecord) {
+                                              onUpdateSupervisionRecord(mentor.id, sup.id, {
+                                                resources: (sup.resources || []).filter((r) => r.id !== id),
+                                              });
+                                            }
+                                          }}
+                                        />
+                                      )}
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })
@@ -1192,7 +1418,22 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">关联个案</label>
+                <select
+                  value={supCaseId}
+                  onChange={(e) => setSupCaseId(e.target.value)}
+                  className="w-full p-2 bg-rose-50/50 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-400 font-bold"
+                >
+                  <option value="">-- 选择关联个案 --</option>
+                  {cases.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.avatar} {c.caseNum} {c.name}{c.status === 'ended' ? ' [已结案]' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">针对咨询次数 *</label>
                 <input
@@ -1255,6 +1496,27 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* 若选中的关联个案状态为“已结束”，显示明显警告提示 */}
+            {(() => {
+              const selectedCaseObj = cases.find((c) => c.id === supCaseId);
+              if (selectedCaseObj?.status === 'ended') {
+                return (
+                  <div className="bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700/80 rounded-xl p-3 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5 shadow-2xs">
+                    <AlertTriangle className="w-4.5 h-4.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
+                        <span>⚠️ 误录预警：当前选中的关联个案处于「已结案/已结束」状态</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 dark:text-amber-300/90 leading-relaxed">
+                        个案【{selectedCaseObj.caseNum} {selectedCaseObj.name}】咨询阶段已结束。请核对是否确实需要为此结案个案录入新的督导记录，谨防误选个案。
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             {/* Modal Tabs */}
             <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
@@ -1417,6 +1679,114 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
                 </button>
               </div>
             </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">关联个案</label>
+                <select
+                  value={editingRecordModal.record.caseId || ''}
+                  onChange={(e) =>
+                    setEditingRecordModal({
+                      ...editingRecordModal,
+                      record: { ...editingRecordModal.record, caseId: e.target.value },
+                    })
+                  }
+                  className="w-full p-2 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-rose-400"
+                >
+                  <option value="">-- 选择关联个案 --</option>
+                  {cases.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.avatar} {c.caseNum} {c.name}{c.status === 'ended' ? ' [已结案]' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">针对咨询次数</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={editingRecordModal.record.sessionNum || 1}
+                  onChange={(e) =>
+                    setEditingRecordModal({
+                      ...editingRecordModal,
+                      record: { ...editingRecordModal.record, sessionNum: Number(e.target.value) || 1 },
+                    })
+                  }
+                  className="w-full p-2 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">督导类型</label>
+                <select
+                  value={editingRecordModal.record.type || 'individual'}
+                  onChange={(e) =>
+                    setEditingRecordModal({
+                      ...editingRecordModal,
+                      record: { ...editingRecordModal.record, type: e.target.value as 'individual' | 'group' },
+                    })
+                  }
+                  className="w-full p-2 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-rose-400"
+                >
+                  <option value="individual">1. 个体督导</option>
+                  <option value="group">2. 团体督导</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">督导日期</label>
+                <input
+                  type="date"
+                  value={editingRecordModal.record.date || ''}
+                  onChange={(e) =>
+                    setEditingRecordModal({
+                      ...editingRecordModal,
+                      record: { ...editingRecordModal.record, date: e.target.value },
+                    })
+                  }
+                  className="w-full p-2 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">时间段</label>
+                <input
+                  type="text"
+                  value={editingRecordModal.record.timeRange || ''}
+                  onChange={(e) =>
+                    setEditingRecordModal({
+                      ...editingRecordModal,
+                      record: { ...editingRecordModal.record, timeRange: e.target.value },
+                    })
+                  }
+                  placeholder="14:00-15:00"
+                  className="w-full p-2 border border-rose-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                />
+              </div>
+            </div>
+
+            {/* 若选中的关联个案状态为“已结束”，显示明显警告提示 */}
+            {(() => {
+              const selectedCaseObj = cases.find((c) => c.id === editingRecordModal.record.caseId);
+              if (selectedCaseObj?.status === 'ended') {
+                return (
+                  <div className="bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700/80 rounded-xl p-3 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5 shadow-2xs">
+                    <AlertTriangle className="w-4.5 h-4.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
+                        <span>⚠️ 误录预警：当前选中的关联个案处于「已结案/已结束」状态</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 dark:text-amber-300/90 leading-relaxed">
+                        个案【{selectedCaseObj.caseNum} {selectedCaseObj.name}】咨询阶段已结束。请核对是否确认要将其关联至此结案个案，谨防误选个案。
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             {/* Modal Tabs */}
             <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">

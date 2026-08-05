@@ -398,22 +398,35 @@ export default function App() {
   };
 
   const handleAddSupervisionRecord = (mentorId: string, recordInput: Omit<SupervisionRecord, 'id'> & Partial<SupervisionRecord>) => {
-    const fullRecord: SupervisionRecord = {
-      id: `sup_rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      caseId: '',
-      sessionNum: 1,
-      date: new Date().toISOString().split('T')[0],
-      timeRange: '14:00-15:00',
-      type: 'individual',
-      reflection: '',
-      ...recordInput,
-    };
+    hasUserMutatedInSessionRef.current = true;
     setSystemData((prev) => ({
       ...prev,
       mentors: (prev.mentors || []).map((m) => {
         if (m.id !== mentorId) return m;
+
+        const isGroup = recordInput.type === 'group' || m.type === 'group';
+        const determinedType: 'individual' | 'group' = isGroup ? 'group' : (recordInput.type || 'individual');
+
+        const fullRecord: SupervisionRecord = {
+          id: `sup_rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          caseId: '',
+          sessionNum: 1,
+          date: new Date().toISOString().split('T')[0],
+          timeRange: '14:00-15:00',
+          reflection: '',
+          ...recordInput,
+          type: determinedType,
+        };
+
+        let updatedBoundCaseIds = m.boundCaseIds || [];
+        if (fullRecord.caseId && !updatedBoundCaseIds.includes(fullRecord.caseId)) {
+          updatedBoundCaseIds = [...updatedBoundCaseIds, fullRecord.caseId];
+        }
+
         return {
           ...m,
+          boundCaseIds: updatedBoundCaseIds,
+          type: isGroup && m.type !== 'both' ? 'group' : m.type,
           records: [fullRecord, ...(m.records || [])],
         };
       }),
