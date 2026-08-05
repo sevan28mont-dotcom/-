@@ -155,6 +155,7 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
       alert('请输入体验师姓名！');
       return;
     }
+    const hours = Number(newIndivTotalHours) || 20;
     const newTherapist = {
       id: `therapist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       name: newIndivName.trim(),
@@ -162,13 +163,14 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
       title: newIndivGender,
       startDate: newIndivStartDate || '2026-01-01',
       endDate: newIndivEndDate || '2026-12-31',
-      totalHours: Number(newIndivTotalHours) || 20,
+      totalHours: hours,
       type: 'individual' as const,
     };
     const updated = [...individualTherapists, newTherapist];
     onUpdateExperienceData({
       ...experienceData,
       individualTherapists: updated,
+      totalIndividualHours: Math.max(experienceData.totalIndividualHours || 0, hours),
     });
     setNewIndivName('');
   };
@@ -180,25 +182,28 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
       alert('请输入团体/小组名称！');
       return;
     }
+    const hours = Number(newGroupTotalHours) || 20;
     const newGroup = {
       id: `group_opt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       name: newGroupName.trim(),
       facilitator: newGroupFacilitator.trim() || '带领者',
       startDate: newGroupStartDate || '2026-01-01',
       endDate: newGroupEndDate || '2026-12-31',
-      totalHours: Number(newGroupTotalHours) || 20,
+      totalHours: hours,
       type: 'group' as const,
     };
     const updated = [...groupOptions, newGroup];
     onUpdateExperienceData({
       ...experienceData,
       groupOptions: updated,
+      totalGroupHours: Math.max(experienceData.totalGroupHours || 0, hours),
     });
     setNewGroupName('');
   };
 
   const handleSaveEditedItem = () => {
     if (!editingItemModal) return;
+    const hours = Number(editingItemModal.totalHours) || 20;
     if (editingItemModal.type === 'individual') {
       const updated = individualTherapists.map((t) =>
         t.id === editingItemModal.id
@@ -209,13 +214,14 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
               title: editingItemModal.genderOrFacilitator,
               startDate: editingItemModal.startDate,
               endDate: editingItemModal.endDate,
-              totalHours: Number(editingItemModal.totalHours) || 20,
+              totalHours: hours,
             }
           : t
       );
       onUpdateExperienceData({
         ...experienceData,
         individualTherapists: updated,
+        totalIndividualHours: Math.max(experienceData.totalIndividualHours || 0, hours),
       });
     } else {
       const updated = groupOptions.map((g) =>
@@ -226,13 +232,14 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
               facilitator: editingItemModal.genderOrFacilitator,
               startDate: editingItemModal.startDate,
               endDate: editingItemModal.endDate,
-              totalHours: Number(editingItemModal.totalHours) || 20,
+              totalHours: hours,
             }
           : g
       );
       onUpdateExperienceData({
         ...experienceData,
         groupOptions: updated,
+        totalGroupHours: Math.max(experienceData.totalGroupHours || 0, hours),
       });
     }
     setEditingItemModal(null);
@@ -275,8 +282,23 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
   const completedIndividualCount = individualRecords.filter((r) => r.completed !== false && Boolean(r.date)).length;
   const completedGroupCount = groupRecords.filter((r) => r.completed !== false && Boolean(r.date)).length;
 
-  const totalIndividualCount = experienceData.totalIndividualHours || 20;
-  const totalGroupCount = experienceData.totalGroupHours || 30;
+  const maxIndivTherapistHours = Math.max(0, ...individualTherapists.map((t) => t.totalHours || 0));
+  const maxIndivRecNum = Math.max(0, ...individualRecords.map((r) => r.sessionNum || 0));
+  const totalIndividualCount = Math.max(
+    20,
+    experienceData.totalIndividualHours || 0,
+    maxIndivTherapistHours,
+    maxIndivRecNum
+  );
+
+  const maxGroupOptionHours = Math.max(0, ...groupOptions.map((g) => g.totalHours || 0));
+  const maxGroupRecNum = Math.max(0, ...groupRecords.map((r) => r.sessionNum || 0));
+  const totalGroupCount = Math.max(
+    30,
+    experienceData.totalGroupHours || 0,
+    maxGroupOptionHours,
+    maxGroupRecNum
+  );
 
   const filteredRecords = records.filter((rec) => {
     if (activeTypeFilter !== 'all' && rec.type !== activeTypeFilter) {
@@ -545,6 +567,105 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
     alert(`已彻底批量清空 ${batchSelectedNums.length} 项【${batchTargetType === 'individual' ? '个体体验' : '团体体验'}】记录！`);
     setIsBatchModalOpen(false);
     setBatchSelectedNums([]);
+  };
+
+  const handleApplyBatchMarkCompleted = () => {
+    if (batchSelectedNums.length === 0) {
+      alert('请至少勾选选择一个需要标记为【已全部完成/已录入】的体验次数！');
+      return;
+    }
+
+    let currentRecords = [...records];
+    const baseDate = new Date(batchDateStart);
+
+    batchSelectedNums.forEach((num, index) => {
+      const targetDate = new Date(baseDate);
+      targetDate.setDate(baseDate.getDate() + index * batchIntervalDays);
+      const dateStr = targetDate.toISOString().split('T')[0];
+
+      const existingIndex = currentRecords.findIndex(
+        (r) => r.type === batchTargetType && r.sessionNum === num
+      );
+
+      if (existingIndex >= 0) {
+        currentRecords[existingIndex] = {
+          ...currentRecords[existingIndex],
+          date: currentRecords[existingIndex].date || dateStr,
+          facilitator: batchFacilitator || currentRecords[existingIndex].facilitator,
+          completed: true,
+        };
+      } else {
+        currentRecords.push({
+          id: `exp_batch_done_${Date.now()}_${num}_${Math.random().toString(36).substring(2, 6)}`,
+          sessionNum: num,
+          type: batchTargetType,
+          date: dateStr,
+          timeRange: '14:00-15:00',
+          facilitator: batchFacilitator || (batchTargetType === 'individual' ? '体验分析师' : '团体带领者'),
+          note: batchNote || `第 ${num} 次${batchTargetType === 'individual' ? '个体' : '团体'}体验 (已全部完成录入)`,
+          completed: true,
+        });
+      }
+    });
+
+    const maxSession = Math.max(0, ...batchSelectedNums);
+    onUpdateExperienceData({
+      ...experienceData,
+      records: currentRecords,
+      ...(batchTargetType === 'individual'
+        ? { totalIndividualHours: Math.max(experienceData.totalIndividualHours || 0, maxSession) }
+        : { totalGroupHours: Math.max(experienceData.totalGroupHours || 0, maxSession) }),
+    });
+
+    alert(`🎉 已成功将 ${batchSelectedNums.length} 项【${batchTargetType === 'individual' ? '个体体验' : '团体体验'}】批量标记为【已全部完成/已录入】，现已完全计入累计体验总数中！`);
+    setIsBatchModalOpen(false);
+    setBatchSelectedNums([]);
+  };
+
+  const handleQuickCompleteAllForTherapist = (therapistId: string, name: string, totalHours: number, type: 'individual' | 'group') => {
+    if (!window.confirm(`确定要将【${name}】的全部 ${totalHours} 小时体验一键标记为【已全部完成/已录入】吗？\n\n标记后，此 ${totalHours} 小时将完全计入自我成长体验总额中。`)) {
+      return;
+    }
+
+    let currentRecords = [...records];
+    const today = new Date().toISOString().split('T')[0];
+
+    for (let num = 1; num <= totalHours; num++) {
+      const existingIndex = currentRecords.findIndex(
+        (r) => r.type === type && (r.therapistId === therapistId || r.facilitator === name) && r.sessionNum === num
+      );
+
+      if (existingIndex >= 0) {
+        currentRecords[existingIndex] = {
+          ...currentRecords[existingIndex],
+          completed: true,
+          date: currentRecords[existingIndex].date || today,
+          facilitator: name,
+        };
+      } else {
+        currentRecords.push({
+          id: `exp_quick_done_${Date.now()}_${num}_${Math.random().toString(36).substring(2, 6)}`,
+          sessionNum: num,
+          type: type,
+          therapistId: therapistId,
+          date: today,
+          timeRange: '14:00-15:00',
+          facilitator: name,
+          note: `第 ${num} 次${type === 'individual' ? '个体' : '团体'}体验 (已全部打卡完成)`,
+          completed: true,
+        });
+      }
+    }
+
+    onUpdateExperienceData({
+      ...experienceData,
+      records: currentRecords,
+      ...(type === 'individual'
+        ? { totalIndividualHours: Math.max(experienceData.totalIndividualHours || 0, totalHours) }
+        : { totalGroupHours: Math.max(experienceData.totalGroupHours || 0, totalHours) }),
+    });
+
+    alert(`🎉 已成功将【${name}】的 ${totalHours} 小时体验全部标记为【已完成】，已完全计入总额！`);
   };
 
   const displayIndivExpHours = totalHoursOverrides?.individualExperienceHours !== undefined
@@ -919,6 +1040,22 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                       <Sliders className="w-3.5 h-3.5" />
                       <span>批量管理</span>
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleQuickCompleteAllForTherapist(therapist.id, therapist.name, totalHours, 'individual');
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className="px-2.5 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95 touch-manipulation select-none min-h-[32px]"
+                      title="一键将该体验师的全部次额度打卡标记为已完成并计入总额"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>已全部完成</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1052,6 +1189,22 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                     >
                       <Sliders className="w-3.5 h-3.5" />
                       <span>批量管理</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleQuickCompleteAllForTherapist(group.id, group.name, totalHours, 'group');
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className="px-2.5 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95 touch-manipulation select-none min-h-[32px]"
+                      title="一键将该团体项目的全部次额度打卡标记为已完成并计入总额"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>已全部完成</span>
                     </button>
                   </div>
                 </div>
@@ -1892,6 +2045,17 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
                   title="仅统一修改已选记录的体验师/带领者姓名"
                 >
                   仅批量更名导师
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleApplyBatchMarkCompleted}
+                  disabled={batchSelectedNums.length === 0}
+                  className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition active:scale-95 flex items-center gap-1"
+                  title="一键将勾选的项目标记为【已全部完成/已录入】，完全计入统计总额"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>一键标记已全部完成 (计入总数)</span>
                 </button>
 
                 <button
