@@ -926,6 +926,8 @@ export default function App() {
         onDeleteReminder={handleDeleteReminder}
         onOpenReminderModal={() => setIsReminderModalOpen(true)}
         onOpenSyncModal={handleManualBackendSync}
+        syncStatus={syncStatus}
+        lastSyncTime={lastSyncTime}
         onNavigateTab={(tab) => setActiveTab(tab)}
         onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />

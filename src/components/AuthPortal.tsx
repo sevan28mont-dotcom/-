@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { UserAccount, loginUser, loginUserAsync, registerUserAsync } from '../services/auth';
-import { EMPTY_SYSTEM_DATA, getDefaultSampleSystemData, saveDataToLocalStorage } from '../services/storage';
+import { EMPTY_SYSTEM_DATA, fetchBackendData, getDefaultSampleSystemData, saveDataToLocalStorage } from '../services/storage';
 import {
   Lock,
   User,
+  Mail,
   UserPlus,
   LogIn,
   CheckCircle2,
@@ -23,22 +24,17 @@ interface AuthPortalProps {
   onToggleTheme?: () => void;
 }
 
-const AVATAR_OPTIONS = [
-  '🩺', '👩‍⚕️', '👨‍⚕️', '🧠', '🌿', '🌱', '🌸', '☕',
-  '🦉', '🎨', '📜', '🛡️', '💎', '☀️', '🌊', '🕯️'
-];
-
 export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMode = false, onToggleTheme }) => {
   const [isRegister, setIsRegister] = useState(false);
 
   // Input states
+  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('123456');
   const [showPassword, setShowPassword] = useState(false);
   const [title, setTitle] = useState('心理咨询师');
-  const [avatar, setAvatar] = useState('🩺');
 
-  // Load demo data by default
+  // Load demo data by default for new registrations
   const [includeDemoData, setIncludeDemoData] = useState(true);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -47,7 +43,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
 
   // Compute Password Strength
   const getPasswordStrength = (pass: string) => {
-    if (!pass) return { score: 0, label: '无', color: 'bg-zinc-200', text: 'text-zinc-400' };
+    if (!pass) return { score: 0, label: '未输入', color: 'bg-zinc-200', text: 'text-zinc-400' };
     if (pass.length < 6) return { score: 1, label: '弱', color: 'bg-rose-500', text: 'text-rose-500' };
     
     let score = 1;
@@ -58,9 +54,9 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
     if (hasLetters && hasNumbers) score = 2;
     if (pass.length >= 8 && hasLetters && hasNumbers && hasSpecial) score = 3;
 
-    if (score === 3) return { score: 3, label: '强', color: 'bg-emerald-500', text: 'text-emerald-600' };
-    if (score === 2) return { score: 2, label: '中', color: 'bg-amber-500', text: 'text-amber-600' };
-    return { score: 1, label: '弱', color: 'bg-rose-500', text: 'text-rose-500' };
+    if (score === 3) return { score: 3, label: '高强度安全', color: 'bg-emerald-500', text: 'text-emerald-600' };
+    if (score === 2) return { score: 2, label: '中等强度', color: 'bg-amber-500', text: 'text-amber-600' };
+    return { score: 1, label: '较弱', color: 'bg-rose-500', text: 'text-rose-500' };
   };
 
   const passStrength = getPasswordStrength(password);
@@ -70,51 +66,85 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
     setErrorMsg('');
     setSuccessMsg('');
 
-    const trimmedUsername = username.trim();
-    if (!trimmedUsername) {
-      setErrorMsg('请填写正确的账号/咨询师姓名');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
       if (isRegister) {
-        // Validate Password Strength
-        if (password.length < 6) {
-          setErrorMsg('密码安全强度不足：密码长度至少需要 6 个字符！');
+        const trimmedEmail = email.trim().toLowerCase();
+        const trimmedUsername = username.trim();
+
+        if (!trimmedEmail || !trimmedEmail.includes('@')) {
+          setErrorMsg('请填写格式正确的电子邮箱（如 test@example.com）');
           setIsLoading(false);
           return;
         }
 
-        const regRes = await registerUserAsync(trimmedUsername, password, title, avatar);
-        if (!regRes.success) {
-          setErrorMsg(regRes.error || '注册失败，该用户名已被使用！');
+        if (!trimmedUsername || trimmedUsername.length < 2) {
+          setErrorMsg('请填写账户名/姓名（至少2位）');
           setIsLoading(false);
           return;
         }
+
+        if (password.length < 6) {
+          setErrorMsg('密码强度不足：密码长度至少需要 6 位字符！');
+          setIsLoading(false);
+          return;
+        }
+
+        const regRes = await registerUserAsync(trimmedEmail, trimmedUsername, password, title);
+        if (!regRes.success) {
+          setErrorMsg(regRes.error || '注册失败，该邮箱或账户名已被注册，请直接登录');
+          setIsLoading(false);
+          return;
+        }
+
         if (regRes.user) {
-          saveDataToLocalStorage(
-            includeDemoData ? getDefaultSampleSystemData() : EMPTY_SYSTEM_DATA,
-            regRes.user.id
-          );
-          onLoginSuccess(regRes.user);
+          // Check if server already has user's cloud backup
+          const existingCloudData = await fetchBackendData(regRes.user.id);
+          if (existingCloudData) {
+            saveDataToLocalStorage(existingCloudData, regRes.user.id);
+          } else {
+            saveDataToLocalStorage(
+              includeDemoData ? getDefaultSampleSystemData() : EMPTY_SYSTEM_DATA,
+              regRes.user.id
+            );
+          }
+          setSuccessMsg('账号注册成功！正在为您自动登录工作台...');
+          setTimeout(() => {
+            onLoginSuccess(regRes.user!);
+          }, 400);
         }
       } else {
         // Login flow with cross-device backend verification
-        const loginRes = await loginUserAsync(trimmedUsername, password);
-        if (!loginRes.success) {
-          setErrorMsg(loginRes.error || '登录失败！请检查账号或密码');
+        const trimmedInput = username.trim();
+        if (!trimmedInput) {
+          setErrorMsg('请输入正确的登录邮箱或账户名');
           setIsLoading(false);
           return;
         }
+
+        const loginRes = await loginUserAsync(trimmedInput, password);
+        if (!loginRes.success) {
+          setErrorMsg(loginRes.error || '登录失败！请检查邮箱/账户名或密码');
+          setIsLoading(false);
+          return;
+        }
+
         if (loginRes.user) {
-          onLoginSuccess(loginRes.user);
+          // Fetch cloud backup for this canonical user ID
+          const cloudData = await fetchBackendData(loginRes.user.id);
+          if (cloudData) {
+            saveDataToLocalStorage(cloudData, loginRes.user.id);
+          }
+          setSuccessMsg('登录成功！已成功同步云端数据');
+          setTimeout(() => {
+            onLoginSuccess(loginRes.user!);
+          }, 300);
         }
       }
     } catch (err) {
       console.error('Submit error:', err);
-      setErrorMsg('登录请求出现错误，请重试');
+      setErrorMsg('登录请求出现网络与连接异常，请重试');
     } finally {
       setIsLoading(false);
     }
@@ -183,7 +213,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
             </span>
           </div>
           <p className="text-xs text-zinc-500 dark:text-slate-400 font-medium">
-            {isRegister ? '输入用户名与密码注册专属账号' : '请登录您的心理咨询师专属工作台'}
+            {isRegister ? '填写邮箱、账户名与密码注册并极速跨端同步' : '使用注册邮箱或账户名登录您的心理咨询工作台'}
           </p>
         </div>
 
@@ -239,10 +269,30 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="space-y-3 flex-1 overflow-y-auto pr-1">
-          {/* Username Input */}
+          {/* Email Input (Visible for Register) */}
+          {isRegister && (
+            <div>
+              <label className="block text-xs font-bold text-zinc-700 dark:text-slate-300 mb-1">
+                电子邮箱 (多端同步唯一标识) *
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-zinc-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="如: myname@example.com"
+                  className="w-full pl-9 pr-3 py-2 bg-zinc-50/50 dark:bg-slate-800/80 border border-zinc-200 dark:border-slate-700 rounded-xl text-xs text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-400 transition"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Username / Login Identifier Input */}
           <div>
             <label className="block text-xs font-bold text-zinc-700 dark:text-slate-300 mb-1">
-              登录账号 / 咨询师姓名 *
+              {isRegister ? '账户名 / 咨询师姓名 *' : '登录邮箱 / 账户名 *'}
             </label>
             <div className="relative">
               <User className="w-4 h-4 text-zinc-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -251,7 +301,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="如: 林心理咨询师 或 张咨询"
+                placeholder={isRegister ? "如: 林心理咨询师 或 张咨询" : "请输入您的注册邮箱或账户名"}
                 className="w-full pl-9 pr-3 py-2 bg-zinc-50/50 dark:bg-slate-800/80 border border-zinc-200 dark:border-slate-700 rounded-xl text-xs text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-400 transition"
               />
             </div>
@@ -319,27 +369,6 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
                 />
               </div>
 
-              {/* Avatar Selector */}
-              <div>
-                <label className="block text-xs font-bold text-zinc-700 dark:text-slate-300 mb-1">
-                  选择咨询师形象头像
-                </label>
-                <div className="flex flex-wrap gap-1.5 p-1.5 bg-zinc-50 dark:bg-slate-800/60 rounded-xl border border-zinc-200 dark:border-slate-700 max-h-20 overflow-y-auto">
-                  {AVATAR_OPTIONS.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => setAvatar(item)}
-                      className={`text-base p-1 rounded-lg transition hover:scale-110 cursor-pointer ${
-                        avatar === item ? 'bg-rose-200 dark:bg-rose-900 border border-rose-400' : ''
-                      }`}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Include Demo Data Option Checkbox */}
               <div className="p-2.5 bg-rose-50/80 dark:bg-slate-800/80 rounded-2xl border border-rose-200 dark:border-slate-700">
                 <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-zinc-800 dark:text-slate-200">
@@ -349,7 +378,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
                     onChange={(e) => setIncludeDemoData(e.target.checked)}
                     className="w-4 h-4 text-rose-600 rounded-md focus:ring-rose-500 border-rose-300 cursor-pointer"
                   />
-                  <span>【体验推荐】生成预设示范来访个案与督导记录</span>
+                  <span>【推荐】初始化包含预设示范来访个案与督导记录</span>
                 </label>
               </div>
             </>
@@ -385,7 +414,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
             className="w-full py-2.5 px-3 bg-rose-50/90 dark:bg-slate-800/90 hover:bg-rose-100 dark:hover:bg-slate-700 text-rose-900 dark:text-rose-300 border border-rose-200 dark:border-slate-700 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-2 cursor-pointer shadow-2xs active:scale-98"
           >
             <Sparkles className="w-4 h-4 text-rose-500" />
-            <span>不注册也可体验</span>
+            <span>免注册演示账号直接体验</span>
           </button>
         </div>
 
@@ -393,7 +422,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
         <div className="text-center pt-0.5 shrink-0">
           <span className="text-[10px] text-zinc-400 dark:text-slate-500 flex items-center justify-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span>本地离线加密存储 & 线上云端同步保障</span>
+            <span>全网络加密存储 & 网页/手机/Pad 跨设备同账号全量无缝同步</span>
           </span>
         </div>
 

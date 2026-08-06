@@ -9,6 +9,7 @@ const SERVER_DB_FILE = path.join(process.cwd(), "psy_app_server_db.json");
 
 interface UserAccountServer {
   id: string;
+  email?: string;
   username: string;
   password?: string;
   name?: string;
@@ -22,9 +23,16 @@ interface ServerDb {
   userStore: Record<string, { data: any; updatedAt: string }>;
 }
 
+function generateServerCanonicalUserId(identifier: string): string {
+  if (!identifier) return "u_default";
+  const clean = identifier.trim().toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_");
+  return `u_${clean}`;
+}
+
 const DEFAULT_SERVER_ACCOUNTS: UserAccountServer[] = [
   {
     id: "u_default",
+    email: "lin@counselor.com",
     username: "林心理咨询师",
     password: "123456",
     name: "林心理咨询师",
@@ -34,6 +42,7 @@ const DEFAULT_SERVER_ACCOUNTS: UserAccountServer[] = [
   },
   {
     id: "u_demo",
+    email: "zhang@supervisor.com",
     username: "counselor_demo",
     password: "123456",
     name: "张督导",
@@ -248,25 +257,25 @@ ${content}
   // API Route: Cross-Device Account Login
   app.post("/api/auth/login", (req, res) => {
     try {
-      const { username, password } = req.body;
-      if (!username || typeof username !== "string" || !username.trim()) {
-        return res.status(400).json({ success: false, error: "请输入账号名称" });
+      const { identifier, username, password } = req.body;
+      const inputStr = String(identifier || username || "").trim();
+      if (!inputStr) {
+        return res.status(400).json({ success: false, error: "请输入登录邮箱或账号名称" });
       }
 
-      const trimmed = username.trim();
-      const lowerTrimmed = trimmed.toLowerCase();
+      const lowerInput = inputStr.toLowerCase();
 
-      // Find user by username or name
+      // Find user by email, username, or name
       let foundIndex = serverDb.accounts.findIndex(
-        (a) => a.username.toLowerCase() === lowerTrimmed || (a.name && a.name.toLowerCase() === lowerTrimmed)
+        (a) => (a.email && a.email.toLowerCase() === lowerInput) ||
+               a.username.toLowerCase() === lowerInput ||
+               (a.name && a.name.toLowerCase() === lowerInput)
       );
 
       let found = foundIndex !== -1 ? serverDb.accounts[foundIndex] : null;
 
       if (found) {
-        // If account found on server
         if (found.password && password && found.password !== password) {
-          // If server password was default "123456", update to the new password entered by user
           if (found.password === "123456") {
             found.password = String(password);
             serverDb.accounts[foundIndex] = found;
@@ -282,13 +291,15 @@ ${content}
         return res.json({ success: true, user: found });
       }
 
-      // If account not found on server yet, auto-create/register user with provided username and password!
+      // Auto-create account if logging in with new credentials
       const userPassword = password ? String(password) : "123456";
+      const canonicalId = generateServerCanonicalUserId(lowerInput);
       const newUser: UserAccountServer = {
-        id: "u_" + Date.now(),
-        username: trimmed,
+        id: canonicalId,
+        email: lowerInput.includes("@") ? lowerInput : `${lowerInput}@counselor.com`,
+        username: inputStr,
         password: userPassword,
-        name: trimmed,
+        name: inputStr,
         title: "心理咨询师",
         avatar: "🩺",
         createdAt: new Date().toISOString().split("T")[0],
@@ -311,31 +322,42 @@ ${content}
   // API Route: Cross-Device Account Registration
   app.post("/api/auth/register", (req, res) => {
     try {
-      const { username, password, title, avatar, name } = req.body;
+      const { email, username, password, title, name, avatar } = req.body;
+      const trimmedEmail = String(email || "").trim().toLowerCase();
       const trimmedUser = String(username || "").trim();
 
+      if (!trimmedEmail || !trimmedEmail.includes("@")) {
+        return res.status(400).json({ success: false, error: "请输入有效的电子邮箱" });
+      }
+
       if (!trimmedUser || trimmedUser.length < 1) {
-        return res.status(400).json({ success: false, error: "请填写正确的账号/咨询师姓名" });
+        return res.status(400).json({ success: false, error: "请填写正确的账户名/咨询师姓名" });
       }
 
       const userPass = password ? String(password) : "123456";
       const existingIndex = serverDb.accounts.findIndex(
-        (a) => a.username.toLowerCase() === trimmedUser.toLowerCase() || (a.name && a.name.toLowerCase() === trimmedUser.toLowerCase())
+        (a) => (a.email && a.email.toLowerCase() === trimmedEmail) ||
+               a.username.toLowerCase() === trimmedUser.toLowerCase()
       );
 
       if (existingIndex !== -1) {
         const existing = serverDb.accounts[existingIndex];
         existing.password = userPass;
+        existing.email = trimmedEmail;
+        existing.username = trimmedUser;
         if (title) existing.title = title;
-        if (avatar) existing.avatar = avatar;
         if (name) existing.name = name;
+        existing.avatar = avatar || "🩺";
         serverDb.accounts[existingIndex] = existing;
         saveServerDb();
-        return res.json({ success: true, user: existing, message: "账号信息已自动更新并登录" });
+        return res.json({ success: true, user: existing, message: "账号信息已更新并登录" });
       }
 
+      const canonicalId = generateServerCanonicalUserId(trimmedEmail);
+
       const newUser: UserAccountServer = {
-        id: "u_" + Date.now(),
+        id: canonicalId,
+        email: trimmedEmail,
         username: trimmedUser,
         password: userPass,
         name: name ? String(name).trim() : trimmedUser,
@@ -358,13 +380,18 @@ ${content}
   app.post("/api/auth/sync-account", (req, res) => {
     try {
       const { user } = req.body;
-      if (!user || !user.username) {
+      if (!user || (!user.username && !user.email)) {
         return res.status(400).json({ success: false, error: "Invalid user data" });
       }
-      const trimmed = user.username.trim().toLowerCase();
+      const emailLower = user.email ? String(user.email).trim().toLowerCase() : "";
+      const usernameLower = user.username ? String(user.username).trim().toLowerCase() : "";
+
       const existingIndex = serverDb.accounts.findIndex(
-        (a) => a.id === user.id || a.username.toLowerCase() === trimmed
+        (a) => a.id === user.id ||
+               (emailLower && a.email?.toLowerCase() === emailLower) ||
+               (usernameLower && a.username.toLowerCase() === usernameLower)
       );
+
       if (existingIndex !== -1) {
         serverDb.accounts[existingIndex] = { ...serverDb.accounts[existingIndex], ...user };
       } else {
@@ -396,23 +423,20 @@ ${content}
     // 1. Direct ID match
     let directAccount = serverDb.accounts.find((a) => a.id === strId);
     if (directAccount) {
-      // Find if there's an earlier/primary account with identical username/name (e.g. u_default)
-      const primaryAccount = serverDb.accounts.find(
-        (a) => a.username.toLowerCase() === directAccount!.username.toLowerCase() ||
-               (a.name && directAccount!.name && a.name.toLowerCase() === directAccount!.name.toLowerCase())
-      );
-      return primaryAccount ? primaryAccount.id : directAccount.id;
+      return directAccount.id;
     }
 
-    // 2. Username or name match
-    let matchByName = serverDb.accounts.find(
-      (a) => a.username.toLowerCase() === lowerId || (a.name && a.name.toLowerCase() === lowerId)
+    // 2. Email or Username match
+    let matchByCred = serverDb.accounts.find(
+      (a) => (a.email && a.email.toLowerCase() === lowerId) ||
+             a.username.toLowerCase() === lowerId ||
+             (a.name && a.name.toLowerCase() === lowerId)
     );
-    if (matchByName) {
-      return matchByName.id;
+    if (matchByCred) {
+      return matchByCred.id;
     }
 
-    return strId;
+    return generateServerCanonicalUserId(lowerId);
   }
 
   // API Route: Account Data Sync - Save

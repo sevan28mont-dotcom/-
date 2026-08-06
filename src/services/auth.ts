@@ -1,5 +1,6 @@
 export interface UserAccount {
   id: string;
+  email?: string;
   username: string;
   password?: string;
   name?: string;
@@ -13,9 +14,16 @@ const STORAGE_KEYS = {
   CURRENT_USER: 'psy_current_user_v1',
 };
 
+export function generateCanonicalUserId(identifier: string): string {
+  if (!identifier) return 'u_default';
+  const clean = identifier.trim().toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+  return `u_${clean}`;
+}
+
 const DEFAULT_ACCOUNTS: UserAccount[] = [
   {
     id: 'u_default',
+    email: 'lin@counselor.com',
     username: '林心理咨询师',
     password: '123456',
     name: '林心理咨询师',
@@ -25,6 +33,7 @@ const DEFAULT_ACCOUNTS: UserAccount[] = [
   },
   {
     id: 'u_demo',
+    email: 'zhang@supervisor.com',
     username: 'counselor_demo',
     password: '123456',
     name: '张督导',
@@ -275,25 +284,28 @@ export function setCurrentUserSession(user: UserAccount | null): void {
 }
 
 export async function loginUserAsync(
-  username: string,
+  identifier: string,
   password: string
 ): Promise<{ success: boolean; user?: UserAccount; error?: string }> {
-  const trimmed = username.trim();
+  const trimmed = identifier.trim();
   if (!trimmed) {
-    return { success: false, error: '请输入有效的账号名称/咨询师姓名' };
+    return { success: false, error: '请输入有效的邮箱或账号名称' };
   }
 
   try {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: trimmed, password }),
+      body: JSON.stringify({ identifier: trimmed, username: trimmed, password }),
     });
 
     const res = await response.json();
     if (res.success && res.user) {
       const accounts = getStoredAccounts();
-      const existingIdx = accounts.findIndex((a) => a.username.toLowerCase() === res.user.username.toLowerCase());
+      const existingIdx = accounts.findIndex(
+        (a) => (a.email && a.email.toLowerCase() === res.user.email?.toLowerCase()) ||
+               a.username.toLowerCase() === res.user.username.toLowerCase()
+      );
       const updatedAccounts = [...accounts];
       if (existingIdx !== -1) {
         updatedAccounts[existingIdx] = res.user;
@@ -304,7 +316,6 @@ export async function loginUserAsync(
       setCurrentUserSession(res.user);
       return { success: true, user: res.user };
     } else if (res.error) {
-      // Fallback: check local storage if server returned negative response
       const localRes = loginUser(trimmed, password);
       if (localRes.success) return localRes;
       return { success: false, error: res.error };
@@ -313,38 +324,45 @@ export async function loginUserAsync(
     console.warn('Network login failed, falling back to local storage:', err);
   }
 
-  // Fallback to local storage if network request failed
   return loginUser(trimmed, password);
 }
 
 export async function registerUserAsync(
+  email: string,
   username: string,
   password: string,
   title: string = '心理咨询师',
-  avatar: string = '🩺',
   name?: string
 ): Promise<{ success: boolean; user?: UserAccount; error?: string }> {
+  const trimmedEmail = email.trim().toLowerCase();
   const trimmedUser = username.trim();
 
+  if (!trimmedEmail || !trimmedEmail.includes('@')) {
+    return { success: false, error: '请输入正确的电子邮箱地址' };
+  }
+
   if (!trimmedUser || trimmedUser.length < 2) {
-    return { success: false, error: '账号/姓名长度至少2个字符' };
+    return { success: false, error: '账户名/姓名长度至少2个字符' };
   }
 
   if (!password || password.length < 6) {
-    return { success: false, error: '密码长度至少为6位' };
+    return { success: false, error: '密码长度至少需要 6 位' };
   }
 
   try {
     const response = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: trimmedUser, password, title, avatar, name }),
+      body: JSON.stringify({ email: trimmedEmail, username: trimmedUser, password, title, name, avatar: '🩺' }),
     });
 
     const res = await response.json();
     if (res.success && res.user) {
       const accounts = getStoredAccounts();
-      const updatedAccounts = [res.user, ...accounts.filter((a) => a.username.toLowerCase() !== res.user.username.toLowerCase())];
+      const updatedAccounts = [
+        res.user,
+        ...accounts.filter((a) => a.email?.toLowerCase() !== res.user.email?.toLowerCase() && a.username.toLowerCase() !== res.user.username.toLowerCase())
+      ];
       saveAccounts(updatedAccounts);
       setCurrentUserSession(res.user);
       return { success: true, user: res.user };
@@ -355,26 +373,29 @@ export async function registerUserAsync(
     console.warn('Network register failed, falling back to local storage:', err);
   }
 
-  // Local fallback
-  return registerUser(trimmedUser, password, title, avatar, name);
+  return registerUser(trimmedEmail, trimmedUser, password, title, name);
 }
 
 export function loginUser(
-  username: string,
+  identifier: string,
   password: string
 ): { success: boolean; user?: UserAccount; error?: string } {
   const accounts = getStoredAccounts();
-  const trimmed = username.trim();
+  const trimmed = identifier.trim();
   const lowerTrimmed = trimmed.toLowerCase();
   
   let found = accounts.find(
-    (a) => a.username.toLowerCase() === lowerTrimmed || (a.name && a.name.toLowerCase() === lowerTrimmed)
+    (a) => (a.email && a.email.toLowerCase() === lowerTrimmed) ||
+           a.username.toLowerCase() === lowerTrimmed ||
+           (a.name && a.name.toLowerCase() === lowerTrimmed)
   );
 
   if (!found) {
     const userPass = password || '123456';
+    const canonicalId = generateCanonicalUserId(lowerTrimmed);
     const newUser: UserAccount = {
-      id: 'u_' + Date.now(),
+      id: canonicalId,
+      email: lowerTrimmed.includes('@') ? lowerTrimmed : `${lowerTrimmed}@counselor.com`,
       username: trimmed,
       password: userPass,
       name: trimmed,
@@ -402,34 +423,42 @@ export function loginUser(
 }
 
 export function registerUser(
+  email: string,
   username: string,
   password: string,
   title: string = '心理咨询师',
-  avatar: string = '🩺',
   name?: string
 ): { success: boolean; user?: UserAccount; error?: string } {
   const accounts = getStoredAccounts();
+  const trimmedEmail = email.trim().toLowerCase();
   const trimmedUser = username.trim();
 
+  if (!trimmedEmail || !trimmedEmail.includes('@')) {
+    return { success: false, error: '请输入正确的电子邮箱地址' };
+  }
+
   if (!trimmedUser || trimmedUser.length < 2) {
-    return { success: false, error: '账号/用户名长度至少2个字符' };
+    return { success: false, error: '账户名/姓名长度至少2个字符' };
   }
 
   if (!password || password.length < 6) {
-    return { success: false, error: '密码长度至少为6位' };
+    return { success: false, error: '密码长度至少需要 6 位' };
   }
 
-  if (accounts.some((a) => a.username.toLowerCase() === trimmedUser.toLowerCase())) {
-    return { success: false, error: '该账号名称已被注册，请尝试其他账号名或直接登录' };
+  if (accounts.some((a) => (a.email && a.email.toLowerCase() === trimmedEmail) || a.username.toLowerCase() === trimmedUser.toLowerCase())) {
+    return { success: false, error: '该邮箱或账户名已被注册，请直接登录' };
   }
+
+  const canonicalId = generateCanonicalUserId(trimmedEmail);
 
   const newUser: UserAccount = {
-    id: 'u_' + Date.now(),
+    id: canonicalId,
+    email: trimmedEmail,
     username: trimmedUser,
     password: password,
     name: name?.trim() || trimmedUser,
     title: title.trim() || '心理咨询师',
-    avatar: avatar || '🩺',
+    avatar: '🩺',
     createdAt: new Date().toISOString().split('T')[0],
   };
 

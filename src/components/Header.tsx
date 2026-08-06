@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Bell, LogOut, Sun, Moon, Search, X, FolderOpen, FileText, UserCheck, Brain, ArrowRight, Feather, Sparkles, Cloud, AlertTriangle, GitMerge, Menu } from 'lucide-react';
+import { Bell, LogOut, Sun, Moon, Search, X, FolderOpen, FileText, UserCheck, Brain, ArrowRight, Feather, Sparkles, Cloud, AlertTriangle, GitMerge, Menu, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { SystemData, ReminderItem, SessionData } from '../types';
 import { ReminderModal } from './ReminderModal';
 import { UserAccount } from '../services/auth';
@@ -16,6 +16,8 @@ interface HeaderProps {
   onDeleteReminder?: (id: string) => void;
   onOpenReminderModal?: () => void;
   onOpenSyncModal?: () => void;
+  syncStatus?: 'idle' | 'syncing' | 'success' | 'error';
+  lastSyncTime?: string;
   hasConflict?: boolean;
   onNavigateTab?: (tab: ActiveTab) => void;
   onToggleMobileMenu?: () => void;
@@ -42,6 +44,8 @@ export const Header: React.FC<HeaderProps> = ({
   onDeleteReminder,
   onOpenReminderModal,
   onOpenSyncModal,
+  syncStatus = 'idle',
+  lastSyncTime,
   hasConflict = false,
   onNavigateTab,
   onToggleMobileMenu,
@@ -412,25 +416,65 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* 顶部数据同步中心按钮 (包含冲突高亮提醒) */}
+        {/* 顶部数据同步状态指示器 / 同步按钮 */}
         {onOpenSyncModal && (
           <button
+            type="button"
             onClick={onOpenSyncModal}
-            className={`relative flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-xl transition cursor-pointer active:scale-95 shadow-2xs ${
+            disabled={syncStatus === 'syncing'}
+            className={`relative flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-300 cursor-pointer active:scale-95 shadow-2xs ${
               hasConflict
                 ? 'bg-amber-500 hover:bg-amber-600 text-white animate-pulse ring-2 ring-amber-400/60'
+                : syncStatus === 'syncing'
+                ? 'bg-rose-100/90 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 cursor-wait shadow-sm'
+                : syncStatus === 'success'
+                ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 ring-2 ring-emerald-400/30 shadow-xs'
+                : syncStatus === 'error'
+                ? 'bg-rose-50 dark:bg-slate-800 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-slate-700'
                 : 'text-zinc-700 dark:text-slate-200 bg-rose-50 dark:bg-slate-800/90 hover:bg-rose-100 dark:hover:bg-slate-700 border border-rose-200 dark:border-slate-700'
             }`}
-            title={hasConflict ? '⚠️ 检测到本地与后台版本冲突，点击进行合并！' : '打开云端同步中心与版本管理'}
+            title={
+              hasConflict
+                ? '⚠️ 检测到本地与后台版本冲突，点击进行合并！'
+                : syncStatus === 'syncing'
+                ? '正在与云端实时同步数据...'
+                : syncStatus === 'success'
+                ? '云端数据同步成功 (已全端同步)'
+                : lastSyncTime || '点击手动触发全端云同步'
+            }
           >
             {hasConflict ? (
               <GitMerge className="w-4 h-4 text-white animate-bounce" />
+            ) : syncStatus === 'syncing' ? (
+              <RefreshCw className="w-4 h-4 text-rose-600 dark:text-rose-400 animate-spin shrink-0" />
+            ) : syncStatus === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 transition-transform duration-300 scale-110" />
+            ) : syncStatus === 'error' ? (
+              <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
             ) : (
-              <Cloud className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+              <Cloud className="w-4 h-4 text-rose-500 dark:text-rose-400 shrink-0" />
             )}
-            <span className="hidden sm:inline">
-              {hasConflict ? '冲突待合并' : '同步中心'}
+
+            <span className="hidden sm:inline-flex items-center gap-1">
+              {hasConflict
+                ? '冲突待合并'
+                : syncStatus === 'syncing'
+                ? '云数据同步中...'
+                : syncStatus === 'success'
+                ? '已同步云端'
+                : syncStatus === 'error'
+                ? '同步异常'
+                : '同步中心'}
             </span>
+
+            {/* 同步成功 3 秒反馈脉冲点 */}
+            {syncStatus === 'success' && (
+              <span className="flex h-2 w-2 relative ml-0.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+            )}
+
             {hasConflict && (
               <span className="ml-0.5 px-1.5 py-0.2 bg-rose-600 text-white font-extrabold text-[10px] rounded-full shadow-2xs">
                 3 处

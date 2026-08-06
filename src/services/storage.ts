@@ -509,6 +509,59 @@ export function integrityCheck(data: SystemData): SystemData {
   };
 }
 
+// In-memory fallback store if localStorage is restricted, disabled, or throws QuotaExceededError/SecurityError
+const memoryStore: Record<string, string> = {};
+
+function checkLocalStorageAvailable(): boolean {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return false;
+    const testKey = '__psy_storage_test__';
+    window.localStorage.setItem(testKey, '1');
+    window.localStorage.removeItem(testKey);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+const isStorageAvailable = checkLocalStorageAvailable();
+
+export function safeGetItem(key: string): string | null {
+  try {
+    if (isStorageAvailable) {
+      const val = window.localStorage.getItem(key);
+      if (val !== null) return val;
+    }
+    return memoryStore[key] !== undefined ? memoryStore[key] : null;
+  } catch (e) {
+    return memoryStore[key] !== undefined ? memoryStore[key] : null;
+  }
+}
+
+export function safeSetItem(key: string, value: string): boolean {
+  try {
+    memoryStore[key] = value;
+    if (isStorageAvailable) {
+      window.localStorage.setItem(key, value);
+    }
+    return true;
+  } catch (err) {
+    console.warn(`[Storage] Failed writing to localStorage for key "${key}":`, err);
+    return false;
+  }
+}
+
+export function safeRemoveItem(key: string): void {
+  try {
+    delete memoryStore[key];
+    if (isStorageAvailable) {
+      window.localStorage.removeItem(key);
+    }
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 export function loadDataFromLocalStorage(userId?: string): SystemData {
   try {
     const userPrefix = userId ? `psy_u_${userId}_` : '';
@@ -525,16 +578,16 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
 
     // Helper to read from primary key or search legacy fallback keys
     const readWithFallback = (primaryKey: string, fallbackKeys: string[], defaultVal: any) => {
-      const val = localStorage.getItem(primaryKey);
+      const val = safeGetItem(primaryKey);
       if (val) {
         try { return JSON.parse(val); } catch (e) { /* ignore parse error */ }
       }
       for (const fKey of fallbackKeys) {
-        const fallbackVal = localStorage.getItem(fKey);
+        const fallbackVal = safeGetItem(fKey);
         if (fallbackVal) {
           try {
             const parsed = JSON.parse(fallbackVal);
-            localStorage.setItem(primaryKey, fallbackVal);
+            safeSetItem(primaryKey, fallbackVal);
             return parsed;
           } catch (e) { /* ignore */ }
         }
@@ -553,7 +606,7 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
 
     // If userId is provided, check if user-specific local storage key exists
     if (userId) {
-      const existingUserRecords = localStorage.getItem(primaryKeys.records);
+      const existingUserRecords = safeGetItem(primaryKeys.records);
       if (existingUserRecords) {
         try {
           const records = JSON.parse(existingUserRecords).map((r: any) => ({
@@ -568,13 +621,13 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
                 ),
             parentSessions: r.parentSessions || {},
           }));
-          const mentors = JSON.parse(localStorage.getItem(primaryKeys.mentors) || '[]');
-          const thinking = JSON.parse(localStorage.getItem(primaryKeys.thinking) || '[]');
-          const schedules = JSON.parse(localStorage.getItem(primaryKeys.schedules) || '[]');
-          const reminders = JSON.parse(localStorage.getItem(primaryKeys.reminders) || '[]');
-          const trainings = JSON.parse(localStorage.getItem(primaryKeys.trainings) || '[]');
-          const credentials = JSON.parse(localStorage.getItem(primaryKeys.credentials) || JSON.stringify(DEFAULT_CREDENTIALS));
-          const expRaw = localStorage.getItem(primaryKeys.experience) || localStorage.getItem(`${userPrefix}experienceData`) || localStorage.getItem('psy_master_backup_experience');
+          const mentors = JSON.parse(safeGetItem(primaryKeys.mentors) || '[]');
+          const thinking = JSON.parse(safeGetItem(primaryKeys.thinking) || '[]');
+          const schedules = JSON.parse(safeGetItem(primaryKeys.schedules) || '[]');
+          const reminders = JSON.parse(safeGetItem(primaryKeys.reminders) || '[]');
+          const trainings = JSON.parse(safeGetItem(primaryKeys.trainings) || '[]');
+          const credentials = JSON.parse(safeGetItem(primaryKeys.credentials) || JSON.stringify(DEFAULT_CREDENTIALS));
+          const expRaw = safeGetItem(primaryKeys.experience) || safeGetItem(`${userPrefix}experienceData`) || safeGetItem('psy_master_backup_experience');
           const experienceData = expRaw ? JSON.parse(expRaw) : DEFAULT_EXPERIENCE;
 
           return integrityCheck({ records, mentors, thinking, schedules, reminders, trainings, credentials, personalExperience: experienceData, experienceData });
@@ -646,37 +699,37 @@ export function saveDataToLocalStorage(data: SystemData, userId?: string): void 
     const experienceDataStr = JSON.stringify(expObj);
 
     // Save to user / current key
-    localStorage.setItem(keys.records, recordsStr);
-    localStorage.setItem(keys.mentors, mentorsStr);
-    localStorage.setItem(keys.thinking, thinkingStr);
-    localStorage.setItem(keys.schedules, schedulesStr);
-    localStorage.setItem(keys.reminders, remindersStr);
-    localStorage.setItem(keys.trainings, trainingsStr);
-    localStorage.setItem(keys.credentials, credentialsStr);
-    localStorage.setItem(keys.experience, experienceDataStr);
+    safeSetItem(keys.records, recordsStr);
+    safeSetItem(keys.mentors, mentorsStr);
+    safeSetItem(keys.thinking, thinkingStr);
+    safeSetItem(keys.schedules, schedulesStr);
+    safeSetItem(keys.reminders, remindersStr);
+    safeSetItem(keys.trainings, trainingsStr);
+    safeSetItem(keys.credentials, credentialsStr);
+    safeSetItem(keys.experience, experienceDataStr);
 
     if (userId) {
-      localStorage.setItem(`psy_u_${userId}_experienceData`, experienceDataStr);
-      localStorage.setItem(`psy_u_${userId}_experience`, experienceDataStr);
+      safeSetItem(`psy_u_${userId}_experienceData`, experienceDataStr);
+      safeSetItem(`psy_u_${userId}_experience`, experienceDataStr);
     }
 
     // Save mirror copies to master backup keys for version update durability
-    localStorage.setItem('psy_master_backup_records', recordsStr);
-    localStorage.setItem('psy_master_backup_mentors', mentorsStr);
-    localStorage.setItem('psy_master_backup_thinking', thinkingStr);
-    localStorage.setItem('psy_master_backup_schedules', schedulesStr);
-    localStorage.setItem('psy_master_backup_reminders', remindersStr);
-    localStorage.setItem('psy_master_backup_trainings', trainingsStr);
-    localStorage.setItem('psy_master_backup_experience', experienceDataStr);
+    safeSetItem('psy_master_backup_records', recordsStr);
+    safeSetItem('psy_master_backup_mentors', mentorsStr);
+    safeSetItem('psy_master_backup_thinking', thinkingStr);
+    safeSetItem('psy_master_backup_schedules', schedulesStr);
+    safeSetItem('psy_master_backup_reminders', remindersStr);
+    safeSetItem('psy_master_backup_trainings', trainingsStr);
+    safeSetItem('psy_master_backup_experience', experienceDataStr);
 
     if (userId) {
-      localStorage.setItem(STORAGE_KEYS.RECORDS, recordsStr);
-      localStorage.setItem(STORAGE_KEYS.MENTORS, mentorsStr);
-      localStorage.setItem(STORAGE_KEYS.THINKING, thinkingStr);
-      localStorage.setItem(STORAGE_KEYS.SCHEDULES, schedulesStr);
-      localStorage.setItem(STORAGE_KEYS.REMINDERS, remindersStr);
-      localStorage.setItem(STORAGE_KEYS.TRAININGS, trainingsStr);
-      localStorage.setItem(STORAGE_KEYS.EXPERIENCE, experienceDataStr);
+      safeSetItem(STORAGE_KEYS.RECORDS, recordsStr);
+      safeSetItem(STORAGE_KEYS.MENTORS, mentorsStr);
+      safeSetItem(STORAGE_KEYS.THINKING, thinkingStr);
+      safeSetItem(STORAGE_KEYS.SCHEDULES, schedulesStr);
+      safeSetItem(STORAGE_KEYS.REMINDERS, remindersStr);
+      safeSetItem(STORAGE_KEYS.TRAININGS, trainingsStr);
+      safeSetItem(STORAGE_KEYS.EXPERIENCE, experienceDataStr);
     }
   } catch (err) {
     console.error('Failed to save to localStorage:', err);
@@ -692,7 +745,7 @@ export function clearAllLocalStorage(userId?: string): void {
       schedules: userId ? `psy_u_${userId}_schedules` : STORAGE_KEYS.SCHEDULES,
       reminders: userId ? `psy_u_${userId}_reminders` : STORAGE_KEYS.REMINDERS,
     };
-    Object.values(keys).forEach((k) => localStorage.removeItem(k));
+    Object.values(keys).forEach((k) => safeRemoveItem(k));
   } catch (err) {
     console.error('Failed to clear localStorage:', err);
   }
