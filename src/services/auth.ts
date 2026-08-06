@@ -22,8 +22,8 @@ export function generateCanonicalUserId(identifier: string): string {
 
 const DEFAULT_ACCOUNTS: UserAccount[] = [
   {
-    id: 'u_sevan_28mont_gmail_com',
-    email: 'sevan.28mont@gmail.com',
+    id: 'u_zhang_qq',
+    email: 'zhang_counselor@qq.com',
     username: '张咨询师',
     password: '123456',
     name: '张咨询师',
@@ -33,7 +33,7 @@ const DEFAULT_ACCOUNTS: UserAccount[] = [
   },
   {
     id: 'u_default',
-    email: 'sevan.28mont@gmail.com',
+    email: 'zhang_counselor@qq.com',
     username: '张咨询师',
     password: '123456',
     name: '张咨询师',
@@ -240,6 +240,13 @@ export function getCurrentUser(): UserAccount | null {
         try {
           const parsed = JSON.parse(raw);
           if (parsed && parsed.id) {
+            // Auto migrate away from old google account
+            if (parsed.email === 'sevan.28mont@gmail.com' || parsed.id === 'u_sevan_28mont_gmail_com') {
+              parsed.email = 'zhang_counselor@qq.com';
+              parsed.id = 'u_zhang_qq';
+              parsed.username = parsed.username || '张咨询师';
+              parsed.name = parsed.name || '张咨询师';
+            }
             const jsonStr = JSON.stringify(parsed);
             safeSetStorage('psy_current_user_backup', jsonStr);
             if (key !== STORAGE_KEYS.CURRENT_USER) {

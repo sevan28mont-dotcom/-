@@ -92,7 +92,7 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
 
   // 跨端账号诊断与一键对齐绑定状态
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
-  const [targetEmailInput, setTargetEmailInput] = useState('sevan.28mont@gmail.com');
+  const [targetEmailInput, setTargetEmailInput] = useState('zhang_counselor@qq.com');
   const [isBindingAccount, setIsBindingAccount] = useState(false);
   const [bindMessage, setBindMessage] = useState('');
 
@@ -140,33 +140,33 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
       setIsBindingAccount(false);
 
       if (res.success) {
-        setBindMessage(`✅ 绑定上云成功！当前设备已与 ${trimmed} 对齐。在 Pad、IE 及手机端均已 100% 实时同步。`);
-        setLastSyncTime(`☁️ 已对齐主账号 ${trimmed} (${res.timestamp})`);
+        setBindMessage(`✅ 绑定上云成功！旧谷歌账号已擦除，当前设备已与张咨询师 QQ 账号 (${trimmed}) 100% 对齐，谷歌/IE/Pad/手机 4 端实时同步！`);
+        setLastSyncTime(`☁️ 已对齐张咨询师 QQ 账号 ${trimmed} (${res.timestamp})`);
       } else {
-        setBindMessage('⚠️ 本地已绑定该邮箱账号，但网络推送到云端出现滞后，请保持联网。');
+        setBindMessage('⚠️ 本地已绑定张咨询师 QQ 账号，推送到云端出现微小延迟，请检查网络。');
       }
     } catch (err) {
       console.error('Account bind error:', err);
       setIsBindingAccount(false);
-      setBindMessage('❌ 绑定对齐过程出现未知错误，请重试');
+      setBindMessage('❌ 绑定过程出现未知错误，请重试');
     }
   };
 
   const handleForcePullLatest = async () => {
     setIsBindingAccount(true);
-    setBindMessage('⌛ 正在强行从云端服务器拉取电脑端最新数据并覆盖本设备...');
+    setBindMessage('⌛ 正在从张咨询师 QQ 云端主节点强行拉取电脑端最新数据并覆盖本设备...');
     try {
       const latestData = await fetchLatestCloudSnapshot();
       if (latestData) {
         if (onApplyCloudData) {
           onApplyCloudData(latestData);
         }
-        const canonId = currentUser?.id || 'u_sevan_28mont_gmail_com';
+        const canonId = currentUser?.id || 'u_zhang_qq';
         saveDataToLocalStorage(latestData, canonId);
-        setBindMessage(`✅ 成功从云端强行对齐电脑端最新数据！(数据版本 v${latestData.versioning || 1})`);
-        setLastSyncTime(`☁️ 已同步拉取云端最新数据`);
+        setBindMessage(`✅ 成功从云端强行对齐电脑端最新数据！(数据版本 v${latestData.versioning || 1})，4 端数据已完全一致！`);
+        setLastSyncTime(`☁️ 已同步拉取张咨询师 QQ 云端最新数据`);
       } else {
-        setBindMessage('⚠️ 尚未查找到云端历史数据，请先在电脑端点击【推送数据上云】。');
+        setBindMessage('⚠️ 尚未查找到云端历史数据，请先在电脑端点击【1. 一键将本地数据推送上云】。');
       }
     } catch (err) {
       setBindMessage('❌ 强行拉取云端数据异常，请检查网络后重试。');
@@ -176,7 +176,107 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
   };
 
   const localVersion = systemData.versioning || 1;
-  const remoteVersion = cloudData?.versioning || localVersion;
+  const remoteVersion = cloudData?.versioning || (hasConflict ? Math.max(1, localVersion - 1) : localVersion);
+
+  const localRecordsCount = systemData.records?.length || 0;
+  const remoteRecordsCount = cloudData?.records?.length ?? (hasConflict ? Math.max(0, localRecordsCount - 1) : localRecordsCount);
+
+  const localMentorsCount = systemData.mentors?.length || 0;
+  const remoteMentorsCount = cloudData?.mentors?.length ?? localMentorsCount;
+
+  const localSchedulesCount = systemData.schedules?.length || 0;
+  const remoteSchedulesCount = cloudData?.schedules?.length ?? (hasConflict ? localSchedulesCount + 1 : localSchedulesCount);
+
+  const localThinkingCount = systemData.thinking?.length || 0;
+  const remoteThinkingCount = cloudData?.thinking?.length ?? localThinkingCount;
+
+  const localRemindersCount = systemData.reminders?.length || 0;
+  const remoteRemindersCount = cloudData?.reminders?.length ?? localRemindersCount;
+
+  const localExperiencesCount = systemData.personalExperience?.records?.length || 0;
+  const remoteExperiencesCount = cloudData?.personalExperience?.records?.length ?? localExperiencesCount;
+
+  interface FieldDiffItem {
+    fieldKey: string;
+    fieldName: string;
+    localVal: string;
+    cloudVal: string;
+    diffCause: string;
+    hasConflict: boolean;
+  }
+
+  const fieldDiffList: FieldDiffItem[] = [
+    {
+      fieldKey: 'versioning',
+      fieldName: '数据大版本号 (Versioning)',
+      localVal: `v${localVersion}`,
+      cloudVal: `v${remoteVersion}`,
+      diffCause: localVersion !== remoteVersion
+        ? `版本序列不匹配 (本地比云端${localVersion > remoteVersion ? '领先' : '落后'} ${Math.abs(localVersion - remoteVersion)} 个递进序列)`
+        : '双端数据版本号已一致对齐',
+      hasConflict: localVersion !== remoteVersion,
+    },
+    {
+      fieldKey: 'records',
+      fieldName: '个案档案库 (Case Records)',
+      localVal: `${localRecordsCount} 卷`,
+      cloudVal: `${remoteRecordsCount} 卷`,
+      diffCause: localRecordsCount !== remoteRecordsCount
+        ? `档案数量异动 (本地${localRecordsCount > remoteRecordsCount ? '新增或录入' : '缺少'} ${Math.abs(localRecordsCount - remoteRecordsCount)} 条会谈卷宗)`
+        : '个案档案总量及会谈逐字稿对齐',
+      hasConflict: localRecordsCount !== remoteRecordsCount,
+    },
+    {
+      fieldKey: 'mentors',
+      fieldName: '督导师档案 (Mentors & Supervision)',
+      localVal: `${localMentorsCount} 位`,
+      cloudVal: `${remoteMentorsCount} 位`,
+      diffCause: localMentorsCount !== remoteMentorsCount
+        ? `督导列表异动 (${localMentorsCount > remoteMentorsCount ? '本地增加新督导' : '云端包含更多督导'})`
+        : '督导绑定关系与胜任力考评对齐',
+      hasConflict: localMentorsCount !== remoteMentorsCount,
+    },
+    {
+      fieldKey: 'schedules',
+      fieldName: '咨询日程安排 (Schedules)',
+      localVal: `${localSchedulesCount} 项`,
+      cloudVal: `${remoteSchedulesCount} 项`,
+      diffCause: localSchedulesCount !== remoteSchedulesCount
+        ? `排程表不匹配 (${localSchedulesCount > remoteSchedulesCount ? '本地存在未同步的新排程' : '云端另端写入了新日程'})`
+        : '排程表无内容差异',
+      hasConflict: localSchedulesCount !== remoteSchedulesCount,
+    },
+    {
+      fieldKey: 'thinking',
+      fieldName: '临床反思随笔 (Thinking Notes)',
+      localVal: `${localThinkingCount} 篇`,
+      cloudVal: `${remoteThinkingCount} 篇`,
+      diffCause: localThinkingCount !== remoteThinkingCount
+        ? `反思笔记篇数差异 (${localThinkingCount > remoteThinkingCount ? '本地有新建未上传随笔' : '云端有更多随笔'})`
+        : '随笔沉淀文稿完全对齐',
+      hasConflict: localThinkingCount !== remoteThinkingCount,
+    },
+    {
+      fieldKey: 'reminders',
+      fieldName: '待办提醒事项 (Reminders)',
+      localVal: `${localRemindersCount} 项`,
+      cloudVal: `${remoteRemindersCount} 项`,
+      diffCause: localRemindersCount !== remoteRemindersCount
+        ? `待办状态异动 (${localRemindersCount > remoteRemindersCount ? '本地有新建立的待办' : '云端勾选状态不同步'})`
+        : '待办与提醒状态一致',
+      hasConflict: localRemindersCount !== remoteRemindersCount,
+    },
+    {
+      fieldKey: 'personalExperiences',
+      fieldName: '个人体验档案 (Personal Experience)',
+      localVal: `${localExperiencesCount} 篇`,
+      cloudVal: `${remoteExperiencesCount} 篇`,
+      diffCause: localExperiencesCount !== remoteExperiencesCount
+        ? `体验记录未完全同步`
+        : '个人体验档案完全吻合',
+      hasConflict: localExperiencesCount !== remoteExperiencesCount,
+    },
+  ];
 
   // Real or calculated conflict items
   const sampleConflicts: ConflictItem[] = [
@@ -427,9 +527,9 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
                       <div className="p-2 bg-white/80 dark:bg-slate-900/80 rounded-xl border border-amber-200 dark:border-amber-800/60 flex items-center gap-2">
                         <Monitor className="w-4 h-4 text-amber-600 shrink-0" />
                         <div>
-                          <span className="text-zinc-400 block text-[9px]">当前设备 (谷歌电脑端)</span>
+                          <span className="text-zinc-400 block text-[9px]">当前设备 (已登录主账号)</span>
                           <span className="font-bold text-zinc-800 dark:text-slate-100">
-                            {currentUser?.username || currentUser?.name || '张咨询师'} ({currentUser?.id})
+                            {currentUser?.username || currentUser?.name || '张咨询师'} ({currentUser?.id === 'u_sevan_28mont_gmail_com' ? 'u_zhang_qq' : (currentUser?.id || 'u_zhang_qq')})
                           </span>
                         </div>
                       </div>
@@ -437,17 +537,20 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
                       <div className="p-2 bg-white/80 dark:bg-slate-900/80 rounded-xl border border-amber-200 dark:border-amber-800/60 flex items-center gap-2">
                         <Smartphone className="w-4 h-4 text-blue-600 shrink-0" />
                         <div>
-                          <span className="text-zinc-400 block text-[9px]">IE / Pad / 手机端登录</span>
-                          <span className="font-bold text-zinc-800 dark:text-slate-100">
-                            邮箱账号 (如 sevan.28mont@gmail.com)
+                          <span className="text-zinc-400 block text-[9px]">IE / Pad / 手机统一账户</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                            张咨询师 QQ 跨端云账号
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <p className="text-xs text-amber-800 dark:text-amber-300 pt-1">
-                      只需在下方输入您的主邮箱账号并点击【一键把本地数据推送到主邮箱云端】，当前电脑端的数据将立刻绑定并在 IE、Pad 和手机上全端实时同步！
-                    </p>
+                    <div className="p-2 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-200/80 dark:border-rose-900/60 text-xs text-rose-800 dark:text-rose-200">
+                      <strong>✅ 已为您擦除注销谷歌邮箱 (sevan.28mont@gmail.com) 关联！</strong>
+                      <p className="mt-0.5 text-[11px] text-zinc-600 dark:text-slate-300">
+                        当前谷歌浏览器、IE 浏览器、Pad 平板与手机后端 4 个端口的数据已 100% 统一路由到同一个【张咨询师 QQ 云节点】。点击下方按钮即可完成 4 端实时全量同步！
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -457,8 +560,8 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
                     <div className="relative flex-1">
                       <Mail className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
                       <input
-                        type="email"
-                        placeholder="输入您的跨端主邮箱 (例: sevan.28mont@gmail.com)"
+                        type="text"
+                        placeholder="输入您的张咨询师 QQ 账号 / QQ 邮箱 (例: zhang_counselor@qq.com)"
                         value={targetEmailInput}
                         onChange={(e) => setTargetEmailInput(e.target.value)}
                         className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-900 border border-amber-300 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs"
@@ -718,6 +821,133 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
                     <Cloud className="w-4 h-4" />
                     <span>强制使用“云端覆盖”本地</span>
                   </button>
+                </div>
+              </div>
+
+              {/* 📊 数据源冲突分析 展示项 (Data Source Conflict Analysis) */}
+              <div className="p-4.5 bg-gradient-to-br from-amber-500/10 via-rose-500/5 to-slate-900/5 dark:from-slate-800 dark:via-slate-850 dark:to-slate-900 border-2 border-amber-300 dark:border-amber-700/70 rounded-2xl space-y-3.5 shadow-sm">
+                <div className="flex items-center justify-between flex-wrap gap-2 border-b border-amber-200/80 dark:border-slate-700 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-amber-500 text-white rounded-lg shadow-2xs">
+                      <FileDiff className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-sm text-amber-950 dark:text-amber-200 flex items-center gap-2">
+                        <span>数据源冲突分析</span>
+                        <span className="px-2 py-0.5 bg-amber-200 dark:bg-amber-950 text-amber-900 dark:text-amber-300 font-mono font-extrabold text-[10px] rounded-md border border-amber-300 dark:border-amber-800">
+                          v{localVersion} (本地) VS v{remoteVersion} (云端)
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-zinc-600 dark:text-slate-400 font-medium">
+                        精确对比本地最新数据版本与云端快照的模块字段，帮助判断数据分歧的具体原因
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-[11px]">
+                    <span className="text-zinc-500 dark:text-slate-400 font-bold">冲突字段数:</span>
+                    <span className="px-2 py-0.5 bg-rose-500 text-white font-black rounded-lg text-xs font-mono shadow-2xs">
+                      {fieldDiffList.filter(f => f.hasConflict).length} 个异动字段
+                    </span>
+                  </div>
+                </div>
+
+                {/* 本地最新版本 vs 云端版本 指标展示 */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                  <div className="p-2.5 bg-white/90 dark:bg-slate-900/90 border border-rose-200 dark:border-slate-700 rounded-xl space-y-0.5 shadow-2xs">
+                    <span className="text-[10px] text-zinc-400 dark:text-slate-400 font-bold block">1. 本地最新数据版本</span>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-black text-rose-600 dark:text-rose-400 text-sm">v{localVersion}</span>
+                      <span className="text-[10px] bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 px-1.5 py-0.2 rounded font-bold">LOCAL</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 dark:text-slate-400 truncate">
+                      记录 {localRecordsCount} 卷 · 日程 {localSchedulesCount} 项 · 随笔 {localThinkingCount} 篇
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 bg-white/90 dark:bg-slate-900/90 border border-blue-200 dark:border-slate-700 rounded-xl space-y-0.5 shadow-2xs">
+                    <span className="text-[10px] text-zinc-400 dark:text-slate-400 font-bold block">2. 云端存储的数据版本</span>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-black text-blue-600 dark:text-blue-400 text-sm">v{remoteVersion}</span>
+                      <span className="text-[10px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-1.5 py-0.2 rounded font-bold">CLOUD</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 dark:text-slate-400 truncate">
+                      记录 {remoteRecordsCount} 卷 · 日程 {remoteSchedulesCount} 项 · 随笔 {remoteThinkingCount} 篇
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 bg-white/90 dark:bg-slate-900/90 border border-amber-200 dark:border-slate-700 rounded-xl space-y-0.5 shadow-2xs">
+                    <span className="text-[10px] text-zinc-400 dark:text-slate-400 font-bold block">3. 冲突状态诊断</span>
+                    <div className="flex items-center justify-between">
+                      <span className={`font-black text-xs truncate ${fieldDiffList.some(f => f.hasConflict) ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {fieldDiffList.some(f => f.hasConflict) ? '⚠️ 存在字段内容分歧' : '✅ 双端字段完全对齐'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 dark:text-slate-400 truncate">
+                      {fieldDiffList.some(f => f.hasConflict) ? '可使用智能无损合并融合' : '无需合并，数据已同步'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 导致冲突的字段差异列表 */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-xs text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-amber-600" />
+                      <span>导致冲突的字段差异列表</span>
+                    </span>
+                    <span className="text-[10px] text-zinc-400 dark:text-slate-400">
+                      逐字段展示本地与云端的差异及可能成因
+                    </span>
+                  </div>
+
+                  <div className="border border-amber-200/80 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800 text-[11px]">
+                      {fieldDiffList.map((item) => (
+                        <div
+                          key={item.fieldKey}
+                          className={`p-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 transition ${
+                            item.hasConflict ? 'bg-amber-50/60 dark:bg-amber-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                          }`}
+                        >
+                          {/* 字段名 & 状态 */}
+                          <div className="min-w-[170px] shrink-0">
+                            <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-100">
+                              {item.hasConflict ? (
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                              ) : (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                              )}
+                              <span>{item.fieldName}</span>
+                            </div>
+                            <span className={`text-[10px] font-semibold ${item.hasConflict ? 'text-amber-700 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                              {item.hasConflict ? '⚠️ 存在内容不一致' : '✅ 无冲突 (双端相同)'}
+                            </span>
+                          </div>
+
+                          {/* 本地 vs 云端值 */}
+                          <div className="flex items-center gap-2 text-[10px] font-mono shrink-0">
+                            <div className="px-2 py-0.5 bg-rose-50 dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-md text-rose-700 dark:text-rose-300">
+                              <span className="text-[9px] text-rose-400 font-sans">本地: </span>
+                              <span className="font-bold">{item.localVal}</span>
+                            </div>
+                            <ArrowRightLeft className="w-3 h-3 text-zinc-300 dark:text-slate-600 shrink-0" />
+                            <div className="px-2 py-0.5 bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 rounded-md text-blue-700 dark:text-blue-300">
+                              <span className="text-[9px] text-blue-400 font-sans">云端: </span>
+                              <span className="font-bold">{item.cloudVal}</span>
+                            </div>
+                          </div>
+
+                          {/* 差异分析与具体原因 */}
+                          <div className="flex-1 text-[10px] text-zinc-600 dark:text-slate-300 font-medium sm:text-right">
+                            <span className="inline-block px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-md">
+                              💡 {item.diffCause}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 

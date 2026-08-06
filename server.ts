@@ -31,8 +31,8 @@ function generateServerCanonicalUserId(identifier: string): string {
 
 const DEFAULT_SERVER_ACCOUNTS: UserAccountServer[] = [
   {
-    id: "u_sevan_28mont_gmail_com",
-    email: "sevan.28mont@gmail.com",
+    id: "u_zhang_qq",
+    email: "zhang_counselor@qq.com",
     username: "张咨询师",
     password: "123456",
     name: "张咨询师",
@@ -42,7 +42,7 @@ const DEFAULT_SERVER_ACCOUNTS: UserAccountServer[] = [
   },
   {
     id: "u_default",
-    email: "sevan.28mont@gmail.com",
+    email: "zhang_counselor@qq.com",
     username: "张咨询师",
     password: "123456",
     name: "张咨询师",
@@ -424,23 +424,25 @@ ${content}
 
   // Helper: Resolve canonical user ID across devices and accounts
   function resolveCanonicalUserId(rawUserId: string): string {
-    if (!rawUserId) return "u_sevan_28mont_gmail_com";
+    if (!rawUserId) return "u_zhang_qq";
     const strId = String(rawUserId).trim();
     const lowerId = strId.toLowerCase();
 
-    // Map all common defaults or email variations to primary unified account
+    // Map all common defaults or former google email variations to primary unified Zhang Counselor QQ account
     if (
       lowerId === "u_default" ||
       lowerId === "u_demo" ||
       lowerId === "default" ||
       lowerId.includes("sevan.28mont") ||
+      lowerId.includes("u_sevan_28mont") ||
       lowerId.includes("lin@counselor") ||
       lowerId.includes("zhang@supervisor") ||
       lowerId.includes("counselor") ||
       lowerId.includes("张咨询师") ||
-      lowerId.includes("林心理咨询师")
+      lowerId.includes("林心理咨询师") ||
+      lowerId.includes("qq")
     ) {
-      return "u_sevan_28mont_gmail_com";
+      return "u_zhang_qq";
     }
 
     // 1. Direct ID match
@@ -466,14 +468,17 @@ ${content}
   app.post("/api/sync/save", (req, res) => {
     try {
       const { userId, data } = req.body;
-      const canonicalId = resolveCanonicalUserId(userId || "u_sevan_28mont_gmail_com");
+      const canonicalId = resolveCanonicalUserId(userId || "u_zhang_qq");
       const updatedAt = new Date().toISOString();
 
       const payload = { data, updatedAt };
       serverDb.userStore[canonicalId] = payload;
-      serverDb.userStore["u_sevan_28mont_gmail_com"] = payload;
+      serverDb.userStore["u_zhang_qq"] = payload;
       serverDb.userStore["u_default"] = payload;
       serverDb.userStore["global_latest"] = payload;
+
+      // Clean up old google account entry if present
+      delete serverDb.userStore["u_sevan_28mont_gmail_com"];
 
       if (userId && userId !== canonicalId) {
         serverDb.userStore[userId] = payload;
@@ -483,7 +488,7 @@ ${content}
       return res.json({
         success: true,
         timestamp: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
-        message: "全端数据已同步至统一多设备云端 (电脑/Pad/IE/手机已完全对齐)",
+        message: "全端数据已同步至【张咨询师 QQ 跨端云】(谷歌浏览器/IE/Pad/手机已 100% 统一对齐)",
       });
     } catch (err) {
       console.error("Sync save error:", err);
@@ -527,7 +532,7 @@ ${content}
     try {
       const { userId } = req.body;
       const canonicalId = resolveCanonicalUserId(userId);
-      let storeEntry = serverDb.userStore[canonicalId] || serverDb.userStore["u_sevan_28mont_gmail_com"] || serverDb.userStore["u_default"] || serverDb.userStore["global_latest"];
+      let storeEntry = serverDb.userStore[canonicalId] || serverDb.userStore["u_zhang_qq"] || serverDb.userStore["u_default"] || serverDb.userStore["global_latest"];
 
       // Check all entries to find the one with the highest versioning
       for (const [key, entry] of Object.entries(serverDb.userStore)) {

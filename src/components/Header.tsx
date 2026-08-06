@@ -638,8 +638,9 @@ export const Header: React.FC<HeaderProps> = ({
                       </div>
 
                       {/* 阻塞识别提示 */}
-                      <div className="p-2 bg-amber-100/70 dark:bg-amber-950/40 rounded-lg text-[10px] text-amber-900 dark:text-amber-200 leading-snug">
-                        💡 <b>阻塞诊断提示:</b> 切换到 Pad、IE 或手机端时，若本地仍为旧版本快照，会导致看不到电脑端更新。请在对应终端点击<b>【强行拉取电脑端最新数据】</b>即可解阻！
+                      <div className="p-2 bg-amber-100/70 dark:bg-amber-950/40 rounded-lg text-[10px] text-amber-900 dark:text-amber-200 leading-snug space-y-1">
+                        <div><b>🔒 跨端统一账号:</b> 张咨询师 QQ 账号 (已完全注销擦除谷歌账号关联)</div>
+                        <div>💡 <b>跨端解阻提示:</b> 切换到 Pad、IE 或手机端时，点击<b>【强行拉取电脑端最新数据】</b>，即可与电脑端保持 100% 绝对一致！</div>
                       </div>
                     </div>
 
