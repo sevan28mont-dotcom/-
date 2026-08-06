@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserAccount, loginUser, loginUserAsync, registerUserAsync } from '../services/auth';
+import { UserAccount, loginUser, loginUserAsync, registerUserAsync, saveDeviceInfo } from '../services/auth';
 import { EMPTY_SYSTEM_DATA, fetchBackendData, getDefaultSampleSystemData, saveDataToLocalStorage } from '../services/storage';
 import {
   Lock,
@@ -99,6 +99,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
         }
 
         if (regRes.user) {
+          saveDeviceInfo();
           // Check if server already has user's cloud backup
           const existingCloudData = await fetchBackendData(regRes.user.id);
           if (existingCloudData) {
@@ -109,7 +110,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
               regRes.user.id
             );
           }
-          setSuccessMsg('账号注册成功！正在为您自动登录工作台...');
+          setSuccessMsg('账号注册成功！已写入当前设备标识，正在进入工作台...');
           setTimeout(() => {
             onLoginSuccess(regRes.user!);
           }, 400);
@@ -131,12 +132,13 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
         }
 
         if (loginRes.user) {
+          saveDeviceInfo();
           // Fetch cloud backup for this canonical user ID
           const cloudData = await fetchBackendData(loginRes.user.id);
           if (cloudData) {
             saveDataToLocalStorage(cloudData, loginRes.user.id);
           }
-          setSuccessMsg('登录成功！已成功同步云端数据');
+          setSuccessMsg('登录成功！已识别并写入当前设备环境，已对齐云端数据');
           setTimeout(() => {
             onLoginSuccess(loginRes.user!);
           }, 300);
@@ -154,10 +156,12 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
     setErrorMsg('');
     const res = loginUser(demoUsername, '123456');
     if (res.success && res.user) {
+      saveDeviceInfo();
       onLoginSuccess(res.user);
     } else {
       const fallback = loginUser('counselor', '123456');
       if (fallback.success && fallback.user) {
+        saveDeviceInfo();
         onLoginSuccess(fallback.user);
       } else {
         setErrorMsg('演示账号登录失败');

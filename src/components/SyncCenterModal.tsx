@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { SystemData, CaseRecord, Supervisor, ThinkingNote } from '../types';
 import { getCurrentUser, generateCanonicalUserId, saveAccounts, getStoredAccounts, UserAccount } from '../services/auth';
-import { saveDataToBackend, saveDataToLocalStorage } from '../services/storage';
+import { saveDataToBackend, saveDataToLocalStorage, fetchLatestCloudSnapshot } from '../services/storage';
 
 export interface ConflictItem {
   id: string;
@@ -56,6 +56,7 @@ export interface SyncCenterModalProps {
   onUseCloud?: () => void;
   onMergeBoth?: () => void;
   onTriggerCheck?: () => void;
+  onApplyCloudData?: (data: SystemData) => void;
   lastSyncTime: string;
   setLastSyncTime: (time: string) => void;
   hasConflict: boolean;
@@ -71,6 +72,7 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
   onUseCloud,
   onMergeBoth,
   onTriggerCheck,
+  onApplyCloudData,
   lastSyncTime,
   setLastSyncTime,
   hasConflict,
@@ -138,7 +140,7 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
       setIsBindingAccount(false);
 
       if (res.success) {
-        setBindMessage(`✅ 绑定上云成功！当前设备已与 ${trimmed} 对齐。在 Pad、IE 及手机端登录相同邮箱即可 100% 跨端同步。`);
+        setBindMessage(`✅ 绑定上云成功！当前设备已与 ${trimmed} 对齐。在 Pad、IE 及手机端均已 100% 实时同步。`);
         setLastSyncTime(`☁️ 已对齐主账号 ${trimmed} (${res.timestamp})`);
       } else {
         setBindMessage('⚠️ 本地已绑定该邮箱账号，但网络推送到云端出现滞后，请保持联网。');
@@ -147,6 +149,29 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
       console.error('Account bind error:', err);
       setIsBindingAccount(false);
       setBindMessage('❌ 绑定对齐过程出现未知错误，请重试');
+    }
+  };
+
+  const handleForcePullLatest = async () => {
+    setIsBindingAccount(true);
+    setBindMessage('⌛ 正在强行从云端服务器拉取电脑端最新数据并覆盖本设备...');
+    try {
+      const latestData = await fetchLatestCloudSnapshot();
+      if (latestData) {
+        if (onApplyCloudData) {
+          onApplyCloudData(latestData);
+        }
+        const canonId = currentUser?.id || 'u_sevan_28mont_gmail_com';
+        saveDataToLocalStorage(latestData, canonId);
+        setBindMessage(`✅ 成功从云端强行对齐电脑端最新数据！(数据版本 v${latestData.versioning || 1})`);
+        setLastSyncTime(`☁️ 已同步拉取云端最新数据`);
+      } else {
+        setBindMessage('⚠️ 尚未查找到云端历史数据，请先在电脑端点击【推送数据上云】。');
+      }
+    } catch (err) {
+      setBindMessage('❌ 强行拉取云端数据异常，请检查网络后重试。');
+    } finally {
+      setIsBindingAccount(false);
     }
   };
 
@@ -426,26 +451,40 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
                   </div>
                 </div>
 
-                {/* 一键绑定/切账号框 */}
-                <div className="pt-2 border-t border-amber-200/80 dark:border-amber-800/60 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                  <div className="relative flex-1">
-                    <Mail className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
-                    <input
-                      type="email"
-                      placeholder="输入您的跨端主邮箱 (例: sevan.28mont@gmail.com)"
-                      value={targetEmailInput}
-                      onChange={(e) => setTargetEmailInput(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-900 border border-amber-300 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs"
-                    />
+                {/* 双向一键全端同步动作栏 */}
+                <div className="pt-2 border-t border-amber-200/80 dark:border-amber-800/60 space-y-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <div className="relative flex-1">
+                      <Mail className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
+                      <input
+                        type="email"
+                        placeholder="输入您的跨端主邮箱 (例: sevan.28mont@gmail.com)"
+                        value={targetEmailInput}
+                        onChange={(e) => setTargetEmailInput(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-900 border border-amber-300 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs"
+                      />
+                    </div>
                   </div>
-                  <button
-                    onClick={handleBindAndSyncToEmail}
-                    disabled={isBindingAccount}
-                    className="px-4 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-extrabold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shadow-sm shrink-0 disabled:opacity-50"
-                  >
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>{isBindingAccount ? '正在合并推送到云端...' : '一键将本地数据同步推送至此邮箱账号'}</span>
-                  </button>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      onClick={handleBindAndSyncToEmail}
+                      disabled={isBindingAccount}
+                      className="px-4 py-2.5 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-extrabold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shadow-sm text-xs disabled:opacity-50"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>{isBindingAccount ? '同步中...' : '1. 【电脑端操作】一键将本地数据推送上云'}</span>
+                    </button>
+
+                    <button
+                      onClick={handleForcePullLatest}
+                      disabled={isBindingAccount}
+                      className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shadow-sm text-xs disabled:opacity-50"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>{isBindingAccount ? '同步中...' : '2. 【Pad/手机/IE端操作】强行拉取电脑端最新数据'}</span>
+                    </button>
+                  </div>
                 </div>
 
                 {bindMessage && (

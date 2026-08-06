@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Bell, LogOut, Sun, Moon, Search, X, FolderOpen, FileText, UserCheck, Brain, ArrowRight, Feather, Sparkles, Cloud, AlertTriangle, GitMerge, Menu, RefreshCw, CheckCircle2, Info, Laptop, ShieldCheck, Clock, Tag } from 'lucide-react';
+import { Bell, LogOut, Sun, Moon, Search, X, FolderOpen, FileText, UserCheck, Brain, ArrowRight, Feather, Sparkles, Cloud, AlertTriangle, GitMerge, Menu, RefreshCw, CheckCircle2, Info, Laptop, ShieldCheck, Clock, Tag, Smartphone, Tablet, Monitor, Globe } from 'lucide-react';
 import { SystemData, ReminderItem, SessionData } from '../types';
 import { ReminderModal } from './ReminderModal';
-import { UserAccount } from '../services/auth';
+import { UserAccount, getStoredDeviceInfo } from '../services/auth';
 import { ActiveTab } from './Sidebar';
 
 interface HeaderProps {
@@ -526,103 +526,151 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* 详情日志 悬浮层 (Popover Panel) */}
-            {isSyncDetailsOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 p-4 bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-xs space-y-3">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-rose-100 dark:border-slate-800 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-rose-50 dark:bg-slate-800 rounded-lg text-rose-600 dark:text-rose-400">
-                      <Cloud className="w-4 h-4" />
+            {isSyncDetailsOpen && (() => {
+              const currentDev = getStoredDeviceInfo();
+              const version = systemData.versioning || 1;
+              return (
+                <div className="absolute right-0 top-full mt-2 w-88 p-4 bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-xs space-y-3">
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b border-rose-100 dark:border-slate-800 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-rose-50 dark:bg-slate-800 rounded-lg text-rose-600 dark:text-rose-400">
+                        <Cloud className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-sm text-zinc-800 dark:text-slate-100">
+                          跨端同步与终端日志
+                        </h4>
+                        <p className="text-[10px] text-zinc-400 dark:text-slate-400">
+                          持久化设备特征 / 终端版本及阻塞诊断
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-extrabold text-sm text-zinc-800 dark:text-slate-100">
-                        跨端同步详情日志
-                      </h4>
-                      <p className="text-[10px] text-zinc-400 dark:text-slate-400">
-                        时间戳 / 设备终端 / 数据版本号
-                      </p>
+
+                    <button
+                      onClick={() => setIsSyncDetailsOpen(false)}
+                      className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-slate-200 rounded-lg transition"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Details List */}
+                  <div className="space-y-2 text-[11px]">
+                    {/* 1. 当前设备持久化特征 */}
+                    <div className="p-2.5 bg-rose-50/80 dark:bg-slate-800/80 border border-rose-200/80 dark:border-slate-700 rounded-xl space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 font-extrabold text-zinc-800 dark:text-slate-100">
+                          <Laptop className="w-3.5 h-3.5 text-rose-500" />
+                          <span>当前终端信息 (已持久化)</span>
+                        </span>
+                        <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold rounded text-[9px]">
+                          本端 ONLINE
+                        </span>
+                      </div>
+                      <div className="pl-5 space-y-1 text-[10px] text-zinc-600 dark:text-slate-300">
+                        <div className="font-bold text-zinc-800 dark:text-slate-100">
+                          🖥️ 设备分类: <span className="text-rose-600 dark:text-rose-400">{currentDev.deviceCategory}</span>
+                        </div>
+                        <div>🌐 浏览器: <span className="font-mono font-semibold">{currentDev.browserName}</span></div>
+                        <div>💻 操作系统: <span className="font-mono font-semibold">{currentDev.osName}</span></div>
+                        <div>🕒 写入登录时间: <span className="font-mono font-semibold">{currentDev.lastLoginTime}</span></div>
+                      </div>
+                    </div>
+
+                    {/* 2. 多设备终端版本号对比及阻塞诊断 */}
+                    <div className="p-2.5 bg-amber-50/70 dark:bg-slate-800/70 border border-amber-200/80 dark:border-slate-700 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 font-extrabold text-amber-800 dark:text-amber-300 text-[11px]">
+                          <Tag className="w-3.5 h-3.5 text-amber-500" />
+                          <span>多端版本对比与阻塞诊断</span>
+                        </span>
+                        <span className="px-1.5 py-0.5 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-mono font-extrabold rounded text-[10px]">
+                          当前端: v{version}
+                        </span>
+                      </div>
+
+                      {/* 终端卡片对比 */}
+                      <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                        {/* 谷歌电脑端 */}
+                        <div className={`p-1.5 rounded-lg border ${currentDev.deviceCategory.includes('电脑') ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800' : 'bg-white/80 dark:bg-slate-900/80 border-amber-200/60 dark:border-slate-750'}`}>
+                          <div className="flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
+                            <Monitor className="w-3 h-3 text-blue-500 shrink-0" />
+                            <span>谷歌电脑端</span>
+                          </div>
+                          <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">
+                            {currentDev.deviceCategory.includes('电脑') ? `✅ 当前端 (v${version})` : `主数据源 (v${version})`}
+                          </div>
+                        </div>
+
+                        {/* IE 浏览器 */}
+                        <div className={`p-1.5 rounded-lg border ${currentDev.deviceCategory.includes('IE') ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800' : 'bg-white/80 dark:bg-slate-900/80 border-amber-200/60 dark:border-slate-750'}`}>
+                          <div className="flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
+                            <Globe className="w-3 h-3 text-amber-500 shrink-0" />
+                            <span>IE 浏览器端</span>
+                          </div>
+                          <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">
+                            {currentDev.deviceCategory.includes('IE') ? `✅ 当前端 (v${version})` : `旧数据端 (待对齐)`}
+                          </div>
+                        </div>
+
+                        {/* Pad 平板端 */}
+                        <div className={`p-1.5 rounded-lg border ${currentDev.deviceCategory.includes('Pad') ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800' : 'bg-white/80 dark:bg-slate-900/80 border-amber-200/60 dark:border-slate-750'}`}>
+                          <div className="flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
+                            <Tablet className="w-3 h-3 text-purple-500 shrink-0" />
+                            <span>Pad 平板端</span>
+                          </div>
+                          <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">
+                            {currentDev.deviceCategory.includes('Pad') ? `✅ 当前端 (v${version})` : `旧数据端 (待对齐)`}
+                          </div>
+                        </div>
+
+                        {/* 手机移动端 */}
+                        <div className={`p-1.5 rounded-lg border ${currentDev.deviceCategory.includes('手机') ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800' : 'bg-white/80 dark:bg-slate-900/80 border-amber-200/60 dark:border-slate-750'}`}>
+                          <div className="flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
+                            <Smartphone className="w-3 h-3 text-rose-500 shrink-0" />
+                            <span>手机移动端</span>
+                          </div>
+                          <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">
+                            {currentDev.deviceCategory.includes('手机') ? `✅ 当前端 (v${version})` : `旧数据端 (待对齐)`}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 阻塞识别提示 */}
+                      <div className="p-2 bg-amber-100/70 dark:bg-amber-950/40 rounded-lg text-[10px] text-amber-900 dark:text-amber-200 leading-snug">
+                        💡 <b>阻塞诊断提示:</b> 切换到 Pad、IE 或手机端时，若本地仍为旧版本快照，会导致看不到电脑端更新。请在对应终端点击<b>【强行拉取电脑端最新数据】</b>即可解阻！
+                      </div>
+                    </div>
+
+                    {/* 3. 同步时间戳 */}
+                    <div className="p-2 bg-rose-50/70 dark:bg-slate-800/70 border border-rose-100/80 dark:border-slate-750 rounded-xl flex items-center justify-between text-[10px]">
+                      <span className="flex items-center gap-1 text-zinc-600 dark:text-slate-300 font-medium">
+                        <Clock className="w-3 h-3 text-rose-500" />
+                        <span>同步时间戳:</span>
+                      </span>
+                      <span className="font-mono font-bold text-rose-600 dark:text-rose-400 truncate max-w-[170px]">
+                        {lastSyncTime || '已同步至本地快照'}
+                      </span>
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => setIsSyncDetailsOpen(false)}
-                    className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-slate-200 rounded-lg transition"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  {/* Footer Action Button */}
+                  <div className="pt-1">
+                    <button
+                      onClick={() => {
+                        setIsSyncDetailsOpen(false);
+                        onOpenSyncModal();
+                      }}
+                      className="w-full py-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-extrabold rounded-xl shadow-2xs transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-98"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>打开同步控制台 (强制拉取/推送上云)</span>
+                    </button>
+                  </div>
                 </div>
-
-                {/* Details List */}
-                <div className="space-y-2 text-[11px]">
-                  {/* 1. 具体同步时间戳 */}
-                  <div className="p-2.5 bg-rose-50/70 dark:bg-slate-800/70 border border-rose-100/80 dark:border-slate-750 rounded-xl space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 font-bold text-zinc-700 dark:text-slate-200">
-                        <Clock className="w-3.5 h-3.5 text-rose-500" />
-                        <span>具体同步时间戳</span>
-                      </span>
-                      <span className="text-[10px] font-mono font-bold text-rose-600 dark:text-rose-400">
-                        {syncStatus === 'syncing' ? '同步中...' : '已对齐'}
-                      </span>
-                    </div>
-                    <div className="text-zinc-800 dark:text-slate-200 font-mono font-bold truncate pl-5 text-[10px]">
-                      {lastSyncTime || '已同步至本地快照 (实时上云就绪)'}
-                    </div>
-                  </div>
-
-                  {/* 2. 最后操作设备信息 */}
-                  <div className="p-2.5 bg-rose-50/70 dark:bg-slate-800/70 border border-rose-100/80 dark:border-slate-750 rounded-xl space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 font-bold text-zinc-700 dark:text-slate-200">
-                        <Laptop className="w-3.5 h-3.5 text-blue-500" />
-                        <span>最后操作设备终端</span>
-                      </span>
-                      <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400">
-                        ONLINE
-                      </span>
-                    </div>
-                    <div className="text-zinc-800 dark:text-slate-200 font-mono font-bold truncate pl-5 text-[10px]">
-                      {getDeviceInfo()}
-                    </div>
-                  </div>
-
-                  {/* 3. 数据版本号与一致性校验 */}
-                  <div className="p-2.5 bg-rose-50/70 dark:bg-slate-800/70 border border-rose-100/80 dark:border-slate-750 rounded-xl space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 font-bold text-zinc-700 dark:text-slate-200">
-                        <Tag className="w-3.5 h-3.5 text-emerald-500" />
-                        <span>数据版本号 (Versioning)</span>
-                      </span>
-                      <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold rounded-md text-[10px]">
-                        v{systemData.versioning || 1}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between pl-5 pt-0.5">
-                      <span className="text-zinc-500 dark:text-slate-400 text-[10px]">
-                        跨端一致性校验:
-                      </span>
-                      <span className={`font-bold text-[10px] ${hasConflict ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                        {hasConflict ? '⚠️ 发现差异需处理' : '✅ 跨端版本号高度一致'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer Action Button */}
-                <div className="pt-1">
-                  <button
-                    onClick={() => {
-                      setIsSyncDetailsOpen(false);
-                      onOpenSyncModal();
-                    }}
-                    className="w-full py-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-extrabold rounded-xl shadow-2xs transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-98"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>打开同步中心控制台</span>
-                  </button>
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 

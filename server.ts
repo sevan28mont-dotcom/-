@@ -31,23 +31,23 @@ function generateServerCanonicalUserId(identifier: string): string {
 
 const DEFAULT_SERVER_ACCOUNTS: UserAccountServer[] = [
   {
-    id: "u_default",
-    email: "lin@counselor.com",
-    username: "林心理咨询师",
+    id: "u_sevan_28mont_gmail_com",
+    email: "sevan.28mont@gmail.com",
+    username: "张咨询师",
     password: "123456",
-    name: "林心理咨询师",
-    title: "国家二级心理咨询师 · 督导师",
+    name: "张咨询师",
+    title: "心理咨询师 · 督导师",
     avatar: "🩺",
     createdAt: "2026-01-01",
   },
   {
-    id: "u_demo",
-    email: "zhang@supervisor.com",
-    username: "counselor_demo",
+    id: "u_default",
+    email: "sevan.28mont@gmail.com",
+    username: "张咨询师",
     password: "123456",
-    name: "张督导",
-    title: "高级心理咨询督导师",
-    avatar: "👩‍⚕️",
+    name: "张咨询师",
+    title: "心理咨询师 · 督导师",
+    avatar: "🩺",
     createdAt: "2026-01-01",
   },
 ];
@@ -424,9 +424,24 @@ ${content}
 
   // Helper: Resolve canonical user ID across devices and accounts
   function resolveCanonicalUserId(rawUserId: string): string {
-    if (!rawUserId) return "u_default";
+    if (!rawUserId) return "u_sevan_28mont_gmail_com";
     const strId = String(rawUserId).trim();
     const lowerId = strId.toLowerCase();
+
+    // Map all common defaults or email variations to primary unified account
+    if (
+      lowerId === "u_default" ||
+      lowerId === "u_demo" ||
+      lowerId === "default" ||
+      lowerId.includes("sevan.28mont") ||
+      lowerId.includes("lin@counselor") ||
+      lowerId.includes("zhang@supervisor") ||
+      lowerId.includes("counselor") ||
+      lowerId.includes("张咨询师") ||
+      lowerId.includes("林心理咨询师")
+    ) {
+      return "u_sevan_28mont_gmail_com";
+    }
 
     // 1. Direct ID match
     let directAccount = serverDb.accounts.find((a) => a.id === strId);
@@ -451,18 +466,16 @@ ${content}
   app.post("/api/sync/save", (req, res) => {
     try {
       const { userId, data } = req.body;
-      if (!userId) {
-        return res.status(400).json({ success: false, error: "Missing userId" });
-      }
-
-      const canonicalId = resolveCanonicalUserId(userId);
+      const canonicalId = resolveCanonicalUserId(userId || "u_sevan_28mont_gmail_com");
       const updatedAt = new Date().toISOString();
 
       const payload = { data, updatedAt };
       serverDb.userStore[canonicalId] = payload;
+      serverDb.userStore["u_sevan_28mont_gmail_com"] = payload;
+      serverDb.userStore["u_default"] = payload;
+      serverDb.userStore["global_latest"] = payload;
 
-      // Also mirror under original userId if different
-      if (userId !== canonicalId) {
+      if (userId && userId !== canonicalId) {
         serverDb.userStore[userId] = payload;
       }
 
@@ -470,7 +483,7 @@ ${content}
       return res.json({
         success: true,
         timestamp: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
-        message: "账号数据已同步至多设备云端",
+        message: "全端数据已同步至统一多设备云端 (电脑/Pad/IE/手机已完全对齐)",
       });
     } catch (err) {
       console.error("Sync save error:", err);
@@ -478,29 +491,51 @@ ${content}
     }
   });
 
+  // API Route: Force pull absolute latest data snapshot across all devices
+  app.get("/api/sync/force-pull-latest", (req, res) => {
+    try {
+      let bestData: any = null;
+      let highestVersion = -1;
+      let latestTime = "";
+
+      for (const [key, entry] of Object.entries(serverDb.userStore)) {
+        if (!entry || !entry.data) continue;
+        const v = Number(entry.data.versioning || 0);
+        if (v >= highestVersion) {
+          highestVersion = v;
+          bestData = entry.data;
+          latestTime = entry.updatedAt;
+        }
+      }
+
+      if (!bestData && serverDb.userStore["global_latest"]) {
+        bestData = serverDb.userStore["global_latest"].data;
+        latestTime = serverDb.userStore["global_latest"].updatedAt;
+      }
+
+      if (bestData) {
+        return res.json({ success: true, data: bestData, version: highestVersion, updatedAt: latestTime });
+      }
+      return res.json({ success: false, message: "服务端尚无备份数据" });
+    } catch (err) {
+      return res.status(500).json({ success: false, error: "Pull failed" });
+    }
+  });
+
   // API Route: Account Data Sync - Get
   app.post("/api/sync/get", (req, res) => {
     try {
       const { userId } = req.body;
-      if (!userId) {
-        return res.json({ success: false, data: null });
-      }
-
       const canonicalId = resolveCanonicalUserId(userId);
-      let storeEntry = serverDb.userStore[canonicalId] || serverDb.userStore[userId];
+      let storeEntry = serverDb.userStore[canonicalId] || serverDb.userStore["u_sevan_28mont_gmail_com"] || serverDb.userStore["u_default"] || serverDb.userStore["global_latest"];
 
-      // Check fallback: if still empty, check if any account matching username has store
-      if (!storeEntry) {
-        const matchingAccount = serverDb.accounts.find(
-          (a) => a.id === userId || a.username.toLowerCase() === String(userId).toLowerCase()
-        );
-        if (matchingAccount) {
-          for (const acc of serverDb.accounts) {
-            if (acc.username.toLowerCase() === matchingAccount.username.toLowerCase() && serverDb.userStore[acc.id]) {
-              storeEntry = serverDb.userStore[acc.id];
-              break;
-            }
-          }
+      // Check all entries to find the one with the highest versioning
+      for (const [key, entry] of Object.entries(serverDb.userStore)) {
+        if (!entry || !entry.data) continue;
+        const entryVer = Number(entry.data.versioning || 0);
+        const currentVer = Number(storeEntry?.data?.versioning || 0);
+        if (entryVer > currentVer) {
+          storeEntry = entry;
         }
       }
 

@@ -953,3 +953,37 @@ export async function fetchBackendData(userId: string): Promise<SystemData | nul
   }
   return null;
 }
+
+export async function fetchLatestCloudSnapshot(): Promise<SystemData | null> {
+  try {
+    const response = await fetch(`/api/sync/force-pull-latest?_t=${Date.now()}`, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+      cache: 'no-store',
+    });
+    const result = await response.json();
+    if (result.success && result.data) {
+      const data = result.data as SystemData;
+      if (data.records && Array.isArray(data.records)) {
+        data.records = data.records.map((r: any) => ({
+          ...r,
+          isTeenager: typeof r.isTeenager === 'boolean'
+            ? r.isTeenager
+            : Boolean(
+                r.avatar === '👦' ||
+                r.avatar === '👧' ||
+                r.avatar === '👶' ||
+                (r.parentSessions && Object.keys(r.parentSessions).length > 0)
+              ),
+          parentSessions: r.parentSessions || {},
+        }));
+      }
+      return integrityCheck(data);
+    }
+  } catch (e) {
+    console.warn('Backend sync force pull warning:', e);
+  }
+  return null;
+}

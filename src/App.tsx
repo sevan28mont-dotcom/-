@@ -1333,6 +1333,7 @@ export default function App() {
         onUseCloud={handleUseCloud}
         onMergeBoth={handleMergeBoth}
         onTriggerCheck={handleManualBackendSync}
+        onApplyCloudData={(cloudData) => setSystemData(cloudData, true)}
         lastSyncTime={lastSyncTime}
         setLastSyncTime={setLastSyncTime}
         hasConflict={hasConflict}

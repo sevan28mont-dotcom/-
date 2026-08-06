@@ -22,23 +22,23 @@ export function generateCanonicalUserId(identifier: string): string {
 
 const DEFAULT_ACCOUNTS: UserAccount[] = [
   {
-    id: 'u_default',
-    email: 'lin@counselor.com',
-    username: '林心理咨询师',
+    id: 'u_sevan_28mont_gmail_com',
+    email: 'sevan.28mont@gmail.com',
+    username: '张咨询师',
     password: '123456',
-    name: '林心理咨询师',
-    title: '国家二级心理咨询师 · 督导师',
+    name: '张咨询师',
+    title: '心理咨询师 · 督导师',
     avatar: '🩺',
     createdAt: '2026-01-01',
   },
   {
-    id: 'u_demo',
-    email: 'zhang@supervisor.com',
-    username: 'counselor_demo',
+    id: 'u_default',
+    email: 'sevan.28mont@gmail.com',
+    username: '张咨询师',
     password: '123456',
-    name: '张督导',
-    title: '高级心理咨询督导师',
-    avatar: '👩‍⚕️',
+    name: '张咨询师',
+    title: '心理咨询师 · 督导师',
+    avatar: '🩺',
     createdAt: '2026-01-01',
   },
 ];
@@ -273,6 +273,7 @@ export function setCurrentUserSession(user: UserAccount | null): void {
       safeSetStorage(STORAGE_KEYS.CURRENT_USER, str);
       safeSetStorage('psy_current_user_backup', str);
       safeSetStorage('psy_session_user', str);
+      saveDeviceInfo();
     } else {
       safeRemoveStorage(STORAGE_KEYS.CURRENT_USER);
       safeRemoveStorage('psy_current_user_backup');
@@ -281,6 +282,111 @@ export function setCurrentUserSession(user: UserAccount | null): void {
   } catch (err) {
     console.error('Failed to set current user session:', err);
   }
+}
+
+export interface DeviceInfo {
+  browserName: string;
+  osName: string;
+  deviceCategory: string;
+  deviceLabel: string;
+  lastLoginTime: string;
+  userAgent: string;
+  isCurrentDevice: boolean;
+}
+
+export function detectCurrentDeviceInfo(): DeviceInfo {
+  let browserName = 'Web 浏览器';
+  let osName = '桌面操作系统';
+  let deviceCategory = '谷歌电脑端';
+
+  if (typeof window !== 'undefined' && navigator) {
+    const ua = navigator.userAgent || '';
+
+    // OS Detection
+    if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+      if (/iPad/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+        osName = 'iPadOS (Pad 平板)';
+        deviceCategory = 'Pad 平板端';
+      } else {
+        osName = 'iOS Mobile (iPhone 手机)';
+        deviceCategory = '手机移动端';
+      }
+    } else if (/Android/.test(ua)) {
+      if (/Mobile/.test(ua)) {
+        osName = 'Android Mobile (安卓手机)';
+        deviceCategory = '手机移动端';
+      } else {
+        osName = 'Android Tablet (安卓平板)';
+        deviceCategory = 'Pad 平板端';
+      }
+    } else if (/Windows/.test(ua)) {
+      osName = 'Windows PC';
+      deviceCategory = '谷歌电脑端';
+    } else if (/Macintosh|Mac OS X/.test(ua)) {
+      osName = 'macOS Desktop';
+      deviceCategory = '谷歌电脑端';
+    } else if (/Linux/.test(ua)) {
+      osName = 'Linux Desktop';
+      deviceCategory = '谷歌电脑端';
+    }
+
+    // Browser Detection
+    if (/MSIE|Trident\//.test(ua)) {
+      browserName = 'IE 浏览器 (Trident)';
+      deviceCategory = 'IE 浏览器端';
+    } else if (/Edg\//.test(ua)) {
+      browserName = 'Edge 浏览器';
+    } else if (/Chrome\//.test(ua)) {
+      browserName = 'Chrome 谷歌浏览器';
+    } else if (/Firefox\//.test(ua)) {
+      browserName = 'Firefox 火狐浏览器';
+    } else if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) {
+      browserName = 'Safari 浏览器';
+    }
+  }
+
+  const now = new Date();
+  const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+  const deviceLabel = `${deviceCategory} (${browserName} · ${osName})`;
+
+  return {
+    browserName,
+    osName,
+    deviceCategory,
+    deviceLabel,
+    lastLoginTime: timeStr,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    isCurrentDevice: true,
+  };
+}
+
+export function saveDeviceInfo(info?: DeviceInfo): DeviceInfo {
+  const device = info || detectCurrentDeviceInfo();
+  try {
+    const jsonStr = JSON.stringify(device);
+    safeSetStorage('psy_current_device_info_v1', jsonStr);
+    safeSetStorage('psy_device_info_backup', jsonStr);
+    safeSetStorage('psy_last_login_device', jsonStr);
+  } catch (e) {
+    console.error('Failed to save device info:', e);
+  }
+  return device;
+}
+
+export function getStoredDeviceInfo(): DeviceInfo {
+  try {
+    const raw = safeGetStorage('psy_current_device_info_v1') || safeGetStorage('psy_device_info_backup') || safeGetStorage('psy_last_login_device');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.browserName) {
+        return parsed;
+      }
+    }
+  } catch (e) { /* ignore */ }
+  const fresh = detectCurrentDeviceInfo();
+  saveDeviceInfo(fresh);
+  return fresh;
 }
 
 export async function loginUserAsync(
