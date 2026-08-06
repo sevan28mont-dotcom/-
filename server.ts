@@ -387,6 +387,34 @@ ${content}
     }
   });
 
+  // Helper: Resolve canonical user ID across devices and accounts
+  function resolveCanonicalUserId(rawUserId: string): string {
+    if (!rawUserId) return "u_default";
+    const strId = String(rawUserId).trim();
+    const lowerId = strId.toLowerCase();
+
+    // 1. Direct ID match
+    let directAccount = serverDb.accounts.find((a) => a.id === strId);
+    if (directAccount) {
+      // Find if there's an earlier/primary account with identical username/name (e.g. u_default)
+      const primaryAccount = serverDb.accounts.find(
+        (a) => a.username.toLowerCase() === directAccount!.username.toLowerCase() ||
+               (a.name && directAccount!.name && a.name.toLowerCase() === directAccount!.name.toLowerCase())
+      );
+      return primaryAccount ? primaryAccount.id : directAccount.id;
+    }
+
+    // 2. Username or name match
+    let matchByName = serverDb.accounts.find(
+      (a) => a.username.toLowerCase() === lowerId || (a.name && a.name.toLowerCase() === lowerId)
+    );
+    if (matchByName) {
+      return matchByName.id;
+    }
+
+    return strId;
+  }
+
   // API Route: Account Data Sync - Save
   app.post("/api/sync/save", (req, res) => {
     try {
@@ -394,15 +422,18 @@ ${content}
       if (!userId) {
         return res.status(400).json({ success: false, error: "Missing userId" });
       }
-      const account = serverDb.accounts.find(
-        (a) => a.id === userId || a.username.toLowerCase() === String(userId).toLowerCase()
-      );
-      const canonicalId = account ? account.id : userId;
 
-      serverDb.userStore[canonicalId] = {
-        data,
-        updatedAt: new Date().toISOString(),
-      };
+      const canonicalId = resolveCanonicalUserId(userId);
+      const updatedAt = new Date().toISOString();
+
+      const payload = { data, updatedAt };
+      serverDb.userStore[canonicalId] = payload;
+
+      // Also mirror under original userId if different
+      if (userId !== canonicalId) {
+        serverDb.userStore[userId] = payload;
+      }
+
       saveServerDb();
       return res.json({
         success: true,
@@ -422,18 +453,33 @@ ${content}
       if (!userId) {
         return res.json({ success: false, data: null });
       }
-      const account = serverDb.accounts.find(
-        (a) => a.id === userId || a.username.toLowerCase() === String(userId).toLowerCase()
-      );
-      const canonicalId = account ? account.id : userId;
 
-      if (!serverDb.userStore[canonicalId]) {
+      const canonicalId = resolveCanonicalUserId(userId);
+      let storeEntry = serverDb.userStore[canonicalId] || serverDb.userStore[userId];
+
+      // Check fallback: if still empty, check if any account matching username has store
+      if (!storeEntry) {
+        const matchingAccount = serverDb.accounts.find(
+          (a) => a.id === userId || a.username.toLowerCase() === String(userId).toLowerCase()
+        );
+        if (matchingAccount) {
+          for (const acc of serverDb.accounts) {
+            if (acc.username.toLowerCase() === matchingAccount.username.toLowerCase() && serverDb.userStore[acc.id]) {
+              storeEntry = serverDb.userStore[acc.id];
+              break;
+            }
+          }
+        }
+      }
+
+      if (!storeEntry) {
         return res.json({ success: false, data: null });
       }
+
       return res.json({
         success: true,
-        data: serverDb.userStore[canonicalId].data,
-        updatedAt: serverDb.userStore[canonicalId].updatedAt,
+        data: storeEntry.data,
+        updatedAt: storeEntry.updatedAt,
       });
     } catch (err) {
       console.error("Sync get error:", err);

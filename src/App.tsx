@@ -99,12 +99,17 @@ export default function App() {
 
     fetchBackendData(currentUser.id).then((cloudData) => {
       if (!isMounted) return;
-      if (cloudData && !hasUserMutatedInSessionRef.current) {
+      if (cloudData) {
         setSystemData(cloudData);
         saveDataToLocalStorage(cloudData, currentUser.id);
-      } else if (!cloudData) {
+        setLastSyncTime(`☁️ 跨设备云端数据已加载 (${new Date().toLocaleTimeString('zh-CN', { hour12: false })})`);
+      } else {
         // If user has no data on backend yet, upload current local state once
-        saveDataToBackend(systemData, currentUser.id);
+        saveDataToBackend(systemData, currentUser.id).then((res) => {
+          if (res.success) {
+            setLastSyncTime(`☁️ 初次数据云端建档 ${res.timestamp}`);
+          }
+        });
       }
       setIsCloudSyncDone(true);
     });
@@ -114,11 +119,51 @@ export default function App() {
     };
   }, [currentUser?.id]);
 
-  // Auto save to LocalStorage & Backend whenever systemData or currentUser changes (AFTER cloud sync is done)
+  // Periodic polling & window focus listener for multi-device sync (PC / Phone / Pad)
+  useEffect(() => {
+    if (!currentUser?.id || !isCloudSyncDone) return;
+
+    const syncFromCloud = async () => {
+      try {
+        const cloudData = await fetchBackendData(currentUser.id);
+        if (cloudData) {
+          const currentStr = JSON.stringify(systemData);
+          const cloudStr = JSON.stringify(cloudData);
+          if (currentStr !== cloudStr && !hasUserMutatedInSessionRef.current) {
+            setSystemData(cloudData);
+            saveDataToLocalStorage(cloudData, currentUser.id);
+            setLastSyncTime(`☁️ 已自动同步云端最新记录 (${new Date().toLocaleTimeString('zh-CN', { hour12: false })})`);
+          }
+        }
+      } catch (err) {
+        console.warn('Background sync check warning:', err);
+      }
+    };
+
+    // Poll every 8 seconds for updates from other devices
+    const intervalId = setInterval(syncFromCloud, 8000);
+
+    // Refresh immediately when switching tabs or focusing window
+    const handleFocus = () => syncFromCloud();
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [currentUser?.id, isCloudSyncDone, systemData]);
+
+  // Auto save to LocalStorage & Backend whenever systemData changes
   useEffect(() => {
     saveDataToLocalStorage(systemData, currentUser?.id);
     if (currentUser?.id && isCloudSyncDone) {
-      saveDataToBackend(systemData, currentUser.id);
+      saveDataToBackend(systemData, currentUser.id).then((res) => {
+        if (res.success) {
+          setLastSyncTime(`☁️ 变动已实时保存云端 ${res.timestamp}`);
+        }
+      });
     }
   }, [systemData, currentUser?.id, isCloudSyncDone]);
 
@@ -132,14 +177,24 @@ export default function App() {
     setIsPrivacyModalOpen(true);
   };
 
-  // 手动同步后台数据
+  // 手动同步后台数据（支持上云与一键重载云端）
   const handleManualBackendSync = async () => {
+    if (!currentUser?.id) return;
     setSyncStatus('syncing');
     try {
-      const result = await saveDataToBackend(systemData, currentUser?.id || 'default');
+      // 1. Try fetching latest cloud snapshot first
+      const cloudData = await fetchBackendData(currentUser.id);
+      if (cloudData) {
+        setSystemData(cloudData);
+        saveDataToLocalStorage(cloudData, currentUser.id);
+      }
+      // 2. Push current state back to cloud to guarantee alignment
+      const result = await saveDataToBackend(systemData, currentUser.id);
+      hasUserMutatedInSessionRef.current = false;
+
       if (result.success) {
         setSyncStatus('success');
-        setLastSyncTime(`账号全量云端同步成功 ${result.timestamp}`);
+        setLastSyncTime(`☁️ 全端强行云同步成功 (${result.timestamp})`);
         setTimeout(() => setSyncStatus('idle'), 3000);
       }
     } catch {
@@ -661,6 +716,7 @@ export default function App() {
         onToggleReminder={handleToggleReminder}
         onDeleteReminder={handleDeleteReminder}
         onOpenReminderModal={() => setIsReminderModalOpen(true)}
+        onOpenSyncModal={handleManualBackendSync}
         onNavigateTab={(tab) => setActiveTab(tab)}
         onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
