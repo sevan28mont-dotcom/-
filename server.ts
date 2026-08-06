@@ -110,6 +110,14 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Disable caching for all API responses to ensure real-time multi-device sync across IE, Chrome, Safari, and Mobile browsers
+  app.use("/api", (req, res, next) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    next();
+  });
+
   // Gemini API helper
   const getGeminiClient = () => {
     const apiKey = process.env.GEMINI_API_KEY;

@@ -495,7 +495,11 @@ export function integrityCheck(data: SystemData): SystemData {
   const rawCredentials = Array.isArray(data.credentials) ? data.credentials : [];
   const validCredentials: CounselorCredential[] = rawCredentials.filter((c) => c && typeof c === 'object' && c.id);
 
+  // 9. 版本号自检与维持 (versioning)
+  const versioning = typeof data.versioning === 'number' && data.versioning > 0 ? data.versioning : Date.now();
+
   return {
+    versioning,
     records: validRecords,
     mentors: validMentors,
     thinking: validThinking,
@@ -713,16 +717,16 @@ export function saveDataToLocalStorage(data: SystemData, userId?: string): void 
       safeSetItem(`psy_u_${userId}_experience`, experienceDataStr);
     }
 
-    // Save mirror copies to master backup keys for version update durability
-    safeSetItem('psy_master_backup_records', recordsStr);
-    safeSetItem('psy_master_backup_mentors', mentorsStr);
-    safeSetItem('psy_master_backup_thinking', thinkingStr);
-    safeSetItem('psy_master_backup_schedules', schedulesStr);
-    safeSetItem('psy_master_backup_reminders', remindersStr);
-    safeSetItem('psy_master_backup_trainings', trainingsStr);
-    safeSetItem('psy_master_backup_experience', experienceDataStr);
+    // Save mirror copies to master backup keys only for default or legacy guest user
+    if (!userId || userId === 'u_default') {
+      safeSetItem('psy_master_backup_records', recordsStr);
+      safeSetItem('psy_master_backup_mentors', mentorsStr);
+      safeSetItem('psy_master_backup_thinking', thinkingStr);
+      safeSetItem('psy_master_backup_schedules', schedulesStr);
+      safeSetItem('psy_master_backup_reminders', remindersStr);
+      safeSetItem('psy_master_backup_trainings', trainingsStr);
+      safeSetItem('psy_master_backup_experience', experienceDataStr);
 
-    if (userId) {
       safeSetItem(STORAGE_KEYS.RECORDS, recordsStr);
       safeSetItem(STORAGE_KEYS.MENTORS, mentorsStr);
       safeSetItem(STORAGE_KEYS.THINKING, thinkingStr);
@@ -752,13 +756,145 @@ export function clearAllLocalStorage(userId?: string): void {
 }
 
 /**
+ * 深度清理机制：扫描并自动清除 localStorage 中超过 30 天未被访问或过期的临时 UI 缓存、旧版冗余 key 或临时草稿，保持应用轻量极速运行
+ */
+export function deepCleanExpiredCaches(): { cleanedKeys: string[]; totalFreedBytes: number } {
+  const cleanedKeys: string[] = [];
+  let totalFreedBytes = 0;
+
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return { cleanedKeys, totalFreedBytes };
+  }
+
+  try {
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    // 核心或长效持久化 Key 白名单 (绝不删除)
+    const PROTECTED_PREFIXES = [
+      'psy_records_v8',
+      'psy_mentors_v8',
+      'psy_thinking_v8',
+      'psy_schedules_v8',
+      'psy_reminders_v8',
+      'psy_trainings_v8',
+      'psy_credentials_v8',
+      'psy_experience_v8',
+      'psy_u_',
+      'psy_master_backup_',
+      'psy_user_session',
+      'psy_theme_is_dark',
+      'psy_workspace_layout_v1',
+      'psy_schedule_categories_v2',
+      'psy_last_deep_clean',
+    ];
+
+    const isProtectedKey = (key: string) => {
+      return PROTECTED_PREFIXES.some((prefix) => key.startsWith(prefix) || key === prefix);
+    };
+
+    const keysToRemove: string[] = [];
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+
+      // 1. 自动清除无用的历史旧版本升级残留 (如 psy_*_v1 到 v7)
+      if (
+        /^psy_(records|mentors|thinking|schedules|reminders|trainings|credentials|experience)_v[1-7]$/.test(key)
+      ) {
+        keysToRemove.push(key);
+        continue;
+      }
+
+      // 绝不误删受保护的核心 Key
+      if (isProtectedKey(key)) continue;
+
+      // 2. 判断是否是显式临时 UI 缓存/预览/日志/测试 Key
+      const isTemporaryCacheKey =
+        key.startsWith('psy_tmp_') ||
+        key.startsWith('psy_cache_') ||
+        key.startsWith('psy_ui_temp_') ||
+        key.startsWith('psy_draft_') ||
+        key.startsWith('psy_export_') ||
+        key.startsWith('psy_log_') ||
+        key.startsWith('psy_search_') ||
+        key.startsWith('_tmp_') ||
+        key.startsWith('_test_');
+
+      const rawVal = localStorage.getItem(key);
+      if (!rawVal) continue;
+
+      let isExpired = false;
+
+      // 3. 检查 JSON 内部的 timestamp / updatedAt / expireAt / lastAccessed 是否超过 30 天
+      try {
+        const parsed = JSON.parse(rawVal);
+        if (parsed && typeof parsed === 'object') {
+          const itemTime =
+            parsed.timestamp ||
+            parsed.updatedAt ||
+            parsed.createdAt ||
+            parsed.lastAccessed ||
+            parsed.expireAt;
+
+          if (typeof itemTime === 'number' && now - itemTime > THIRTY_DAYS_MS) {
+            isExpired = true;
+          } else if (typeof itemTime === 'string') {
+            const parsedMs = new Date(itemTime).getTime();
+            if (!isNaN(parsedMs) && now - parsedMs > THIRTY_DAYS_MS) {
+              isExpired = true;
+            }
+          }
+        }
+      } catch {
+        // 如果无法解析且不是临时 key，不轻易删除；若是临时 cache 字符串则判定清理
+        if (isTemporaryCacheKey) {
+          isExpired = true;
+        }
+      }
+
+      if (isExpired || isTemporaryCacheKey) {
+        keysToRemove.push(key);
+      }
+    }
+
+    // 执行清理
+    keysToRemove.forEach((key) => {
+      const val = localStorage.getItem(key);
+      const itemSize = val ? val.length * 2 : 0;
+      totalFreedBytes += itemSize;
+      localStorage.removeItem(key);
+      cleanedKeys.push(key);
+    });
+
+    if (cleanedKeys.length > 0) {
+      console.log(
+        `[Deep Clean] 深度清理完成: 自动清除了 ${cleanedKeys.length} 个超过 30 天或过期的临时 UI 缓存，释放了约 ${(totalFreedBytes / 1024).toFixed(2)} KB 内存空间。`
+      );
+    }
+
+    localStorage.setItem('psy_last_deep_clean_time', String(now));
+  } catch (err) {
+    console.warn('[Deep Clean] 深度清理扫描警告:', err);
+  }
+
+  return { cleanedKeys, totalFreedBytes };
+}
+
+/**
  * 在线后端账号全量信息同步接口
  */
 export async function saveDataToBackend(data: SystemData, userId: string = 'default'): Promise<{ success: boolean; message: string; timestamp: string }> {
   try {
-    const response = await fetch('/api/sync/save', {
+    const response = await fetch(`/api/sync/save?_t=${Date.now()}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+      cache: 'no-store',
       body: JSON.stringify({ userId, data }),
     });
     const result = await response.json();
@@ -783,9 +919,14 @@ export async function saveDataToBackend(data: SystemData, userId: string = 'defa
 
 export async function fetchBackendData(userId: string): Promise<SystemData | null> {
   try {
-    const response = await fetch('/api/sync/get', {
+    const response = await fetch(`/api/sync/get?_t=${Date.now()}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+      cache: 'no-store',
       body: JSON.stringify({ userId }),
     });
     const result = await response.json();

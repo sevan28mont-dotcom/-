@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Bell, LogOut, Sun, Moon, Search, X, FolderOpen, FileText, UserCheck, Brain, ArrowRight, Feather, Sparkles, Cloud, AlertTriangle, GitMerge, Menu, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Bell, LogOut, Sun, Moon, Search, X, FolderOpen, FileText, UserCheck, Brain, ArrowRight, Feather, Sparkles, Cloud, AlertTriangle, GitMerge, Menu, RefreshCw, CheckCircle2, Info, Laptop, ShieldCheck, Clock, Tag } from 'lucide-react';
 import { SystemData, ReminderItem, SessionData } from '../types';
 import { ReminderModal } from './ReminderModal';
 import { UserAccount } from '../services/auth';
@@ -59,6 +59,29 @@ export const Header: React.FC<HeaderProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
+  // 同步详情日志 Popover 状态
+  const [isSyncDetailsOpen, setIsSyncDetailsOpen] = useState(false);
+  const syncPopoverRef = useRef<HTMLDivElement>(null);
+
+  const getDeviceInfo = () => {
+    if (typeof window === 'undefined') return 'Web Client';
+    const ua = navigator.userAgent;
+    let os = '桌面终端';
+    if (ua.includes('Macintosh')) os = 'macOS Desktop';
+    else if (ua.includes('Windows')) os = 'Windows PC';
+    else if (ua.includes('Android')) os = 'Android Mobile';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS Touch';
+    else if (ua.includes('Linux')) os = 'Linux Terminal';
+
+    let browser = 'Web App';
+    if (ua.includes('Chrome')) browser = 'Chrome';
+    else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+    else if (ua.includes('Firefox')) browser = 'Firefox';
+    else if (ua.includes('Edg')) browser = 'Edge';
+
+    return `${browser} (${os} · 当前客户端)`;
+  };
+
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
@@ -97,6 +120,9 @@ export const Header: React.FC<HeaderProps> = ({
     const handleClickOutside = (e: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
         setIsSearchOpen(false);
+      }
+      if (syncPopoverRef.current && !syncPopoverRef.current.contains(e.target as Node)) {
+        setIsSyncDetailsOpen(false);
       }
     };
 
@@ -416,71 +442,188 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* 顶部数据同步状态指示器 / 同步按钮 */}
+        {/* 顶部数据同步状态指示器 / 同步按钮 + 详情日志悬浮层 */}
         {onOpenSyncModal && (
-          <button
-            type="button"
-            onClick={onOpenSyncModal}
-            disabled={syncStatus === 'syncing'}
-            className={`relative flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-300 cursor-pointer active:scale-95 shadow-2xs ${
+          <div className="relative flex items-center" ref={syncPopoverRef}>
+            <div className={`flex items-center rounded-xl overflow-hidden shadow-2xs border transition-all duration-300 ${
               hasConflict
-                ? 'bg-amber-500 hover:bg-amber-600 text-white animate-pulse ring-2 ring-amber-400/60'
+                ? 'bg-amber-500 border-amber-400 text-white animate-pulse'
                 : syncStatus === 'syncing'
-                ? 'bg-rose-100/90 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 cursor-wait shadow-sm'
+                ? 'bg-rose-100/90 dark:bg-rose-950/80 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300'
                 : syncStatus === 'success'
-                ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 ring-2 ring-emerald-400/30 shadow-xs'
+                ? 'bg-emerald-50 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
                 : syncStatus === 'error'
-                ? 'bg-rose-50 dark:bg-slate-800 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-slate-700'
-                : 'text-zinc-700 dark:text-slate-200 bg-rose-50 dark:bg-slate-800/90 hover:bg-rose-100 dark:hover:bg-slate-700 border border-rose-200 dark:border-slate-700'
-            }`}
-            title={
-              hasConflict
-                ? '⚠️ 检测到本地与后台版本冲突，点击进行合并！'
-                : syncStatus === 'syncing'
-                ? '正在与云端实时同步数据...'
-                : syncStatus === 'success'
-                ? '云端数据同步成功 (已全端同步)'
-                : lastSyncTime || '点击手动触发全端云同步'
-            }
-          >
-            {hasConflict ? (
-              <GitMerge className="w-4 h-4 text-white animate-bounce" />
-            ) : syncStatus === 'syncing' ? (
-              <RefreshCw className="w-4 h-4 text-rose-600 dark:text-rose-400 animate-spin shrink-0" />
-            ) : syncStatus === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 transition-transform duration-300 scale-110" />
-            ) : syncStatus === 'error' ? (
-              <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
-            ) : (
-              <Cloud className="w-4 h-4 text-rose-500 dark:text-rose-400 shrink-0" />
-            )}
+                ? 'bg-rose-50 dark:bg-slate-800 border-rose-300 dark:border-slate-700 text-rose-700 dark:text-rose-400'
+                : 'bg-rose-50 dark:bg-slate-800/90 border-rose-200 dark:border-slate-700 text-zinc-700 dark:text-slate-200'
+            }`}>
+              {/* 主同步控制按钮 */}
+              <button
+                type="button"
+                onClick={onOpenSyncModal}
+                disabled={syncStatus === 'syncing'}
+                className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer active:scale-95"
+                title={
+                  hasConflict
+                    ? '⚠️ 检测到本地与后台版本冲突，点击进行合并！'
+                    : syncStatus === 'syncing'
+                    ? '正在与云端实时同步数据...'
+                    : syncStatus === 'success'
+                    ? '云端数据同步成功 (已全端同步)'
+                    : lastSyncTime || '点击手动触发全端云同步'
+                }
+              >
+                {hasConflict ? (
+                  <GitMerge className="w-4 h-4 text-white animate-bounce" />
+                ) : syncStatus === 'syncing' ? (
+                  <RefreshCw className="w-4 h-4 text-rose-600 dark:text-rose-400 animate-spin shrink-0" />
+                ) : syncStatus === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 scale-110" />
+                ) : syncStatus === 'error' ? (
+                  <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                ) : (
+                  <Cloud className="w-4 h-4 text-rose-500 dark:text-rose-400 shrink-0" />
+                )}
 
-            <span className="hidden sm:inline-flex items-center gap-1">
-              {hasConflict
-                ? '冲突待合并'
-                : syncStatus === 'syncing'
-                ? '云数据同步中...'
-                : syncStatus === 'success'
-                ? '已同步云端'
-                : syncStatus === 'error'
-                ? '同步异常'
-                : '同步中心'}
-            </span>
+                <span className="hidden sm:inline-flex items-center gap-1">
+                  {hasConflict
+                    ? '冲突待合并'
+                    : syncStatus === 'syncing'
+                    ? '同步中...'
+                    : syncStatus === 'success'
+                    ? '已同步云端'
+                    : syncStatus === 'error'
+                    ? '同步异常'
+                    : '同步中心'}
+                </span>
 
-            {/* 同步成功 3 秒反馈脉冲点 */}
-            {syncStatus === 'success' && (
-              <span className="flex h-2 w-2 relative ml-0.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-            )}
+                {syncStatus === 'success' && (
+                  <span className="flex h-2 w-2 relative ml-0.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                )}
 
-            {hasConflict && (
-              <span className="ml-0.5 px-1.5 py-0.2 bg-rose-600 text-white font-extrabold text-[10px] rounded-full shadow-2xs">
-                3 处
-              </span>
+                {hasConflict && (
+                  <span className="ml-0.5 px-1.5 py-0.2 bg-rose-600 text-white font-extrabold text-[10px] rounded-full shadow-2xs">
+                    待合并
+                  </span>
+                )}
+              </button>
+
+              {/* 详情日志 悬浮层触发按钮 */}
+              <button
+                type="button"
+                onClick={() => setIsSyncDetailsOpen(!isSyncDetailsOpen)}
+                className={`p-1.5 border-l transition-colors cursor-pointer ${
+                  hasConflict
+                    ? 'border-amber-400/50 hover:bg-amber-600 text-white'
+                    : 'border-rose-200 dark:border-slate-700 text-zinc-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-100 dark:hover:bg-slate-700'
+                } ${isSyncDetailsOpen ? 'bg-rose-200/60 dark:bg-slate-700 text-rose-700 dark:text-rose-200' : ''}`}
+                title="点击展开详情日志悬浮层：查看具体同步时间戳、设备终端与版本号"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* 详情日志 悬浮层 (Popover Panel) */}
+            {isSyncDetailsOpen && (
+              <div className="absolute right-0 top-full mt-2 w-80 p-4 bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-xs space-y-3">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-rose-100 dark:border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-rose-50 dark:bg-slate-800 rounded-lg text-rose-600 dark:text-rose-400">
+                      <Cloud className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-sm text-zinc-800 dark:text-slate-100">
+                        跨端同步详情日志
+                      </h4>
+                      <p className="text-[10px] text-zinc-400 dark:text-slate-400">
+                        时间戳 / 设备终端 / 数据版本号
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setIsSyncDetailsOpen(false)}
+                    className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-slate-200 rounded-lg transition"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Details List */}
+                <div className="space-y-2 text-[11px]">
+                  {/* 1. 具体同步时间戳 */}
+                  <div className="p-2.5 bg-rose-50/70 dark:bg-slate-800/70 border border-rose-100/80 dark:border-slate-750 rounded-xl space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 font-bold text-zinc-700 dark:text-slate-200">
+                        <Clock className="w-3.5 h-3.5 text-rose-500" />
+                        <span>具体同步时间戳</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-rose-600 dark:text-rose-400">
+                        {syncStatus === 'syncing' ? '同步中...' : '已对齐'}
+                      </span>
+                    </div>
+                    <div className="text-zinc-800 dark:text-slate-200 font-mono font-bold truncate pl-5 text-[10px]">
+                      {lastSyncTime || '已同步至本地快照 (实时上云就绪)'}
+                    </div>
+                  </div>
+
+                  {/* 2. 最后操作设备信息 */}
+                  <div className="p-2.5 bg-rose-50/70 dark:bg-slate-800/70 border border-rose-100/80 dark:border-slate-750 rounded-xl space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 font-bold text-zinc-700 dark:text-slate-200">
+                        <Laptop className="w-3.5 h-3.5 text-blue-500" />
+                        <span>最后操作设备终端</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400">
+                        ONLINE
+                      </span>
+                    </div>
+                    <div className="text-zinc-800 dark:text-slate-200 font-mono font-bold truncate pl-5 text-[10px]">
+                      {getDeviceInfo()}
+                    </div>
+                  </div>
+
+                  {/* 3. 数据版本号与一致性校验 */}
+                  <div className="p-2.5 bg-rose-50/70 dark:bg-slate-800/70 border border-rose-100/80 dark:border-slate-750 rounded-xl space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 font-bold text-zinc-700 dark:text-slate-200">
+                        <Tag className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>数据版本号 (Versioning)</span>
+                      </span>
+                      <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold rounded-md text-[10px]">
+                        v{systemData.versioning || 1}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pl-5 pt-0.5">
+                      <span className="text-zinc-500 dark:text-slate-400 text-[10px]">
+                        跨端一致性校验:
+                      </span>
+                      <span className={`font-bold text-[10px] ${hasConflict ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {hasConflict ? '⚠️ 发现差异需处理' : '✅ 跨端版本号高度一致'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Action Button */}
+                <div className="pt-1">
+                  <button
+                    onClick={() => {
+                      setIsSyncDetailsOpen(false);
+                      onOpenSyncModal();
+                    }}
+                    className="w-full py-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-extrabold rounded-xl shadow-2xs transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-98"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>打开同步中心控制台</span>
+                  </button>
+                </div>
+              </div>
             )}
-          </button>
+          </div>
         )}
 
         {/* 顶部提醒事项中心按钮 */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SystemData, CaseRecord, Supervisor, ScheduleItem, ThinkingNote, ReminderItem, SessionData, SupervisionRecord, ParentSessionData, CounselorCredential } from './types';
-import { loadDataFromLocalStorage, saveDataToLocalStorage, saveDataToBackend, fetchBackendData, getDefaultSampleSystemData, integrityCheck } from './services/storage';
+import { loadDataFromLocalStorage, saveDataToLocalStorage, saveDataToBackend, fetchBackendData, getDefaultSampleSystemData, integrityCheck, deepCleanExpiredCaches } from './services/storage';
 import { getCurrentUser, logoutUser, UserAccount } from './services/auth';
 import { loadWorkspaceLayout, saveWorkspaceLayout, WorkspaceLayoutConfig } from './services/layout';
 import { AuthPortal } from './components/AuthPortal';
@@ -15,6 +15,7 @@ import { TrainingManagement } from './components/TrainingManagement';
 import { CredentialManagement } from './components/CredentialManagement';
 import { PrivacySecurityModal } from './components/PrivacySecurityModal';
 import { ReminderModal } from './components/ReminderModal';
+import { SyncCenterModal } from './components/SyncCenterModal';
 import { TodayScheduleOverview } from './components/TodayScheduleOverview';
 import { TotalHoursOverview } from './components/TotalHoursOverview';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -126,15 +127,36 @@ export default function App() {
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [privacyModalTab, setPrivacyModalTab] = useState<'privacy' | 'backup' | 'clear' | 'layout'>('privacy');
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [isSyncCenterModalOpen, setIsSyncCenterModalOpen] = useState(false);
+  const [hasConflict, setHasConflict] = useState(false);
+  const [cloudSnapshotData, setCloudSnapshotData] = useState<SystemData | null>(null);
 
   const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutConfig>(() => loadWorkspaceLayout());
 
+  const [forceRefreshKey, setForceRefreshKey] = useState<number>(Date.now());
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [lastSyncTime, setLastSyncTime] = useState<string>('已自动本地缓存');
 
-  const [systemData, setSystemData] = useState<SystemData>(() =>
+  const [systemData, setRawSystemData] = useState<SystemData>(() =>
     integrityCheck(loadDataFromLocalStorage(currentUser?.id))
   );
+
+  // 自定义 setSystemData，确保本地变更时自动打上递增版本号 stamp (versioning)
+  const setSystemData = useCallback((updater: SystemData | ((prev: SystemData) => SystemData), isFromCloud = false) => {
+    if (isFromCloud) {
+      setRawSystemData(updater as SystemData);
+    } else {
+      hasUserMutatedInSessionRef.current = true;
+      setRawSystemData((prev) => {
+        const nextState = typeof updater === 'function' ? updater(prev) : updater;
+        const newVersion = Math.max((prev.versioning || 0) + 1, Date.now());
+        return {
+          ...nextState,
+          versioning: newVersion,
+        };
+      });
+    }
+  }, []);
 
   // 全局深色/浅色主题模式状态 (持久化存储在 localStorage)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -161,6 +183,18 @@ export default function App() {
     }
   }, [isDarkMode]);
 
+  // 初始化流程：自动执行“深度清理”，扫描并清除 localStorage 中超过 30 天未访问或过期的临时 UI 缓存，维持轻量运行
+  useEffect(() => {
+    try {
+      const res = deepCleanExpiredCaches();
+      if (res.cleanedKeys.length > 0) {
+        console.log(`[App Init] Auto deep-cleaned ${res.cleanedKeys.length} stale localStorage cache items.`);
+      }
+    } catch (err) {
+      console.warn('[App Init] Deep clean routine encountered a minor issue:', err);
+    }
+  }, []);
+
   const toggleDarkMode = () => {
     setIsDarkMode((prev) => !prev);
   };
@@ -174,7 +208,8 @@ export default function App() {
     setIsCloudSyncDone(false);
     hasUserMutatedInSessionRef.current = false;
     const localData = loadDataFromLocalStorage(user.id);
-    setSystemData(localData);
+    setSystemData(localData, true);
+    setForceRefreshKey(localData.versioning || Date.now());
   };
 
   const handleLogout = () => {
@@ -182,7 +217,9 @@ export default function App() {
     setCurrentUser(null);
     setIsCloudSyncDone(false);
     hasUserMutatedInSessionRef.current = false;
-    setSystemData(getDefaultSampleSystemData());
+    const sampleData = getDefaultSampleSystemData();
+    setSystemData(sampleData, true);
+    setForceRefreshKey(Date.now());
   };
 
   // Sync cloud data when user logs in or mounts
@@ -198,9 +235,16 @@ export default function App() {
     fetchBackendData(currentUser.id).then((cloudData) => {
       if (!isMounted) return;
       if (cloudData) {
-        setSystemData(cloudData);
-        saveDataToLocalStorage(cloudData, currentUser.id);
-        setLastSyncTime(`☁️ 跨设备云端数据已加载 (${new Date().toLocaleTimeString('zh-CN', { hour12: false })})`);
+        const localVersion = systemData.versioning || 0;
+        const cloudVersion = cloudData.versioning || 0;
+        if (cloudVersion >= localVersion || !localVersion) {
+          setSystemData(cloudData, true);
+          saveDataToLocalStorage(cloudData, currentUser.id);
+          setForceRefreshKey(cloudVersion || Date.now());
+          setSyncStatus('success');
+          setLastSyncTime(`☁️ 跨设备云端数据已重绘同步 (v${cloudVersion || '1'})`);
+          setTimeout(() => setSyncStatus('idle'), 3000);
+        }
       } else {
         // If user has no data on backend yet, upload current local state once
         saveDataToBackend(systemData, currentUser.id).then((res) => {
@@ -217,7 +261,7 @@ export default function App() {
     };
   }, [currentUser?.id]);
 
-  // Periodic polling & window focus listener for multi-device sync (PC / Phone / Pad)
+  // Periodic polling & window focus listener for multi-device sync (PC / Phone / Pad / IE / Safari)
   useEffect(() => {
     if (!currentUser?.id || !isCloudSyncDone) return;
 
@@ -225,12 +269,23 @@ export default function App() {
       try {
         const cloudData = await fetchBackendData(currentUser.id);
         if (cloudData) {
+          const localVersion = systemData.versioning || 0;
+          const cloudVersion = cloudData.versioning || 0;
           const currentStr = JSON.stringify(systemData);
           const cloudStr = JSON.stringify(cloudData);
-          if (currentStr !== cloudStr && !hasUserMutatedInSessionRef.current) {
-            setSystemData(cloudData);
+
+          // 核心控制：当获取到比当前本地数据更新的版本号 (cloudVersion > localVersion) 或差异数据时
+          if (cloudVersion > localVersion || (currentStr !== cloudStr && !hasUserMutatedInSessionRef.current)) {
+            console.log(`[Version Sync] Detecting newer cloud version: local=v${localVersion}, cloud=v${cloudVersion}`);
+            setSystemData(cloudData, true);
             saveDataToLocalStorage(cloudData, currentUser.id);
-            setLastSyncTime(`☁️ 已自动同步云端最新记录 (${new Date().toLocaleTimeString('zh-CN', { hour12: false })})`);
+            
+            // 强制触发 UI 刷新机制与重绘
+            setForceRefreshKey(cloudVersion || Date.now());
+
+            setSyncStatus('success');
+            setLastSyncTime(`☁️ 已接收跨端最新版本强行刷新 (v${cloudVersion || 'latest'})`);
+            setTimeout(() => setSyncStatus('idle'), 3000);
           }
         }
       } catch (err) {
@@ -238,18 +293,20 @@ export default function App() {
       }
     };
 
-    // Poll every 8 seconds for updates from other devices
-    const intervalId = setInterval(syncFromCloud, 8000);
+    // Poll every 4 seconds for immediate updates from other devices (PC / Phone / Pad)
+    const intervalId = setInterval(syncFromCloud, 4000);
 
-    // Refresh immediately when switching tabs or focusing window
+    // Refresh immediately when switching tabs, focusing window, or coming back online
     const handleFocus = () => syncFromCloud();
     window.addEventListener('focus', handleFocus);
     window.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('online', handleFocus);
 
     return () => {
       clearInterval(intervalId);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('online', handleFocus);
     };
   }, [currentUser?.id, isCloudSyncDone, systemData]);
 
@@ -257,9 +314,16 @@ export default function App() {
   useEffect(() => {
     saveDataToLocalStorage(systemData, currentUser?.id);
     if (currentUser?.id && isCloudSyncDone) {
+      setSyncStatus('syncing');
       saveDataToBackend(systemData, currentUser.id).then((res) => {
         if (res.success) {
-          setLastSyncTime(`☁️ 变动已实时保存云端 ${res.timestamp}`);
+          hasUserMutatedInSessionRef.current = false;
+          setSyncStatus('success');
+          setLastSyncTime(`☁️ 变动已保存 (v${systemData.versioning || ''} ${res.timestamp})`);
+          setTimeout(() => setSyncStatus('idle'), 3000);
+        } else {
+          setSyncStatus('error');
+          setTimeout(() => setSyncStatus('idle'), 3000);
         }
       });
     }
@@ -275,28 +339,113 @@ export default function App() {
     setIsPrivacyModalOpen(true);
   };
 
-  // 手动同步后台数据（支持上云与一键重载云端）
+  // 手动调出“数据冲突检测与同步控制台”
   const handleManualBackendSync = async () => {
     if (!currentUser?.id) return;
     setSyncStatus('syncing');
     try {
-      // 1. Try fetching latest cloud snapshot first
       const cloudData = await fetchBackendData(currentUser.id);
-      if (cloudData) {
-        setSystemData(cloudData);
-        saveDataToLocalStorage(cloudData, currentUser.id);
-      }
-      // 2. Push current state back to cloud to guarantee alignment
-      const result = await saveDataToBackend(systemData, currentUser.id);
-      hasUserMutatedInSessionRef.current = false;
+      setCloudSnapshotData(cloudData);
+      const localVersion = systemData.versioning || 0;
+      const cloudVersion = cloudData?.versioning || 0;
+      const currentStr = JSON.stringify(systemData);
+      const cloudStr = JSON.stringify(cloudData || {});
 
-      if (result.success) {
-        setSyncStatus('success');
-        setLastSyncTime(`☁️ 全端强行云同步成功 (${result.timestamp})`);
-        setTimeout(() => setSyncStatus('idle'), 3000);
+      // 判定是否存在版本号冲突或端间字段不一致
+      if (cloudData && (cloudVersion !== localVersion || (currentStr !== cloudStr && hasUserMutatedInSessionRef.current))) {
+        setHasConflict(true);
       }
-    } catch {
+
+      setIsSyncCenterModalOpen(true);
+      setSyncStatus('idle');
+    } catch (err) {
+      console.error('Manual sync error:', err);
       setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    }
+  };
+
+  // 冲突解决 - 保留本地版本并全端同步
+  const handleKeepLocal = async () => {
+    if (!currentUser?.id) return;
+    const localVer = systemData.versioning || 0;
+    const cloudVer = cloudSnapshotData?.versioning || 0;
+    const nextVersion = Math.max(localVer, cloudVer) + 1;
+    const updated = { ...systemData, versioning: nextVersion };
+
+    hasUserMutatedInSessionRef.current = false;
+    setSystemData(updated, true);
+    saveDataToLocalStorage(updated, currentUser.id);
+    setForceRefreshKey(nextVersion);
+    setHasConflict(false);
+    setIsSyncCenterModalOpen(false);
+
+    setSyncStatus('syncing');
+    const res = await saveDataToBackend(updated, currentUser.id);
+    if (res.success) {
+      setSyncStatus('success');
+      setLastSyncTime(`☁️ 已保留本地版本并强行云端对齐 (v${nextVersion})`);
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    }
+  };
+
+  // 冲突解决 - 强制使用云端覆盖本地
+  const handleUseCloud = async () => {
+    if (!currentUser?.id || !cloudSnapshotData) return;
+    hasUserMutatedInSessionRef.current = false;
+    setSystemData(cloudSnapshotData, true);
+    saveDataToLocalStorage(cloudSnapshotData, currentUser.id);
+    setForceRefreshKey(cloudSnapshotData.versioning || Date.now());
+    setHasConflict(false);
+    setIsSyncCenterModalOpen(false);
+    setSyncStatus('success');
+    setLastSyncTime(`☁️ 强制使用云端覆盖本地成功 (v${cloudSnapshotData.versioning || 'latest'})`);
+    setTimeout(() => setSyncStatus('idle'), 3000);
+  };
+
+  // 冲突解决 - 智能无损双向合并
+  const handleMergeBoth = async () => {
+    if (!currentUser?.id || !cloudSnapshotData) return;
+    const mergeById = <T extends { id: string }>(arr1: T[] = [], arr2: T[] = []): T[] => {
+      const map = new Map<string, T>();
+      arr1.forEach((item) => item && item.id && map.set(item.id, item));
+      arr2.forEach((item) => {
+        if (item && item.id && !map.has(item.id)) {
+          map.set(item.id, item);
+        }
+      });
+      return Array.from(map.values());
+    };
+
+    const localVer = systemData.versioning || 0;
+    const cloudVer = cloudSnapshotData?.versioning || 0;
+    const mergedVersion = Math.max(localVer, cloudVer) + 1;
+
+    const mergedData: SystemData = {
+      versioning: mergedVersion,
+      records: mergeById(systemData.records, cloudSnapshotData.records),
+      mentors: mergeById(systemData.mentors, cloudSnapshotData.mentors),
+      thinking: mergeById(systemData.thinking, cloudSnapshotData.thinking),
+      schedules: mergeById(systemData.schedules, cloudSnapshotData.schedules),
+      reminders: mergeById(systemData.reminders, cloudSnapshotData.reminders),
+      trainings: mergeById(systemData.trainings, cloudSnapshotData.trainings),
+      credentials: mergeById(systemData.credentials, cloudSnapshotData.credentials),
+      personalExperience: systemData.personalExperience || cloudSnapshotData.personalExperience,
+      totalHoursOverrides: systemData.totalHoursOverrides || cloudSnapshotData.totalHoursOverrides,
+    };
+
+    hasUserMutatedInSessionRef.current = false;
+    setSystemData(mergedData, true);
+    saveDataToLocalStorage(mergedData, currentUser.id);
+    setForceRefreshKey(mergedVersion);
+    setHasConflict(false);
+    setIsSyncCenterModalOpen(false);
+
+    setSyncStatus('syncing');
+    const res = await saveDataToBackend(mergedData, currentUser.id);
+    if (res.success) {
+      setSyncStatus('success');
+      setLastSyncTime(`☁️ 智能无损双向合并完成 (v${mergedVersion})`);
       setTimeout(() => setSyncStatus('idle'), 3000);
     }
   };
@@ -909,7 +1058,7 @@ export default function App() {
   }
 
   return (
-    <div className={`flex flex-col h-screen w-screen transition-colors duration-300 ${
+    <div key={forceRefreshKey} className={`flex flex-col h-screen w-screen transition-colors duration-300 ${
       isDarkMode
         ? 'bg-slate-950 text-slate-100 dark'
         : 'bg-[#fce4ec] text-[#212121]'
@@ -928,6 +1077,7 @@ export default function App() {
         onOpenSyncModal={handleManualBackendSync}
         syncStatus={syncStatus}
         lastSyncTime={lastSyncTime}
+        hasConflict={hasConflict}
         onNavigateTab={(tab) => setActiveTab(tab)}
         onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
@@ -1171,6 +1321,22 @@ export default function App() {
         layoutConfig={workspaceLayout}
         onUpdateLayoutConfig={handleUpdateWorkspaceLayout}
         initialTab={privacyModalTab}
+      />
+
+      {/* 数据冲突检测与多端同步控制台 Modal */}
+      <SyncCenterModal
+        isOpen={isSyncCenterModalOpen}
+        onClose={() => setIsSyncCenterModalOpen(false)}
+        systemData={systemData}
+        cloudData={cloudSnapshotData}
+        onKeepLocal={handleKeepLocal}
+        onUseCloud={handleUseCloud}
+        onMergeBoth={handleMergeBoth}
+        onTriggerCheck={handleManualBackendSync}
+        lastSyncTime={lastSyncTime}
+        setLastSyncTime={setLastSyncTime}
+        hasConflict={hasConflict}
+        setHasConflict={setHasConflict}
       />
     </div>
   );

@@ -26,11 +26,27 @@ import {
 } from 'lucide-react';
 import { SystemData, CaseRecord, Supervisor, ThinkingNote } from '../types';
 
-interface SyncCenterModalProps {
+export interface ConflictItem {
+  id: string;
+  type: 'record' | 'mentor' | 'thinking';
+  title: string;
+  field: string;
+  localTime: string;
+  remoteTime: string;
+  localValue: string;
+  remoteValue: string;
+  recommended: 'local' | 'remote' | 'merge';
+}
+
+export interface SyncCenterModalProps {
   isOpen: boolean;
   onClose: () => void;
   systemData: SystemData;
-  onUpdateSystemData: (newData: SystemData) => void;
+  cloudData?: SystemData | null;
+  onKeepLocal?: () => void;
+  onUseCloud?: () => void;
+  onMergeBoth?: () => void;
+  onTriggerCheck?: () => void;
   lastSyncTime: string;
   setLastSyncTime: (time: string) => void;
   hasConflict: boolean;
@@ -53,7 +69,11 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
   isOpen,
   onClose,
   systemData,
-  onUpdateSystemData,
+  cloudData,
+  onKeepLocal,
+  onUseCloud,
+  onMergeBoth,
+  onTriggerCheck,
   lastSyncTime,
   setLastSyncTime,
   hasConflict,
@@ -63,7 +83,7 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
   const [syncStage, setSyncStage] = useState<'idle' | 'checking' | 'conflict' | 'syncing' | 'success'>('idle');
   const [syncProgress, setSyncProgress] = useState(0);
   const [currentStepText, setCurrentStepText] = useState('准备就绪');
-  const [activeTab, setActiveTab] = useState<'center' | 'conflicts' | 'guide' | 'settings'>('center');
+  const [activeTab, setActiveTab] = useState<'center' | 'conflicts' | 'guide'>('conflicts');
 
   // Selected resolution strategy: 'smart' | 'local_first' | 'remote_first'
   const [globalStrategy, setGlobalStrategy] = useState<'smart' | 'local_first' | 'remote_first'>('smart');
@@ -71,39 +91,42 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
   // Specific per-item resolution choices
   const [decisions, setDecisions] = useState<Record<string, 'local' | 'remote' | 'merge'>>({});
 
-  // Mock Conflict Items
+  const localVersion = systemData.versioning || 1;
+  const remoteVersion = cloudData?.versioning || localVersion;
+
+  // Real or calculated conflict items
   const sampleConflicts: ConflictItem[] = [
     {
       id: 'conf_c1',
       type: 'record',
-      title: '长程个案: 李先生 (C001)',
-      field: '第3次会谈记录与总结',
-      localTime: '今日 10:30 (本地最新编辑)',
-      remoteTime: '今日 08:15 (云端历史快照)',
-      localValue: '讨论亲密关系中的依恋模式，并补充了深层情绪评估与反思逐字稿摘要。',
-      remoteValue: '讨论亲密关系中的依恋模式。',
+      title: `个案记录数据量 (本地 ${systemData.records.length} 条 vs 云端 ${cloudData?.records?.length ?? systemData.records.length} 条)`,
+      field: '个案档案清单与深度逐字稿',
+      localTime: `本地版本 v${localVersion}`,
+      remoteTime: `云端版本 v${remoteVersion}`,
+      localValue: `包含 ${systemData.records.length} 个个案，包含最后新增或修改的极短/长程会谈记录。`,
+      remoteValue: cloudData ? `云端包含 ${cloudData.records.length} 个个案档案。` : '云端暂未获取到差异快照。',
       recommended: 'local',
     },
     {
       id: 'conf_m1',
       type: 'mentor',
-      title: '督导师记录: 张教授 (C001绑定)',
-      field: '督导要点与反思记录',
-      localTime: '今日 09:40 (本地3条记录)',
-      remoteTime: '昨日 18:20 (云端2条记录)',
-      localValue: '新增督导反思: 导师建议注意拯救冲动，认知重构保持中立。',
-      remoteValue: '暂无最新督导反思记录。',
+      title: `督导师与反思记录 (本地 ${systemData.mentors.length} 位 vs 云端 ${cloudData?.mentors?.length ?? systemData.mentors.length} 位)`,
+      field: '督导绑定关系与胜任力记录',
+      localTime: `本地版本 v${localVersion}`,
+      remoteTime: `云端版本 v${remoteVersion}`,
+      localValue: `本地共有 ${systemData.mentors.length} 位督导师，包含最新打勾的督导反思与胜任力记录。`,
+      remoteValue: cloudData ? `云端有 ${cloudData.mentors.length} 位督导师。` : '云端包含历史备案督导。',
       recommended: 'merge',
     },
     {
       id: 'conf_t1',
       type: 'thinking',
-      title: '反思随笔: 关于精神分析中阻抗的思考',
-      field: '随笔内容与分类标签',
-      localTime: '今日 11:00 (本地版本)',
-      remoteTime: '昨日 22:15 (云端版本)',
-      localValue: '标签: [精神分析, 阻抗, 临床反思, 伪合作]',
-      remoteValue: '标签: [精神分析, 阻抗]',
+      title: `日程与反思笔记 (本地 ${systemData.schedules.length + systemData.thinking.length} 项 vs 云端 ${(cloudData?.schedules?.length ?? systemData.schedules.length) + (cloudData?.thinking?.length ?? systemData.thinking.length)} 项)`,
+      field: '咨询安排与临床沉淀随笔',
+      localTime: `本地版本 v${localVersion}`,
+      remoteTime: `云端版本 v${remoteVersion}`,
+      localValue: `本地包含 ${systemData.schedules.length} 项日程及 ${systemData.thinking.length} 篇反思随笔。`,
+      remoteValue: cloudData ? `云端包含 ${cloudData.schedules.length} 项日程及 ${cloudData.thinking.length} 篇反思随笔。` : '云端保存的笔记。',
       recommended: 'local',
     },
   ];
@@ -426,9 +449,126 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: CONFLICT RESOLUTION & ITEM DIFF MERGE (冲突合并面板) */}
+          {/* TAB 2: CONFLICT RESOLUTION & ITEM DIFF MERGE (数据冲突检测与覆盖/合并决策) */}
           {activeTab === 'conflicts' && (
             <div className="space-y-5">
+              {/* Visual Conflict Overview Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Local Version Card */}
+                <div className="p-4 bg-gradient-to-br from-rose-50 to-pink-50 dark:from-slate-800 dark:to-slate-850 border border-rose-200 dark:border-slate-700 rounded-2xl space-y-3 relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-1 bg-rose-500 text-white text-[10px] font-extrabold rounded-lg flex items-center gap-1 shadow-2xs">
+                      <HardDrive className="w-3.5 h-3.5" />
+                      <span>📱 本地当前版本 (v{localVersion})</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-rose-700 dark:text-rose-300 font-bold">
+                      上次变动
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between text-zinc-700 dark:text-slate-300">
+                      <span>个案总记录数:</span>
+                      <span className="font-bold">{systemData.records.length} 条</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-700 dark:text-slate-300">
+                      <span>督导师档案数:</span>
+                      <span className="font-bold">{systemData.mentors.length} 位</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-700 dark:text-slate-300">
+                      <span>日程安排总数:</span>
+                      <span className="font-bold">{systemData.schedules.length} 项</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-700 dark:text-slate-300">
+                      <span>反思笔记篇数:</span>
+                      <span className="font-bold">{systemData.thinking.length} 篇</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (onKeepLocal) onKeepLocal();
+                      else handleResolveAndMerge();
+                    }}
+                    className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-98"
+                  >
+                    <HardDrive className="w-4 h-4" />
+                    <span>保留“本地版本”并全端同步</span>
+                  </button>
+                </div>
+
+                {/* Cloud Version Card */}
+                <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-850 border border-blue-200 dark:border-slate-700 rounded-2xl space-y-3 relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-1 bg-blue-600 text-white text-[10px] font-extrabold rounded-lg flex items-center gap-1 shadow-2xs">
+                      <Cloud className="w-3.5 h-3.5" />
+                      <span>☁️ 云端最新备份 (v{remoteVersion})</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-blue-700 dark:text-blue-300 font-bold">
+                      服务器快照
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between text-zinc-700 dark:text-slate-300">
+                      <span>个案总记录数:</span>
+                      <span className="font-bold">{cloudData?.records?.length ?? systemData.records.length} 条</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-700 dark:text-slate-300">
+                      <span>督导师档案数:</span>
+                      <span className="font-bold">{cloudData?.mentors?.length ?? systemData.mentors.length} 位</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-700 dark:text-slate-300">
+                      <span>日程安排总数:</span>
+                      <span className="font-bold">{cloudData?.schedules?.length ?? systemData.schedules.length} 项</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-700 dark:text-slate-300">
+                      <span>反思笔记篇数:</span>
+                      <span className="font-bold">{cloudData?.thinking?.length ?? systemData.thinking.length} 篇</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (onUseCloud) onUseCloud();
+                      else handleResolveAndMerge();
+                    }}
+                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-98"
+                  >
+                    <Cloud className="w-4 h-4" />
+                    <span>强制使用“云端覆盖”本地</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Merge Both Smart Option */}
+              <div className="p-4 bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-teal-500/10 border border-emerald-300/80 dark:border-emerald-700/80 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-500 text-white rounded-xl shadow-2xs">
+                    <GitMerge className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="font-extrabold text-sm text-zinc-800 dark:text-slate-100">
+                      🔀 智能无损双向合并
+                    </h5>
+                    <p className="text-[11px] text-zinc-500 dark:text-slate-400">
+                      合并本地与云端的全部个案、日程与反思随笔，去重并生成统一最新版本号。
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (onMergeBoth) onMergeBoth();
+                    else handleResolveAndMerge();
+                  }}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>智能融合两端所有记录</span>
+                </button>
+              </div>
+
               {/* Conflict Header & Global Strategy Bar */}
               <div className="p-4 bg-amber-50 dark:bg-slate-800/90 border border-amber-200 dark:border-slate-700 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -436,21 +576,13 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
                     <GitMerge className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                     <div>
                       <h4 className="font-extrabold text-sm text-amber-900 dark:text-amber-200">
-                        版本冲突合并决策中心
+                        版本冲突细粒度比对面板
                       </h4>
                       <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
                         逐项对比本地修改与云端记录，选择保留项或执行智能融合：
                       </p>
                     </div>
                   </div>
-
-                  <button
-                    onClick={handleResolveAndMerge}
-                    className="px-4 py-2 bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white font-extrabold text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 active:scale-95"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>应用决策并完成合并</span>
-                  </button>
                 </div>
 
                 {/* Global preset strategy buttons */}

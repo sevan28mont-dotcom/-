@@ -207,6 +207,7 @@ export interface CounselorCredential {
 }
 
 export interface SystemData {
+  versioning?: number; // 隐性版本控制与跨端强同步控制号 (时间戳毫秒数)
   records: CaseRecord[];
   mentors: Supervisor[];
   thinking: ThinkingNote[];
