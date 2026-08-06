@@ -34,27 +34,167 @@ const DEFAULT_ACCOUNTS: UserAccount[] = [
   },
 ];
 
+// Multi-tier storage compatibility layer for cross-browser / legacy IE & restricted path compatibility
+const memoryStore: Record<string, string> = {};
+
+function getCookie(name: string): string | null {
+  try {
+    if (typeof document === 'undefined') return null;
+    const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'));
+    return match ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setCookie(name: string, value: string, days = 30): void {
+  try {
+    if (typeof document === 'undefined') return;
+    const date = new Date();
+    date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+    const expires = `; expires=${date.toUTCString()}`;
+    document.cookie = `${name}=${encodeURIComponent(value)}${expires}; path=/; SameSite=Lax`;
+  } catch (e) {
+    // Ignore cookie write errors
+  }
+}
+
+function removeCookie(name: string): void {
+  try {
+    if (typeof document === 'undefined') return;
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax`;
+  } catch (e) {
+    // Ignore
+  }
+}
+
+export function checkStorageCompatibility(): {
+  localStorageAvailable: boolean;
+  sessionStorageAvailable: boolean;
+  cookiesAvailable: boolean;
+} {
+  let localStorageAvailable = false;
+  let sessionStorageAvailable = false;
+  let cookiesAvailable = false;
+
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const testKey = '__psy_test_storage__';
+      window.localStorage.setItem(testKey, '1');
+      window.localStorage.removeItem(testKey);
+      localStorageAvailable = true;
+    }
+  } catch (e) {
+    localStorageAvailable = false;
+  }
+
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const testKey = '__psy_test_storage__';
+      window.sessionStorage.setItem(testKey, '1');
+      window.sessionStorage.removeItem(testKey);
+      sessionStorageAvailable = true;
+    }
+  } catch (e) {
+    sessionStorageAvailable = false;
+  }
+
+  try {
+    if (typeof document !== 'undefined') {
+      setCookie('__psy_test_cookie__', '1', 1);
+      cookiesAvailable = getCookie('__psy_test_cookie__') === '1';
+      removeCookie('__psy_test_cookie__');
+    }
+  } catch (e) {
+    cookiesAvailable = false;
+  }
+
+  return { localStorageAvailable, sessionStorageAvailable, cookiesAvailable };
+}
+
+export function safeGetStorage(key: string): string | null {
+  // 1. LocalStorage
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const val = window.localStorage.getItem(key);
+      if (val !== null && val !== undefined) return val;
+    }
+  } catch (e) { /* ignore */ }
+
+  // 2. SessionStorage
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const val = window.sessionStorage.getItem(key);
+      if (val !== null && val !== undefined) return val;
+    }
+  } catch (e) { /* ignore */ }
+
+  // 3. Cookie fallback
+  const cookieVal = getCookie(key);
+  if (cookieVal !== null) return cookieVal;
+
+  // 4. Memory fallback
+  return memoryStore[key] || null;
+}
+
+export function safeSetStorage(key: string, value: string): void {
+  memoryStore[key] = value;
+
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(key, value);
+    }
+  } catch (e) { /* ignore */ }
+
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.setItem(key, value);
+    }
+  } catch (e) { /* ignore */ }
+
+  setCookie(key, value, 30);
+}
+
+export function safeRemoveStorage(key: string): void {
+  delete memoryStore[key];
+
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(key);
+    }
+  } catch (e) { /* ignore */ }
+
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.removeItem(key);
+    }
+  } catch (e) { /* ignore */ }
+
+  removeCookie(key);
+}
+
 export function getStoredAccounts(): UserAccount[] {
   try {
     const fallbackKeys = [STORAGE_KEYS.ACCOUNTS, 'psy_user_accounts_backup', 'psy_user_accounts', 'psy_accounts'];
     for (const key of fallbackKeys) {
-      const raw = localStorage.getItem(key);
+      const raw = safeGetStorage(key);
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            // Keep master backup updated
-            localStorage.setItem('psy_user_accounts_backup', JSON.stringify(parsed));
+            const jsonStr = JSON.stringify(parsed);
+            safeSetStorage('psy_user_accounts_backup', jsonStr);
             if (key !== STORAGE_KEYS.ACCOUNTS) {
-              localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(parsed));
+              safeSetStorage(STORAGE_KEYS.ACCOUNTS, jsonStr);
             }
             return parsed;
           }
         } catch (e) { /* ignore parse error */ }
       }
     }
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(DEFAULT_ACCOUNTS));
-    localStorage.setItem('psy_user_accounts_backup', JSON.stringify(DEFAULT_ACCOUNTS));
+    const defaultStr = JSON.stringify(DEFAULT_ACCOUNTS);
+    safeSetStorage(STORAGE_KEYS.ACCOUNTS, defaultStr);
+    safeSetStorage('psy_user_accounts_backup', defaultStr);
     return DEFAULT_ACCOUNTS;
   } catch {
     return DEFAULT_ACCOUNTS;
@@ -64,8 +204,8 @@ export function getStoredAccounts(): UserAccount[] {
 export function saveAccounts(accounts: UserAccount[]): void {
   try {
     const jsonStr = JSON.stringify(accounts);
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, jsonStr);
-    localStorage.setItem('psy_user_accounts_backup', jsonStr);
+    safeSetStorage(STORAGE_KEYS.ACCOUNTS, jsonStr);
+    safeSetStorage('psy_user_accounts_backup', jsonStr);
 
     // Asynchronously sync accounts to server
     if (accounts.length > 0) {
@@ -84,16 +224,17 @@ export function saveAccounts(accounts: UserAccount[]): void {
 
 export function getCurrentUser(): UserAccount | null {
   try {
-    const sessionKeys = [STORAGE_KEYS.CURRENT_USER, 'psy_current_user_backup', 'psy_user_session'];
+    const sessionKeys = [STORAGE_KEYS.CURRENT_USER, 'psy_current_user_backup', 'psy_user_session', 'psy_session_user'];
     for (const key of sessionKeys) {
-      const raw = localStorage.getItem(key);
+      const raw = safeGetStorage(key);
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
           if (parsed && parsed.id) {
-            localStorage.setItem('psy_current_user_backup', JSON.stringify(parsed));
+            const jsonStr = JSON.stringify(parsed);
+            safeSetStorage('psy_current_user_backup', jsonStr);
             if (key !== STORAGE_KEYS.CURRENT_USER) {
-              localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(parsed));
+              safeSetStorage(STORAGE_KEYS.CURRENT_USER, jsonStr);
             }
             return parsed;
           }
@@ -105,8 +246,9 @@ export function getCurrentUser(): UserAccount | null {
     const accounts = getStoredAccounts();
     const defaultUser = accounts[0];
     if (defaultUser) {
-      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(defaultUser));
-      localStorage.setItem('psy_current_user_backup', JSON.stringify(defaultUser));
+      const defaultStr = JSON.stringify(defaultUser);
+      safeSetStorage(STORAGE_KEYS.CURRENT_USER, defaultStr);
+      safeSetStorage('psy_current_user_backup', defaultStr);
       return defaultUser;
     }
     return null;
@@ -119,11 +261,13 @@ export function setCurrentUserSession(user: UserAccount | null): void {
   try {
     if (user) {
       const str = JSON.stringify(user);
-      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, str);
-      localStorage.setItem('psy_current_user_backup', str);
+      safeSetStorage(STORAGE_KEYS.CURRENT_USER, str);
+      safeSetStorage('psy_current_user_backup', str);
+      safeSetStorage('psy_session_user', str);
     } else {
-      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-      localStorage.removeItem('psy_current_user_backup');
+      safeRemoveStorage(STORAGE_KEYS.CURRENT_USER);
+      safeRemoveStorage('psy_current_user_backup');
+      safeRemoveStorage('psy_session_user');
     }
   } catch (err) {
     console.error('Failed to set current user session:', err);

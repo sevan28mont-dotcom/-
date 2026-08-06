@@ -217,7 +217,7 @@ export const TodayScheduleOverview: React.FC<TodayScheduleOverviewProps> = ({
       {isExpanded && (
         <div className="p-3 sm:p-4">
           {targetDaySchedules.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            <div className="max-h-[380px] sm:max-h-[460px] overflow-y-auto pr-1 sm:pr-2 space-y-2.5 sm:space-y-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 scrollbar-thin scrollbar-thumb-rose-200 dark:scrollbar-thumb-slate-700">
               {targetDaySchedules.map((item) => {
                 const { label, hex } = getItemStyleAndLabel(item.type);
                 const displayTime = item.timeStr || (item.hour < 10 ? `0${item.hour}:00` : `${item.hour}:00`);

@@ -1,4 +1,4 @@
-import { SystemData, CaseRecord, Supervisor, ThinkingNote, ScheduleItem, ReminderItem, CounselorCredential, PersonalExperienceSetting } from '../types';
+import { SystemData, CaseRecord, Supervisor, ThinkingNote, ScheduleItem, ReminderItem, CounselorCredential, PersonalExperienceSetting, TrainingCourse } from '../types';
 
 const STORAGE_KEYS = {
   RECORDS: 'psy_records_v8',
@@ -344,6 +344,171 @@ export function getZeroedSystemData(): SystemData {
   return { ...EMPTY_SYSTEM_DATA };
 }
 
+/**
+ * 启动与加载时的数据完整性自检与修复函数 (integrityCheck)
+ * 遍历 systemData 中的所有关联 ID（如 mentor 与 case、schedule 与 case/mentor、experience 与 therapist），
+ * 如果发现孤儿数据（如 mentor 绑定了或督导记录引用了不存在的 caseId），则自动清除或修正该索引，
+ * 避免因渲染时缺失关联对象而导致页面崩溃。
+ */
+export function integrityCheck(data: SystemData): SystemData {
+  if (!data || typeof data !== 'object') {
+    return getDefaultSampleSystemData();
+  }
+
+  // 1. 清理与校验个案档案 (Case Records)
+  const rawRecords = Array.isArray(data.records) ? data.records : [];
+  const validRecords: CaseRecord[] = rawRecords
+    .filter((c) => c && typeof c === 'object' && c.id)
+    .map((c) => ({
+      ...c,
+      category: c.category || 'longTerm',
+      status: c.status || 'active',
+      sessions: c.sessions || {},
+      parentSessions: c.parentSessions || {},
+      isTeenager:
+        typeof c.isTeenager === 'boolean'
+          ? c.isTeenager
+          : Boolean(
+              c.avatar === '👦' ||
+              c.avatar === '👧' ||
+              c.avatar === '👶' ||
+              (c.parentSessions && Object.keys(c.parentSessions).length > 0)
+            ),
+    }));
+
+  const validCaseIds = new Set(validRecords.map((c) => c.id));
+
+  // 2. 清理与校验导师/督导 (Supervisors / Mentors) 及关联绑定
+  const rawMentors = Array.isArray(data.mentors) ? data.mentors : [];
+  const validMentors: Supervisor[] = rawMentors
+    .filter((m) => m && typeof m === 'object' && m.id)
+    .map((m) => {
+      // 过滤绑定的个案 ID，清除孤儿 caseId
+      const boundCaseIds = Array.isArray(m.boundCaseIds)
+        ? m.boundCaseIds.filter((cid) => cid && validCaseIds.has(cid))
+        : [];
+
+      // 校验活跃个案 ID
+      const activeCaseId = m.activeCaseId && validCaseIds.has(m.activeCaseId) ? m.activeCaseId : null;
+
+      // 清理督导记录中的孤儿 caseId 引用
+      const rawSupRecords = Array.isArray(m.records) ? m.records : [];
+      const cleanedSupRecords = rawSupRecords
+        .filter((r) => r && typeof r === 'object' && r.id)
+        .map((r) => {
+          const caseId = r.caseId && validCaseIds.has(r.caseId) ? r.caseId : '';
+          return {
+            ...r,
+            caseId,
+          };
+        });
+
+      return {
+        ...m,
+        boundCaseIds,
+        activeCaseId,
+        records: cleanedSupRecords,
+      };
+    });
+
+  const validMentorIds = new Set(validMentors.map((m) => m.id));
+
+  // 3. 清理与校验日程记录 (Schedules) 中的关联对象
+  const rawSchedules = Array.isArray(data.schedules) ? data.schedules : [];
+  const validSchedules: ScheduleItem[] = rawSchedules
+    .filter((s) => s && typeof s === 'object' && s.id)
+    .map((s) => {
+      let relatedId = s.relatedId;
+      let relatedType = s.relatedType;
+
+      if (relatedType === 'case' && relatedId && !validCaseIds.has(relatedId)) {
+        relatedId = undefined;
+        relatedType = undefined;
+      } else if (relatedType === 'supervisor' && relatedId && !validMentorIds.has(relatedId)) {
+        relatedId = undefined;
+        relatedType = undefined;
+      }
+
+      return {
+        ...s,
+        relatedId,
+        relatedType,
+      };
+    });
+
+  // 4. 清理与校验个人体验 (Personal Experience) 中的关联体验师
+  const expSource = data.personalExperience || data.experienceData;
+  let cleanedExp: PersonalExperienceSetting | undefined = undefined;
+
+  if (expSource && typeof expSource === 'object') {
+    const individualTherapists = Array.isArray(expSource.individualTherapists)
+      ? expSource.individualTherapists.filter((t: any) => t && t.id)
+      : [];
+    const groupOptions = Array.isArray(expSource.groupOptions)
+      ? expSource.groupOptions.filter((g: any) => g && g.id)
+      : [];
+
+    const validTherapistIds = new Set([
+      ...individualTherapists.map((t: any) => t.id),
+      ...groupOptions.map((g: any) => g.id),
+    ]);
+
+    const rawExpRecords = Array.isArray(expSource.records) ? expSource.records : [];
+    const cleanedExpRecords = rawExpRecords
+      .filter((r: any) => r && typeof r === 'object' && r.id)
+      .map((r: any) => {
+        const therapistId = r.therapistId && validTherapistIds.has(r.therapistId) ? r.therapistId : undefined;
+        return {
+          ...r,
+          therapistId,
+        };
+      });
+
+    cleanedExp = {
+      ...expSource,
+      records: cleanedExpRecords,
+      individualTherapists,
+      groupOptions,
+      totalIndividualHours: expSource.totalIndividualHours || 0,
+      totalGroupHours: expSource.totalGroupHours || 0,
+    };
+  }
+
+  // 5. 清理思考笔记 (Thinking Notes)
+  const rawThinking = Array.isArray(data.thinking) ? data.thinking : [];
+  const validThinking: ThinkingNote[] = rawThinking.filter((n) => n && typeof n === 'object' && n.id);
+
+  // 6. 清理提醒事项 (Reminders)
+  const rawReminders = Array.isArray(data.reminders) ? data.reminders : [];
+  const validReminders: ReminderItem[] = rawReminders.filter((r) => r && typeof r === 'object' && r.id);
+
+  // 7. 清理培训项目 (Trainings)
+  const rawTrainings = Array.isArray(data.trainings) ? data.trainings : [];
+  const validTrainings: TrainingCourse[] = rawTrainings
+    .filter((t) => t && typeof t === 'object' && t.id)
+    .map((t) => ({
+      ...t,
+      sessions: Array.isArray(t.sessions) ? t.sessions.filter((s: any) => s && s.id) : [],
+    }));
+
+  // 8. 清理资质证书 (Credentials)
+  const rawCredentials = Array.isArray(data.credentials) ? data.credentials : [];
+  const validCredentials: CounselorCredential[] = rawCredentials.filter((c) => c && typeof c === 'object' && c.id);
+
+  return {
+    records: validRecords,
+    mentors: validMentors,
+    thinking: validThinking,
+    schedules: validSchedules,
+    reminders: validReminders,
+    personalExperience: cleanedExp,
+    experienceData: cleanedExp,
+    trainings: validTrainings,
+    credentials: validCredentials,
+    totalHoursOverrides: data.totalHoursOverrides || {},
+  };
+}
+
 export function loadDataFromLocalStorage(userId?: string): SystemData {
   try {
     const userPrefix = userId ? `psy_u_${userId}_` : '';
@@ -412,7 +577,7 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
           const expRaw = localStorage.getItem(primaryKeys.experience) || localStorage.getItem(`${userPrefix}experienceData`) || localStorage.getItem('psy_master_backup_experience');
           const experienceData = expRaw ? JSON.parse(expRaw) : DEFAULT_EXPERIENCE;
 
-          return { records, mentors, thinking, schedules, reminders, trainings, credentials, personalExperience: experienceData, experienceData };
+          return integrityCheck({ records, mentors, thinking, schedules, reminders, trainings, credentials, personalExperience: experienceData, experienceData });
         } catch (e) {
           console.error('Error parsing user local storage:', e);
         }
@@ -425,7 +590,7 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
 
       // For new custom user accounts, check if there is local experience or default data
       const fallbackExp = readWithFallback(primaryKeys.experience, legacyExperienceKeys, DEFAULT_EXPERIENCE);
-      return { ...EMPTY_SYSTEM_DATA, personalExperience: fallbackExp, experienceData: fallbackExp };
+      return integrityCheck({ ...EMPTY_SYSTEM_DATA, personalExperience: fallbackExp, experienceData: fallbackExp });
     }
 
     const rawRecords = readWithFallback(primaryKeys.records, legacyRecordsKeys, DEFAULT_RECORDS);
@@ -449,7 +614,7 @@ export function loadDataFromLocalStorage(userId?: string): SystemData {
     const credentials = readWithFallback(primaryKeys.credentials, legacyCredentialsKeys, DEFAULT_CREDENTIALS);
     const experienceData = readWithFallback(primaryKeys.experience, legacyExperienceKeys, DEFAULT_EXPERIENCE);
 
-    return { records, mentors, thinking, schedules, reminders, trainings, credentials, personalExperience: experienceData, experienceData };
+    return integrityCheck({ records, mentors, thinking, schedules, reminders, trainings, credentials, personalExperience: experienceData, experienceData });
   } catch (err) {
     console.error('Failed to load from localStorage:', err);
     return getDefaultSampleSystemData();
@@ -587,7 +752,7 @@ export async function fetchBackendData(userId: string): Promise<SystemData | nul
           parentSessions: r.parentSessions || {},
         }));
       }
-      return data;
+      return integrityCheck(data);
     }
   } catch (e) {
     console.warn('Backend sync fetch warning:', e);

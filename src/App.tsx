@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SystemData, CaseRecord, Supervisor, ScheduleItem, ThinkingNote, ReminderItem, SessionData, SupervisionRecord, ParentSessionData, CounselorCredential } from './types';
-import { loadDataFromLocalStorage, saveDataToLocalStorage, saveDataToBackend, fetchBackendData, getDefaultSampleSystemData } from './services/storage';
+import { loadDataFromLocalStorage, saveDataToLocalStorage, saveDataToBackend, fetchBackendData, getDefaultSampleSystemData, integrityCheck } from './services/storage';
 import { getCurrentUser, logoutUser, UserAccount } from './services/auth';
 import { loadWorkspaceLayout, saveWorkspaceLayout, WorkspaceLayoutConfig } from './services/layout';
 import { AuthPortal } from './components/AuthPortal';
@@ -19,10 +19,107 @@ import { TodayScheduleOverview } from './components/TodayScheduleOverview';
 import { TotalHoursOverview } from './components/TotalHoursOverview';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
+export type DeviceType = 'mobile' | 'pad' | 'desktop';
+export type OrientationType = 'portrait' | 'landscape';
+
+export interface DeviceOrientationState {
+  deviceType: DeviceType;
+  orientation: OrientationType;
+  screenWidth: number;
+  screenHeight: number;
+  isTouchDevice: boolean;
+  isPad: boolean;
+  isMobile: boolean;
+  isDesktop: boolean;
+}
+
+/**
+ * detectDeviceOrientation 自定义 Hook
+ * 动态检测 Pad / 手机 / PC 端屏幕宽度与横竖屏方向
+ */
+export function detectDeviceOrientation(): DeviceOrientationState {
+  const [deviceState, setDeviceState] = useState<DeviceOrientationState>(() => {
+    if (typeof window === 'undefined') {
+      return {
+        deviceType: 'desktop',
+        orientation: 'landscape',
+        screenWidth: 1024,
+        screenHeight: 768,
+        isTouchDevice: false,
+        isPad: false,
+        isMobile: false,
+        isDesktop: true,
+      };
+    }
+
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const deviceType: DeviceType = w < 768 ? 'mobile' : w < 1024 ? 'pad' : 'desktop';
+    const orientation: OrientationType = h > w ? 'portrait' : 'landscape';
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+    return {
+      deviceType,
+      orientation,
+      screenWidth: w,
+      screenHeight: h,
+      isTouchDevice,
+      isPad: deviceType === 'pad',
+      isMobile: deviceType === 'mobile',
+      isDesktop: deviceType === 'desktop',
+    };
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const deviceType: DeviceType = w < 768 ? 'mobile' : w < 1024 ? 'pad' : 'desktop';
+      const orientation: OrientationType = h > w ? 'portrait' : 'landscape';
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+      setDeviceState({
+        deviceType,
+        orientation,
+        screenWidth: w,
+        screenHeight: h,
+        isTouchDevice,
+        isPad: deviceType === 'pad',
+        isMobile: deviceType === 'mobile',
+        isDesktop: deviceType === 'desktop',
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
+  return deviceState;
+}
+
+export const useDeviceOrientation = detectDeviceOrientation;
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
   const [activeTab, setActiveTab] = useState<ActiveTab>('longTerm');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // 动态屏幕设备与方向检测
+  const deviceInfo = detectDeviceOrientation();
+
+  // 针对 Pad 和 手机端的屏幕差异，屏幕宽度或方向变化时动态调整 Sidebar 的展开与收起行为
+  useEffect(() => {
+    if (deviceInfo.screenWidth < 1024) {
+      setIsMobileMenuOpen(false);
+    }
+  }, [deviceInfo.deviceType, deviceInfo.orientation, deviceInfo.screenWidth]);
   const [supervisionTypeFilter, setSupervisionTypeFilter] = useState<'all' | 'individual' | 'group'>('all');
   const [personalExperienceFilter, setPersonalExperienceFilter] = useState<'all' | 'individual' | 'group'>('all');
   const [trainingTypeFilter, setTrainingTypeFilter] = useState<'all' | 'psychodynamics' | 'longShort' | 'otherSchools' | 'ethicsCrisis'>('all');
@@ -36,7 +133,7 @@ export default function App() {
   const [lastSyncTime, setLastSyncTime] = useState<string>('已自动本地缓存');
 
   const [systemData, setSystemData] = useState<SystemData>(() =>
-    loadDataFromLocalStorage(currentUser?.id)
+    integrityCheck(loadDataFromLocalStorage(currentUser?.id))
   );
 
   // 全局深色/浅色主题模式状态 (持久化存储在 localStorage)
@@ -70,6 +167,7 @@ export default function App() {
 
   const [isCloudSyncDone, setIsCloudSyncDone] = useState<boolean>(false);
   const hasUserMutatedInSessionRef = useRef<boolean>(false);
+  const deleteDebounceRef = useRef<Record<string, number>>({});
 
   const handleLoginSuccess = (user: UserAccount) => {
     setCurrentUser(user);
@@ -256,22 +354,37 @@ export default function App() {
     }));
   };
 
-  const handleDeleteCase = (id: string) => {
+  const handleDeleteCase = useCallback((id: string) => {
+    if (!id || typeof id !== 'string') return;
+    const key = `case_${id}`;
+    const now = Date.now();
+    if (deleteDebounceRef.current[key] && now - deleteDebounceRef.current[key] < 300) return;
+    deleteDebounceRef.current[key] = now;
+
     hasUserMutatedInSessionRef.current = true;
-    setSystemData((prev) => ({
-      ...prev,
-      records: (prev.records || []).filter((r) => r && r.id !== id),
-      // 解绑导师关联
-      mentors: (prev.mentors || []).map((m) => {
-        if (!m) return m;
-        return {
-          ...m,
-          boundCaseIds: (m.boundCaseIds || []).filter((cid) => cid && cid !== id),
-          records: (m.records || []).filter((r) => r && r.caseId !== id),
-        };
-      }),
-    }));
-  };
+    setSystemData((prev) => {
+      const records = prev.records || [];
+      const targetExists = records.some((r) => r && r.id === id);
+      if (!targetExists) return prev;
+
+      return {
+        ...prev,
+        records: records.filter((r) => r && r.id !== id),
+        mentors: (prev.mentors || []).map((m) => {
+          if (!m) return m;
+          return {
+            ...m,
+            boundCaseIds: (m.boundCaseIds || []).filter((cid) => cid && cid !== id),
+            activeCaseId: m.activeCaseId === id ? null : m.activeCaseId,
+            records: (m.records || []).filter((r) => r && r.caseId !== id),
+          };
+        }),
+        schedules: (prev.schedules || []).filter(
+          (s) => !(s && s.relatedType === 'case' && s.relatedId === id)
+        ),
+      };
+    });
+  }, []);
 
   const handleUpdateSessionNote = (
     caseId: string,
@@ -397,22 +510,41 @@ export default function App() {
     }));
   };
 
-  const handleBatchDeleteCases = (ids: string[]) => {
+  const handleBatchDeleteCases = useCallback((ids: string[]) => {
+    if (!Array.isArray(ids) || ids.length === 0) return;
+    const validIds = ids.filter((id) => id && typeof id === 'string');
+    if (validIds.length === 0) return;
+
+    const key = `batch_case_${validIds.join('_')}`;
+    const now = Date.now();
+    if (deleteDebounceRef.current[key] && now - deleteDebounceRef.current[key] < 300) return;
+    deleteDebounceRef.current[key] = now;
+
     hasUserMutatedInSessionRef.current = true;
-    const idSet = new Set(ids);
-    setSystemData((prev) => ({
-      ...prev,
-      records: (prev.records || []).filter((r) => r && !idSet.has(r.id)),
-      mentors: (prev.mentors || []).map((m) => {
-        if (!m) return m;
-        return {
-          ...m,
-          boundCaseIds: (m.boundCaseIds || []).filter((cid) => cid && !idSet.has(cid)),
-          records: (m.records || []).filter((r) => r && r.caseId && !idSet.has(r.caseId)),
-        };
-      }),
-    }));
-  };
+    const idSet = new Set(validIds);
+    setSystemData((prev) => {
+      const records = prev.records || [];
+      const hasAny = records.some((r) => r && idSet.has(r.id));
+      if (!hasAny) return prev;
+
+      return {
+        ...prev,
+        records: records.filter((r) => r && !idSet.has(r.id)),
+        mentors: (prev.mentors || []).map((m) => {
+          if (!m) return m;
+          return {
+            ...m,
+            boundCaseIds: (m.boundCaseIds || []).filter((cid) => cid && !idSet.has(cid)),
+            activeCaseId: m.activeCaseId && idSet.has(m.activeCaseId) ? null : m.activeCaseId,
+            records: (m.records || []).filter((r) => r && r.caseId && !idSet.has(r.caseId)),
+          };
+        }),
+        schedules: (prev.schedules || []).filter(
+          (s) => !(s && s.relatedType === 'case' && s.relatedId && idSet.has(s.relatedId))
+        ),
+      };
+    });
+  }, []);
 
   const handleUpdateCaseTotalSessions = (caseId: string, newTotal: number) => {
     setSystemData((prev) => ({
@@ -434,13 +566,28 @@ export default function App() {
     }));
   };
 
-  const handleDeleteMentor = (id: string) => {
+  const handleDeleteMentor = useCallback((id: string) => {
+    if (!id || typeof id !== 'string') return;
+    const key = `mentor_${id}`;
+    const now = Date.now();
+    if (deleteDebounceRef.current[key] && now - deleteDebounceRef.current[key] < 300) return;
+    deleteDebounceRef.current[key] = now;
+
     hasUserMutatedInSessionRef.current = true;
-    setSystemData((prev) => ({
-      ...prev,
-      mentors: (prev.mentors || []).filter((m) => m.id !== id),
-    }));
-  };
+    setSystemData((prev) => {
+      const mentors = prev.mentors || [];
+      const targetExists = mentors.some((m) => m && m.id === id);
+      if (!targetExists) return prev;
+
+      return {
+        ...prev,
+        mentors: mentors.filter((m) => m && m.id !== id),
+        schedules: (prev.schedules || []).filter(
+          (s) => !(s && s.relatedType === 'supervisor' && s.relatedId === id)
+        ),
+      };
+    });
+  }, []);
 
   const handleUpdateMentorCaseBinding = (mentorId: string, caseId: string | string[], bind?: boolean) => {
     setSystemData((prev) => ({
@@ -509,19 +656,34 @@ export default function App() {
     }));
   };
 
-  const handleDeleteSupervisionRecord = (mentorId: string, recordId: string) => {
+  const handleDeleteSupervisionRecord = useCallback((mentorId: string, recordId: string) => {
+    if (!mentorId || !recordId || typeof mentorId !== 'string' || typeof recordId !== 'string') return;
+    const key = `suprec_${mentorId}_${recordId}`;
+    const now = Date.now();
+    if (deleteDebounceRef.current[key] && now - deleteDebounceRef.current[key] < 300) return;
+    deleteDebounceRef.current[key] = now;
+
     hasUserMutatedInSessionRef.current = true;
-    setSystemData((prev) => ({
-      ...prev,
-      mentors: prev.mentors.map((m) => {
-        if (m.id !== mentorId) return m;
-        return {
-          ...m,
-          records: m.records.filter((r) => r.id !== recordId),
-        };
-      }),
-    }));
-  };
+    setSystemData((prev) => {
+      const mentors = prev.mentors || [];
+      const targetMentor = mentors.find((m) => m && m.id === mentorId);
+      if (!targetMentor || !Array.isArray(targetMentor.records)) return prev;
+
+      const recordExists = targetMentor.records.some((r) => r && r.id === recordId);
+      if (!recordExists) return prev;
+
+      return {
+        ...prev,
+        mentors: mentors.map((m) => {
+          if (!m || m.id !== mentorId) return m;
+          return {
+            ...m,
+            records: (m.records || []).filter((r) => r && r.id !== recordId),
+          };
+        }),
+      };
+    });
+  }, []);
 
   const handleUpdateSupervisionRecord = (
     mentorId: string,
@@ -554,13 +716,25 @@ export default function App() {
     }));
   };
 
-  const handleDeleteThinkingNote = (id: string) => {
+  const handleDeleteThinkingNote = useCallback((id: string) => {
+    if (!id || typeof id !== 'string') return;
+    const key = `thinking_${id}`;
+    const now = Date.now();
+    if (deleteDebounceRef.current[key] && now - deleteDebounceRef.current[key] < 300) return;
+    deleteDebounceRef.current[key] = now;
+
     hasUserMutatedInSessionRef.current = true;
-    setSystemData((prev) => ({
-      ...prev,
-      thinking: prev.thinking.filter((t) => t.id !== id),
-    }));
-  };
+    setSystemData((prev) => {
+      const thinking = prev.thinking || [];
+      const targetExists = thinking.some((t) => t && t.id === id);
+      if (!targetExists) return prev;
+
+      return {
+        ...prev,
+        thinking: thinking.filter((t) => t && t.id !== id),
+      };
+    });
+  }, []);
 
   const handleTogglePinCase = (id: string) => {
     setSystemData((prev) => ({
@@ -613,14 +787,25 @@ export default function App() {
     }));
   };
 
-  const handleDeleteSchedule = (id: string) => {
-    if (!id) return;
+  const handleDeleteSchedule = useCallback((id: string) => {
+    if (!id || typeof id !== 'string') return;
+    const key = `sch_${id}`;
+    const now = Date.now();
+    if (deleteDebounceRef.current[key] && now - deleteDebounceRef.current[key] < 300) return;
+    deleteDebounceRef.current[key] = now;
+
     hasUserMutatedInSessionRef.current = true;
-    setSystemData((prev) => ({
-      ...prev,
-      schedules: (prev.schedules || []).filter((s) => s && typeof s === 'object' && s.id && s.id !== id),
-    }));
-  };
+    setSystemData((prev) => {
+      const schedules = prev.schedules || [];
+      const targetExists = schedules.some((s) => s && s.id === id);
+      if (!targetExists) return prev;
+
+      return {
+        ...prev,
+        schedules: schedules.filter((s) => s && s.id !== id),
+      };
+    });
+  }, []);
 
   const handleReorderSchedules = (newSchedules: ScheduleItem[]) => {
     setSystemData((prev) => ({
@@ -659,13 +844,25 @@ export default function App() {
     }));
   };
 
-  const handleDeleteReminder = (id: string) => {
+  const handleDeleteReminder = useCallback((id: string) => {
+    if (!id || typeof id !== 'string') return;
+    const key = `rem_${id}`;
+    const now = Date.now();
+    if (deleteDebounceRef.current[key] && now - deleteDebounceRef.current[key] < 300) return;
+    deleteDebounceRef.current[key] = now;
+
     hasUserMutatedInSessionRef.current = true;
-    setSystemData((prev) => ({
-      ...prev,
-      reminders: (prev.reminders || []).filter((r) => r.id !== id),
-    }));
-  };
+    setSystemData((prev) => {
+      const reminders = prev.reminders || [];
+      const targetExists = reminders.some((r) => r && r.id === id);
+      if (!targetExists) return prev;
+
+      return {
+        ...prev,
+        reminders: reminders.filter((r) => r && r.id !== id),
+      };
+    });
+  }, []);
 
   const handleAddCredential = (cred: Omit<CounselorCredential, 'id'>) => {
     hasUserMutatedInSessionRef.current = true;
@@ -687,13 +884,25 @@ export default function App() {
     }));
   };
 
-  const handleDeleteCredential = (id: string) => {
+  const handleDeleteCredential = useCallback((id: string) => {
+    if (!id || typeof id !== 'string') return;
+    const key = `cred_${id}`;
+    const now = Date.now();
+    if (deleteDebounceRef.current[key] && now - deleteDebounceRef.current[key] < 300) return;
+    deleteDebounceRef.current[key] = now;
+
     hasUserMutatedInSessionRef.current = true;
-    setSystemData((prev) => ({
-      ...prev,
-      credentials: (prev.credentials || []).filter((c) => c.id !== id),
-    }));
-  };
+    setSystemData((prev) => {
+      const credentials = prev.credentials || [];
+      const targetExists = credentials.some((c) => c && c.id === id);
+      if (!targetExists) return prev;
+
+      return {
+        ...prev,
+        credentials: credentials.filter((c) => c && c.id !== id),
+      };
+    });
+  }, []);
 
   if (!currentUser) {
     return <AuthPortal onLoginSuccess={handleLoginSuccess} isDarkMode={isDarkMode} onToggleTheme={toggleDarkMode} />;
@@ -726,7 +935,12 @@ export default function App() {
         {/* 左侧侧边栏 (集成数据控制、导入导出、提醒中心、隐私说明、后台同步、自定义工作区布局) */}
         <Sidebar
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={(tab) => {
+            setActiveTab(tab);
+            if (deviceInfo.screenWidth < 1024) {
+              setIsMobileMenuOpen(false);
+            }
+          }}
           supervisionTypeFilter={supervisionTypeFilter}
           onSelectSupervisionFilter={setSupervisionTypeFilter}
           personalExperienceFilter={personalExperienceFilter}
