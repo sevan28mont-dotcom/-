@@ -28,6 +28,23 @@ export const ThinkingNotes: React.FC<ThinkingNotesProps> = ({ notes, onAddNote, 
   // 编辑现有笔记状态
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 
+  const deleteLockRef = useRef<Record<string, number>>({});
+
+  const handleDebouncedDeleteNote = (id: string) => {
+    const now = Date.now();
+    if (deleteLockRef.current[id] && now - deleteLockRef.current[id] < 500) {
+      return;
+    }
+    deleteLockRef.current[id] = now;
+    if (editingNoteId === id) {
+      setEditingNoteId(null);
+      setTitle('');
+      setContent('');
+      setTagInput('反思, 督导心得');
+    }
+    onDeleteNote(id);
+  };
+
   // 全屏沉浸撰写与自动保存指示
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
@@ -662,7 +679,7 @@ export const ThinkingNotes: React.FC<ThinkingNotesProps> = ({ notes, onAddNote, 
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      onDeleteNote(note.id);
+                      handleDebouncedDeleteNote(note.id);
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onTouchStart={(e) => e.stopPropagation()}

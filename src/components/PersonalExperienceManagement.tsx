@@ -246,10 +246,6 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
   };
 
   const handleDeleteTherapistItem = (id: string, name: string, type: 'individual' | 'group') => {
-    const typeLabel = type === 'individual' ? '个人体验师' : '团体体验';
-    if (!window.confirm(`⚠️ 警示：确定要彻底删除【${name}】(${typeLabel}) 及其所有关联的打卡记录、会谈逐字稿与反思笔记吗？\n\n此操作不可撤销，请确认！`)) {
-      return;
-    }
     if (type === 'individual') {
       const updatedIndiv = individualTherapists.filter((t) => t.id !== id);
       const updatedRecords = records.filter((r) => r.therapistId !== id && r.facilitator !== name);
@@ -435,7 +431,6 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
   };
 
   const handleDeleteRecord = (id: string) => {
-    if (!window.confirm('⚠️ 警示：确定要删除此条个人体验记录及其所有的逐字稿、反思和体悟吗？此操作不可恢复！')) return;
     const updatedList = records.filter((r) => r.id !== id);
     onUpdateExperienceData({
       ...experienceData,
@@ -563,13 +558,7 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
   };
 
   const handleApplyBatchDelete = () => {
-    if (batchSelectedNums.length === 0) {
-      alert('请至少勾选选择一个需要批量清空/删除的体验次数！');
-      return;
-    }
-    if (!window.confirm(`确定要批量清空已勾选的 ${batchSelectedNums.length} 项【${batchTargetType === 'individual' ? '个体体验' : '团体体验'}】记录吗？`)) {
-      return;
-    }
+    if (batchSelectedNums.length === 0) return;
 
     const setNums = new Set(batchSelectedNums);
     const updatedRecords = records.filter(
@@ -581,7 +570,6 @@ export const PersonalExperienceManagement: React.FC<PersonalExperienceManagement
       records: updatedRecords,
     });
 
-    alert(`已彻底批量清空 ${batchSelectedNums.length} 项【${batchTargetType === 'individual' ? '个体体验' : '团体体验'}】记录！`);
     setIsBatchModalOpen(false);
     setBatchSelectedNums([]);
   };

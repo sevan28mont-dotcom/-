@@ -205,13 +205,16 @@ export default function App() {
     hasUserMutatedInSessionRef.current = true;
     setSystemData((prev) => ({
       ...prev,
-      records: (prev.records || []).filter((r) => r.id !== id),
+      records: (prev.records || []).filter((r) => r && r.id !== id),
       // 解绑导师关联
-      mentors: (prev.mentors || []).map((m) => ({
-        ...m,
-        boundCaseIds: (m.boundCaseIds || []).filter((cid) => cid !== id),
-        records: (m.records || []).filter((r) => r.caseId !== id),
-      })),
+      mentors: (prev.mentors || []).map((m) => {
+        if (!m) return m;
+        return {
+          ...m,
+          boundCaseIds: (m.boundCaseIds || []).filter((cid) => cid && cid !== id),
+          records: (m.records || []).filter((r) => r && r.caseId !== id),
+        };
+      }),
     }));
   };
 
@@ -344,12 +347,15 @@ export default function App() {
     const idSet = new Set(ids);
     setSystemData((prev) => ({
       ...prev,
-      records: (prev.records || []).filter((r) => !idSet.has(r.id)),
-      mentors: (prev.mentors || []).map((m) => ({
-        ...m,
-        boundCaseIds: (m.boundCaseIds || []).filter((cid) => !idSet.has(cid)),
-        records: (m.records || []).filter((r) => !idSet.has(r.caseId)),
-      })),
+      records: (prev.records || []).filter((r) => r && !idSet.has(r.id)),
+      mentors: (prev.mentors || []).map((m) => {
+        if (!m) return m;
+        return {
+          ...m,
+          boundCaseIds: (m.boundCaseIds || []).filter((cid) => cid && !idSet.has(cid)),
+          records: (m.records || []).filter((r) => r && r.caseId && !idSet.has(r.caseId)),
+        };
+      }),
     }));
   };
 

@@ -104,6 +104,45 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   const [summaryModalCase, setSummaryModalCase] = useState<CaseRecord | null>(null);
   const [showChartsCaseId, setShowChartsCaseId] = useState<string | null>(null);
 
+  // 删除防抖 lock ref
+  const deleteLockRef = React.useRef<Record<string, number>>({});
+
+  const isDeleteDebounced = (key: string = 'global', cooldownMs = 500) => {
+    const now = Date.now();
+    if (deleteLockRef.current[key] && now - deleteLockRef.current[key] < cooldownMs) {
+      return true;
+    }
+    deleteLockRef.current[key] = now;
+    return false;
+  };
+
+  const handleDeleteSingleCase = (item: CaseRecord) => {
+    if (isDeleteDebounced(`case_${item.id}`)) return;
+
+    if (selectedCaseId === item.id) {
+      setSelectedCaseId(null);
+      setSelectedSessionNum(null);
+    }
+    if (selectedParentCaseId === item.id) {
+      setSelectedParentCaseId(null);
+      setSelectedParentSessionNum(null);
+    }
+    if (summaryModalCase?.id === item.id) setSummaryModalCase(null);
+    if (exportingPdfCase?.id === item.id) setExportingPdfCase(null);
+    if (exportingTranscriptSession?.caseRecord?.id === item.id) setExportingTranscriptSession(null);
+    if (showChartsCaseId === item.id) setShowChartsCaseId(null);
+    if (editingTotalCaseId === item.id) setEditingTotalCaseId(null);
+    setSelectedCaseIds((prev) => prev.filter((cid) => cid !== item.id));
+
+    setExpandedParentSection((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
+    setExpandedCaseIds((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
+    setExpandedCaseSessions((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
+    setBatchSessionModes((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
+    setSelectedSessionsMap((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
+
+    onDeleteCase(item.id);
+  };
+
   // 个案模块时数修改 Modal
   const [isEditHoursModalOpen, setIsEditHoursModalOpen] = useState(false);
   const [hoursInputValue, setHoursInputValue] = useState('');
@@ -223,14 +262,35 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
 
   const handleBatchDeleteSelectedCases = () => {
     if (selectedCaseIds.length === 0) return;
-    if (selectedCaseId && selectedCaseIds.includes(selectedCaseId)) {
+    if (isDeleteDebounced('batch_cases_delete')) return;
+    const idsSet = new Set(selectedCaseIds);
+
+    if (selectedCaseId && idsSet.has(selectedCaseId)) {
       setSelectedCaseId(null);
       setSelectedSessionNum(null);
     }
-    if (summaryModalCase && selectedCaseIds.includes(summaryModalCase.id)) setSummaryModalCase(null);
-    if (exportingPdfCase && selectedCaseIds.includes(exportingPdfCase.id)) setExportingPdfCase(null);
-    if (showChartsCaseId && selectedCaseIds.includes(showChartsCaseId)) setShowChartsCaseId(null);
-    if (editingTotalCaseId && selectedCaseIds.includes(editingTotalCaseId)) setEditingTotalCaseId(null);
+    if (selectedParentCaseId && idsSet.has(selectedParentCaseId)) {
+      setSelectedParentCaseId(null);
+      setSelectedParentSessionNum(null);
+    }
+    if (summaryModalCase && idsSet.has(summaryModalCase.id)) setSummaryModalCase(null);
+    if (exportingPdfCase && idsSet.has(exportingPdfCase.id)) setExportingPdfCase(null);
+    if (exportingTranscriptSession && idsSet.has(exportingTranscriptSession.caseRecord.id)) setExportingTranscriptSession(null);
+    if (showChartsCaseId && idsSet.has(showChartsCaseId)) setShowChartsCaseId(null);
+    if (editingTotalCaseId && idsSet.has(editingTotalCaseId)) setEditingTotalCaseId(null);
+
+    // 清理删除个案关联的本地映射状态
+    const cleanupMap = <T,>(prevMap: Record<string, T>): Record<string, T> => {
+      const next = { ...prevMap };
+      selectedCaseIds.forEach((id) => delete next[id]);
+      return next;
+    };
+    setExpandedParentSection(cleanupMap);
+    setExpandedCaseIds(cleanupMap);
+    setExpandedCaseSessions(cleanupMap);
+    setBatchSessionModes(cleanupMap);
+    setSelectedSessionsMap(cleanupMap);
+
     if (onBatchDeleteCases) {
       onBatchDeleteCases(selectedCaseIds);
     } else {
@@ -242,14 +302,35 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   const handleDeleteAllCasesInView = () => {
     const allIds = categoryRecords.map((r) => r.id);
     if (allIds.length === 0) return;
-    if (selectedCaseId && allIds.includes(selectedCaseId)) {
+    if (isDeleteDebounced('delete_all_cases_view')) return;
+    const idsSet = new Set(allIds);
+
+    if (selectedCaseId && idsSet.has(selectedCaseId)) {
       setSelectedCaseId(null);
       setSelectedSessionNum(null);
     }
-    if (summaryModalCase && allIds.includes(summaryModalCase.id)) setSummaryModalCase(null);
-    if (exportingPdfCase && allIds.includes(exportingPdfCase.id)) setExportingPdfCase(null);
-    if (showChartsCaseId && allIds.includes(showChartsCaseId)) setShowChartsCaseId(null);
-    if (editingTotalCaseId && allIds.includes(editingTotalCaseId)) setEditingTotalCaseId(null);
+    if (selectedParentCaseId && idsSet.has(selectedParentCaseId)) {
+      setSelectedParentCaseId(null);
+      setSelectedParentSessionNum(null);
+    }
+    if (summaryModalCase && idsSet.has(summaryModalCase.id)) setSummaryModalCase(null);
+    if (exportingPdfCase && idsSet.has(exportingPdfCase.id)) setExportingPdfCase(null);
+    if (exportingTranscriptSession && idsSet.has(exportingTranscriptSession.caseRecord.id)) setExportingTranscriptSession(null);
+    if (showChartsCaseId && idsSet.has(showChartsCaseId)) setShowChartsCaseId(null);
+    if (editingTotalCaseId && idsSet.has(editingTotalCaseId)) setEditingTotalCaseId(null);
+
+    // 清理删除个案关联的本地映射状态
+    const cleanupMap = <T,>(prevMap: Record<string, T>): Record<string, T> => {
+      const next = { ...prevMap };
+      allIds.forEach((id) => delete next[id]);
+      return next;
+    };
+    setExpandedParentSection(cleanupMap);
+    setExpandedCaseIds(cleanupMap);
+    setExpandedCaseSessions(cleanupMap);
+    setBatchSessionModes(cleanupMap);
+    setSelectedSessionsMap(cleanupMap);
+
     if (onBatchDeleteCases) {
       onBatchDeleteCases(allIds);
     } else {
@@ -267,7 +348,8 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
     }
   }, [statusFilter]);
 
-  const categoryRecords = records.filter((r) => {
+  const categoryRecords = (records || []).filter((r) => {
+    if (!r) return false;
     if (r.category !== category) return false;
     if (category === 'shortTerm' && shortTermSubtypeFilter !== 'all') {
       if (shortTermSubtypeFilter === 'personal') {
@@ -281,6 +363,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   });
 
   const statusFilteredRecords = categoryRecords.filter((item) => {
+    if (!item) return false;
     if (category === 'shortTerm') {
       // 短程个案（个人短程案例/医院机构短程案例）不设“正在进行”与“已结案”隐形卡顿限制，全部直接自由建立与呈现
       return true;
@@ -441,13 +524,20 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
     if (exportingPdfCase && !records.some((r) => r && r.id === exportingPdfCase.id)) {
       setExportingPdfCase(null);
     }
+    if (exportingTranscriptSession && !records.some((r) => r && r.id === exportingTranscriptSession.caseRecord.id)) {
+      setExportingTranscriptSession(null);
+    }
     if (showChartsCaseId && !records.some((r) => r && r.id === showChartsCaseId)) {
       setShowChartsCaseId(null);
     }
     if (editingTotalCaseId && !records.some((r) => r && r.id === editingTotalCaseId)) {
       setEditingTotalCaseId(null);
     }
-  }, [records, selectedCaseId, summaryModalCase, exportingPdfCase, showChartsCaseId, editingTotalCaseId]);
+    if (selectedParentCaseId && !records.some((r) => r && r.id === selectedParentCaseId)) {
+      setSelectedParentCaseId(null);
+      setSelectedParentSessionNum(null);
+    }
+  }, [records, selectedCaseId, summaryModalCase, exportingPdfCase, exportingTranscriptSession, showChartsCaseId, editingTotalCaseId, selectedParentCaseId]);
 
   const activeRecords = sortedRecords.filter((item) => item && (item.status === 'active' || !item.status));
   const endedRecords = sortedRecords.filter((item) => item && item.status === 'ended');
@@ -775,13 +865,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                if (selectedCaseId === item.id) setSelectedCaseId(null);
-                if (summaryModalCase?.id === item.id) setSummaryModalCase(null);
-                if (exportingPdfCase?.id === item.id) setExportingPdfCase(null);
-                if (showChartsCaseId === item.id) setShowChartsCaseId(null);
-                if (editingTotalCaseId === item.id) setEditingTotalCaseId(null);
-                setSelectedCaseIds((prev) => prev.filter((cid) => cid !== item.id));
-                onDeleteCase(item.id);
+                handleDeleteSingleCase(item);
               }}
               onMouseDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
@@ -853,9 +937,8 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      if (window.confirm('确定要清空当前个案的所有父母访谈记录吗？此操作不可撤销！')) {
-                        onUpdateParentSessionNote?.(item.id, -1, null);
-                      }
+                      if (isDeleteDebounced(`parent_clear_all_${item.id}`)) return;
+                      onUpdateParentSessionNote?.(item.id, -1, null);
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onTouchStart={(e) => e.stopPropagation()}
@@ -915,9 +998,8 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
-                          if (window.confirm(`确定要删除第 ${pNum} 次父母访谈记录吗？`)) {
-                            onUpdateParentSessionNote?.(item.id, pNum, null);
-                          }
+                          if (isDeleteDebounced(`parent_single_${item.id}_${pNum}`)) return;
+                          onUpdateParentSessionNote?.(item.id, pNum, null);
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
                         onTouchStart={(e) => e.stopPropagation()}
@@ -1123,7 +1205,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
               <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-15 gap-2">
                 {Array.from({ length: item.totalSessions }, (_, idx) => {
                   const sessionNum = idx + 1;
-                  const sessionData = item.sessions[sessionNum] || { completed: false, note: '' };
+                  const sessionData = (item.sessions || {})[sessionNum] || { completed: false, note: '' };
 
                   const hasNote = Boolean(sessionData.note && sessionData.note.trim());
                   const hasTranscript = Boolean(sessionData.transcript && sessionData.transcript.trim());
@@ -1400,21 +1482,23 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
     }
   };
 
-  const currentCase = records.find((r) => r.id === selectedCaseId);
+  const currentCase = (records || []).find((r) => r && r.id === selectedCaseId);
+  const currentParentCase = (records || []).find((r) => r && r.id === selectedParentCaseId);
 
   // 计算当前视图筛选下的自动累计时数 (只要新建/设置了总额度，就计入总数)
   const autoCompletedHours = statusFilteredRecords.reduce((acc, rec) => {
+    if (!rec) return acc;
     let recordedSessCount = 0;
     if (rec.sessions) {
       Object.values(rec.sessions).forEach((s: any) => {
-        if (s.completed || (s.note && s.note.trim()) || (s.transcript && s.transcript.trim()) || (s.ideas && s.ideas.length > 0) || (s.resources && s.resources.length > 0)) {
+        if (s && (s.completed || (s.note && s.note.trim()) || (s.transcript && s.transcript.trim()) || (s.ideas && s.ideas.length > 0) || (s.resources && s.resources.length > 0))) {
           recordedSessCount++;
         }
       });
     }
     let parentCount = 0;
     if (rec.parentSessions) {
-      parentCount = Object.values(rec.parentSessions).filter((p: any) => p.completed !== false && (p.date || (p.note && p.note.trim()))).length;
+      parentCount = Object.values(rec.parentSessions).filter((p: any) => p && p.completed !== false && (p.date || (p.note && p.note.trim()))).length;
     }
     const eff = Math.max(rec.totalSessions || 0, recordedSessCount) + parentCount;
     return acc + eff;
@@ -2120,6 +2204,9 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  if (selectedCaseId && selectedSessionNum !== null) {
+                    if (isDeleteDebounced(`session_clear_modal_${selectedCaseId}_${selectedSessionNum}`)) return;
+                  }
                   setModalNote('');
                   setModalTranscript('');
                   setModalIdeas([]);
@@ -2187,7 +2274,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
       )}
 
       {/* 导出单次会谈逐字稿 PDF Modal */}
-      {exportingTranscriptSession && (
+      {exportingTranscriptSession && records.some((r) => r && r.id === exportingTranscriptSession.caseRecord.id) && (
         <ExportTranscriptPdfModal
           caseRecord={exportingTranscriptSession.caseRecord}
           sessionNum={exportingTranscriptSession.sessionNum}
@@ -2197,7 +2284,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
       )}
 
       {/* Gemini AI 咨询进度摘要 Modal */}
-      {summaryModalCase && (
+      {summaryModalCase && records.some((r) => r && r.id === summaryModalCase.id) && (
         <AiCaseSummaryModal
           caseRecord={summaryModalCase}
           mentors={mentors}
@@ -2207,7 +2294,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
       )}
 
       {/* 父母访谈 (Parent Session) 专属全功能档案 Modal */}
-      {selectedParentCaseId && selectedParentSessionNum !== null && (
+      {selectedParentCaseId && selectedParentSessionNum !== null && currentParentCase && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-800 rounded-2xl p-6 max-w-2xl w-full shadow-xl max-h-[90vh] flex flex-col">
             {/* Modal Header */}
@@ -2394,12 +2481,13 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  if (window.confirm('确定要删除此父母访谈记录吗？')) {
-                    if (onUpdateParentSessionNote && selectedParentCaseId && selectedParentSessionNum !== null) {
-                      onUpdateParentSessionNote(selectedParentCaseId, selectedParentSessionNum, null);
-                    }
-                    closeParentSessionModal();
+                  if (selectedParentCaseId && selectedParentSessionNum !== null) {
+                    if (isDeleteDebounced(`parent_modal_${selectedParentCaseId}_${selectedParentSessionNum}`)) return;
                   }
+                  if (onUpdateParentSessionNote && selectedParentCaseId && selectedParentSessionNum !== null) {
+                    onUpdateParentSessionNote(selectedParentCaseId, selectedParentSessionNum, null);
+                  }
+                  closeParentSessionModal();
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
