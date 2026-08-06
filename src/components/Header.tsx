@@ -644,30 +644,38 @@ export const Header: React.FC<HeaderProps> = ({
         {/* 当前登录用户身份标识卡片 */}
         {currentUser && (() => {
           const isPhoto = currentUser.avatar && (currentUser.avatar.startsWith('data:') || currentUser.avatar.startsWith('http') || currentUser.avatar.startsWith('https'));
-          const displayName = currentUser.username || currentUser.name;
+          const displayName = currentUser.username || currentUser.name || currentUser.email || '未命名账号';
+          const shortName = displayName.includes('@') ? displayName.split('@')[0] : displayName;
           return (
-            <div className="flex items-center gap-2 bg-rose-50/80 dark:bg-slate-800/90 border border-rose-200 dark:border-slate-700 pl-2 pr-1.5 py-1 rounded-2xl shadow-2xs ml-1">
+            <div
+              onClick={onOpenSyncModal}
+              className="flex items-center gap-1.5 bg-rose-50/80 dark:bg-slate-800/90 border border-rose-200 dark:border-slate-700 pl-2 pr-1.5 py-1 rounded-2xl shadow-2xs ml-1 cursor-pointer hover:bg-rose-100 dark:hover:bg-slate-700 transition"
+              title="点击查看/切换当前多设备登录账号与云端同步"
+            >
               {isPhoto ? (
                 <img
                   src={currentUser.avatar}
                   alt={displayName}
-                  className="w-7 h-7 rounded-full object-cover border border-rose-300 dark:border-rose-500 shadow-2xs"
+                  className="w-7 h-7 rounded-full object-cover border border-rose-300 dark:border-rose-500 shadow-2xs shrink-0"
                 />
               ) : (
-                <span className="text-base select-none">{currentUser.avatar || '🩺'}</span>
+                <span className="text-base select-none shrink-0">{currentUser.avatar || '🩺'}</span>
               )}
-              <div className="text-left hidden sm:block">
-                <div className="text-xs font-bold text-zinc-800 dark:text-slate-100 flex items-center gap-1 leading-tight">
-                  <span>{displayName}</span>
+              <div className="text-left max-w-[100px] sm:max-w-[140px] truncate">
+                <div className="text-[11px] sm:text-xs font-bold text-zinc-800 dark:text-slate-100 truncate leading-tight">
+                  {shortName}
                 </div>
-                <div className="text-[10px] text-rose-800 dark:text-rose-300 font-medium leading-tight">
-                  {currentUser.title || '心理咨询师'}
+                <div className="text-[9px] sm:text-[10px] text-rose-800 dark:text-rose-300 font-medium leading-tight truncate">
+                  {currentUser.email ? currentUser.email : (currentUser.title || '心理咨询师')}
                 </div>
               </div>
               {onLogout && (
                 <button
-                  onClick={onLogout}
-                  className="ml-1 p-1.5 text-zinc-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition cursor-pointer border border-transparent hover:border-rose-200 dark:hover:border-slate-600"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onLogout();
+                  }}
+                  className="ml-0.5 p-1 text-zinc-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition cursor-pointer border border-transparent hover:border-rose-200 dark:hover:border-slate-600 shrink-0"
                   title="退出当前登录账号"
                 >
                   <LogOut className="w-3.5 h-3.5" />

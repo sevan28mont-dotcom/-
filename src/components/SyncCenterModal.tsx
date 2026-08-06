@@ -23,8 +23,17 @@ import {
   ArrowUp,
   Download,
   Upload,
+  User,
+  Smartphone,
+  Monitor,
+  Globe,
+  Mail,
+  Link,
+  ShieldCheck,
 } from 'lucide-react';
 import { SystemData, CaseRecord, Supervisor, ThinkingNote } from '../types';
+import { getCurrentUser, generateCanonicalUserId, saveAccounts, getStoredAccounts, UserAccount } from '../services/auth';
+import { saveDataToBackend, saveDataToLocalStorage } from '../services/storage';
 
 export interface ConflictItem {
   id: string;
@@ -53,18 +62,6 @@ export interface SyncCenterModalProps {
   setHasConflict: (val: boolean) => void;
 }
 
-export interface ConflictItem {
-  id: string;
-  type: 'record' | 'mentor' | 'thinking';
-  title: string;
-  field: string;
-  localTime: string;
-  remoteTime: string;
-  localValue: string;
-  remoteValue: string;
-  recommended: 'local' | 'remote' | 'merge';
-}
-
 export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
   isOpen,
   onClose,
@@ -90,6 +87,68 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
 
   // Specific per-item resolution choices
   const [decisions, setDecisions] = useState<Record<string, 'local' | 'remote' | 'merge'>>({});
+
+  // 跨端账号诊断与一键对齐绑定状态
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
+  const [targetEmailInput, setTargetEmailInput] = useState('sevan.28mont@gmail.com');
+  const [isBindingAccount, setIsBindingAccount] = useState(false);
+  const [bindMessage, setBindMessage] = useState('');
+
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, [isOpen]);
+
+  const handleBindAndSyncToEmail = async () => {
+    const trimmed = targetEmailInput.trim().toLowerCase();
+    if (!trimmed || (!trimmed.includes('@') && trimmed.length < 3)) {
+      setBindMessage('❌ 请输入有效的跨端同步主电子邮箱（如: sevan.28mont@gmail.com）');
+      return;
+    }
+
+    setIsBindingAccount(true);
+    setBindMessage('⌛ 正在将本地档案同步并发往目标邮箱云端存储...');
+
+    try {
+      const canonicalId = generateCanonicalUserId(trimmed);
+      const accounts = getStoredAccounts();
+      const existing = accounts.find((a) => a.id === canonicalId || a.email?.toLowerCase() === trimmed);
+
+      const updatedUser: UserAccount = existing || {
+        id: canonicalId,
+        email: trimmed,
+        username: trimmed.split('@')[0] || trimmed,
+        name: trimmed,
+        title: '心理咨询师',
+        avatar: '🩺',
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+
+      // 1. 设置为当前设备的登录账号
+      if (typeof window !== 'undefined') {
+        const jsonStr = JSON.stringify(updatedUser);
+        localStorage.setItem('psy_current_user_v1', jsonStr);
+        localStorage.setItem('psy_current_user_backup', jsonStr);
+      }
+
+      // 2. 将全量本地数据绑定发送至后端云端存储
+      const res = await saveDataToBackend(systemData, canonicalId);
+      saveDataToLocalStorage(systemData, canonicalId);
+
+      setCurrentUser(updatedUser);
+      setIsBindingAccount(false);
+
+      if (res.success) {
+        setBindMessage(`✅ 绑定上云成功！当前设备已与 ${trimmed} 对齐。在 Pad、IE 及手机端登录相同邮箱即可 100% 跨端同步。`);
+        setLastSyncTime(`☁️ 已对齐主账号 ${trimmed} (${res.timestamp})`);
+      } else {
+        setBindMessage('⚠️ 本地已绑定该邮箱账号，但网络推送到云端出现滞后，请保持联网。');
+      }
+    } catch (err) {
+      console.error('Account bind error:', err);
+      setIsBindingAccount(false);
+      setBindMessage('❌ 绑定对齐过程出现未知错误，请重试');
+    }
+  };
 
   const localVersion = systemData.versioning || 1;
   const remoteVersion = cloudData?.versioning || localVersion;
@@ -318,6 +377,88 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
           {/* TAB 1: SYNCHRONIZATION CENTER & DETAILED PROGRESS BAR */}
           {activeTab === 'center' && (
             <div className="space-y-5">
+              {/* 跨端多设备账号一致性诊断面板 */}
+              <div className="p-4 bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 dark:from-amber-950/40 dark:via-slate-850 dark:to-rose-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl space-y-3 shadow-2xs">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-amber-500 text-white rounded-xl shrink-0 mt-0.5 shadow-sm">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <h4 className="font-extrabold text-amber-900 dark:text-amber-200 text-sm flex items-center gap-1.5">
+                        <span>🔍 跨端多设备账号对齐与智能诊断</span>
+                        <span className="px-2 py-0.2 bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 text-[10px] rounded-full font-bold">
+                          四端对齐控制
+                        </span>
+                      </h4>
+                    </div>
+
+                    <p className="text-amber-800 dark:text-amber-300 text-xs leading-relaxed">
+                      💡 <strong>为什么电脑端、IE、Pad 和手机端显示的内容不一样？</strong><br />
+                      系统采用严格的<strong>账号级数据隔离保护</strong>：
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                      <div className="p-2 bg-white/80 dark:bg-slate-900/80 rounded-xl border border-amber-200 dark:border-amber-800/60 flex items-center gap-2">
+                        <Monitor className="w-4 h-4 text-amber-600 shrink-0" />
+                        <div>
+                          <span className="text-zinc-400 block text-[9px]">当前设备 (谷歌电脑端)</span>
+                          <span className="font-bold text-zinc-800 dark:text-slate-100">
+                            {currentUser?.username || currentUser?.name || '张咨询师'} ({currentUser?.id})
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-2 bg-white/80 dark:bg-slate-900/80 rounded-xl border border-amber-200 dark:border-amber-800/60 flex items-center gap-2">
+                        <Smartphone className="w-4 h-4 text-blue-600 shrink-0" />
+                        <div>
+                          <span className="text-zinc-400 block text-[9px]">IE / Pad / 手机端登录</span>
+                          <span className="font-bold text-zinc-800 dark:text-slate-100">
+                            邮箱账号 (如 sevan.28mont@gmail.com)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-amber-800 dark:text-amber-300 pt-1">
+                      只需在下方输入您的主邮箱账号并点击【一键把本地数据推送到主邮箱云端】，当前电脑端的数据将立刻绑定并在 IE、Pad 和手机上全端实时同步！
+                    </p>
+                  </div>
+                </div>
+
+                {/* 一键绑定/切账号框 */}
+                <div className="pt-2 border-t border-amber-200/80 dark:border-amber-800/60 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <div className="relative flex-1">
+                    <Mail className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
+                    <input
+                      type="email"
+                      placeholder="输入您的跨端主邮箱 (例: sevan.28mont@gmail.com)"
+                      value={targetEmailInput}
+                      onChange={(e) => setTargetEmailInput(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-900 border border-amber-300 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs"
+                    />
+                  </div>
+                  <button
+                    onClick={handleBindAndSyncToEmail}
+                    disabled={isBindingAccount}
+                    className="px-4 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-extrabold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shadow-sm shrink-0 disabled:opacity-50"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>{isBindingAccount ? '正在合并推送到云端...' : '一键将本地数据同步推送至此邮箱账号'}</span>
+                  </button>
+                </div>
+
+                {bindMessage && (
+                  <div className={`p-2.5 rounded-xl font-bold text-xs flex items-center gap-2 ${
+                    bindMessage.startsWith('✅')
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300'
+                      : 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-300'
+                  }`}>
+                    <span>{bindMessage}</span>
+                  </div>
+                )}
+              </div>
+
               {/* Sync Dashboard Status Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3.5 bg-rose-50/70 dark:bg-slate-800/60 border border-rose-200/80 dark:border-slate-700 rounded-2xl space-y-1">
