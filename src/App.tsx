@@ -783,84 +783,96 @@ export default function App() {
             </ErrorBoundary>
 
             {activeTab === 'mentor' && (
-              <SupervisorManagement
-                mentors={systemData.mentors}
-                cases={systemData.records}
-                totalHoursOverrides={systemData.totalHoursOverrides}
-                onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
-                onAddMentor={handleAddMentor}
-                onDeleteMentor={handleDeleteMentor}
-                onUpdateMentor={handleUpdateMentor}
-                onUpdateMentorCaseBinding={handleUpdateMentorCaseBinding}
-                onUpdateMentorTotalSupervisions={handleUpdateMentorTotalSupervisions}
-                onAddSupervisionRecord={handleAddSupervisionRecord}
-                onDeleteSupervisionRecord={handleDeleteSupervisionRecord}
-                onUpdateSupervisionRecord={handleUpdateSupervisionRecord}
-                supervisionTypeFilter={supervisionTypeFilter}
-                onTypeFilterChange={setSupervisionTypeFilter}
-              />
+              <ErrorBoundary fallbackTitle="督导管理模块加载异常">
+                <SupervisorManagement
+                  mentors={systemData.mentors}
+                  cases={systemData.records}
+                  totalHoursOverrides={systemData.totalHoursOverrides}
+                  onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
+                  onAddMentor={handleAddMentor}
+                  onDeleteMentor={handleDeleteMentor}
+                  onUpdateMentor={handleUpdateMentor}
+                  onUpdateMentorCaseBinding={handleUpdateMentorCaseBinding}
+                  onUpdateMentorTotalSupervisions={handleUpdateMentorTotalSupervisions}
+                  onAddSupervisionRecord={handleAddSupervisionRecord}
+                  onDeleteSupervisionRecord={handleDeleteSupervisionRecord}
+                  onUpdateSupervisionRecord={handleUpdateSupervisionRecord}
+                  supervisionTypeFilter={supervisionTypeFilter}
+                  onTypeFilterChange={setSupervisionTypeFilter}
+                />
+              </ErrorBoundary>
             )}
 
             {activeTab === 'personalExperience' && (
-              <PersonalExperienceManagement
-                experienceData={systemData.personalExperience}
-                totalHoursOverrides={systemData.totalHoursOverrides}
-                onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
-                onUpdateExperienceData={(updated) => {
-                  hasUserMutatedInSessionRef.current = true;
-                  setSystemData((prev) => ({
-                    ...prev,
-                    personalExperience: updated,
-                  }));
-                }}
-                experienceTypeFilter={personalExperienceFilter}
-                onTypeFilterChange={setPersonalExperienceFilter}
-              />
+              <ErrorBoundary fallbackTitle="个人体验模块加载异常">
+                <PersonalExperienceManagement
+                  experienceData={systemData.personalExperience}
+                  totalHoursOverrides={systemData.totalHoursOverrides}
+                  onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
+                  onUpdateExperienceData={(updated) => {
+                    hasUserMutatedInSessionRef.current = true;
+                    setSystemData((prev) => ({
+                      ...prev,
+                      personalExperience: updated,
+                    }));
+                  }}
+                  experienceTypeFilter={personalExperienceFilter}
+                  onTypeFilterChange={setPersonalExperienceFilter}
+                />
+              </ErrorBoundary>
             )}
 
             {(activeTab === 'training' || activeTab === 'trainingPsychodynamics' || activeTab === 'trainingLongShort' || activeTab === 'trainingOtherSchools' || activeTab === 'trainingEthicsCrisis') && (
-              <TrainingManagement
-                trainings={systemData.trainings || []}
-                onUpdateTrainings={(updatedTrainings) => {
-                  hasUserMutatedInSessionRef.current = true;
-                  setSystemData((prev) => ({
-                    ...prev,
-                    trainings: updatedTrainings,
-                  }));
-                }}
-                trainingTypeFilter={trainingTypeFilter}
-                onTypeFilterChange={setTrainingTypeFilter}
-              />
+              <ErrorBoundary fallbackTitle="培训经历模块加载异常">
+                <TrainingManagement
+                  trainings={systemData.trainings || []}
+                  onUpdateTrainings={(updatedTrainings) => {
+                    hasUserMutatedInSessionRef.current = true;
+                    setSystemData((prev) => ({
+                      ...prev,
+                      trainings: updatedTrainings,
+                    }));
+                  }}
+                  trainingTypeFilter={trainingTypeFilter}
+                  onTypeFilterChange={setTrainingTypeFilter}
+                />
+              </ErrorBoundary>
             )}
 
             {activeTab === 'credentials' && (
-              <CredentialManagement
-                credentials={systemData.credentials || []}
-                onAddCredential={handleAddCredential}
-                onUpdateCredential={handleUpdateCredential}
-                onDeleteCredential={handleDeleteCredential}
-              />
+              <ErrorBoundary fallbackTitle="资质证书模块加载异常">
+                <CredentialManagement
+                  credentials={systemData.credentials || []}
+                  onAddCredential={handleAddCredential}
+                  onUpdateCredential={handleUpdateCredential}
+                  onDeleteCredential={handleDeleteCredential}
+                />
+              </ErrorBoundary>
             )}
 
             {activeTab === 'thinking' && (
-              <ThinkingNotes
-                notes={systemData.thinking}
-                onAddNote={handleAddThinkingNote}
-                onUpdateNote={handleUpdateThinkingNote}
-                onDeleteNote={handleDeleteThinkingNote}
-              />
+              <ErrorBoundary fallbackTitle="反思笔记模块加载异常">
+                <ThinkingNotes
+                  notes={systemData.thinking}
+                  onAddNote={handleAddThinkingNote}
+                  onUpdateNote={handleUpdateThinkingNote}
+                  onDeleteNote={handleDeleteThinkingNote}
+                />
+              </ErrorBoundary>
             )}
 
             {activeTab === 'schedule' && (
-              <ScheduleManagement
-                schedules={systemData.schedules}
-                cases={systemData.records}
-                mentors={systemData.mentors}
-                onAddSchedule={handleAddSchedule}
-                onUpdateSchedule={handleUpdateSchedule}
-                onDeleteSchedule={handleDeleteSchedule}
-                onReorderSchedules={handleReorderSchedules}
-              />
+              <ErrorBoundary fallbackTitle="日程管理模块加载异常">
+                <ScheduleManagement
+                  schedules={systemData.schedules}
+                  cases={systemData.records}
+                  mentors={systemData.mentors}
+                  onAddSchedule={handleAddSchedule}
+                  onUpdateSchedule={handleUpdateSchedule}
+                  onDeleteSchedule={handleDeleteSchedule}
+                  onReorderSchedules={handleReorderSchedules}
+                />
+              </ErrorBoundary>
             )}
           </div>
         </main>

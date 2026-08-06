@@ -24,6 +24,8 @@ export const AiCaseSummaryModal: React.FC<AiCaseSummaryModalProps> = ({
   onClose,
   onSaveToThinkingNotes,
 }) => {
+  if (!caseRecord || !caseRecord.id) return null;
+
   const [loading, setLoading] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<AiProvider>('gemini');

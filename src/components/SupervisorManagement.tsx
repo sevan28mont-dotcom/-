@@ -1825,7 +1825,7 @@ export const SupervisorManagement: React.FC<SupervisorManagementProps> = ({
         if (!targetMentor) return null;
 
         const totalQuota = targetMentor.totalSupervisions || 20;
-        const boundCases = cases.filter((c) => targetMentor.boundCaseIds.includes(c.id));
+        const boundCases = (cases || []).filter((c) => c && (targetMentor.boundCaseIds || []).includes(c.id));
 
         return (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">

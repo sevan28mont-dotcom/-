@@ -253,41 +253,54 @@ ${content}
         return res.status(400).json({ success: false, error: "请输入账号名称" });
       }
 
-      const trimmed = username.trim().toLowerCase();
-      let found = serverDb.accounts.find((a) => a.username.toLowerCase() === trimmed);
+      const trimmed = username.trim();
+      const lowerTrimmed = trimmed.toLowerCase();
 
-      // If user exists on server
+      // Find user by username or name
+      let foundIndex = serverDb.accounts.findIndex(
+        (a) => a.username.toLowerCase() === lowerTrimmed || (a.name && a.name.toLowerCase() === lowerTrimmed)
+      );
+
+      let found = foundIndex !== -1 ? serverDb.accounts[foundIndex] : null;
+
       if (found) {
+        // If account found on server
         if (found.password && password && found.password !== password) {
-          return res.status(401).json({ success: false, error: "密码错误，请核对后重试" });
+          // If server password was default "123456", update to the new password entered by user
+          if (found.password === "123456") {
+            found.password = String(password);
+            serverDb.accounts[foundIndex] = found;
+            saveServerDb();
+            return res.json({ success: true, user: found, message: "已更新密码并完成跨设备登录" });
+          }
+          return res.status(401).json({ success: false, error: "密码错误，请核对密码后重试" });
+        }
+        if (password && !found.password) {
+          found.password = String(password);
+          saveServerDb();
         }
         return res.json({ success: true, user: found });
       }
 
-      // If account not found on server yet, but user supplied a valid username and password (>= 6 chars),
-      // auto-create/sync account seamlessly so login across phone & PC works flawlessly!
-      if (password && String(password).length >= 6) {
-        const newUser: UserAccountServer = {
-          id: "u_" + Date.now(),
-          username: username.trim(),
-          password: String(password),
-          name: username.trim(),
-          title: "心理咨询师",
-          avatar: "🩺",
-          createdAt: new Date().toISOString().split("T")[0],
-        };
-        serverDb.accounts.unshift(newUser);
-        saveServerDb();
-        return res.json({
-          success: true,
-          user: newUser,
-          message: "跨设备账号智能创建并成功登录",
-        });
-      }
+      // If account not found on server yet, auto-create/register user with provided username and password!
+      const userPassword = password ? String(password) : "123456";
+      const newUser: UserAccountServer = {
+        id: "u_" + Date.now(),
+        username: trimmed,
+        password: userPassword,
+        name: trimmed,
+        title: "心理咨询师",
+        avatar: "🩺",
+        createdAt: new Date().toISOString().split("T")[0],
+      };
 
-      return res.status(404).json({
-        success: false,
-        error: "账号不存在，请输入6位以上密码自动注册并登录，或点击“用户注册”",
+      serverDb.accounts.unshift(newUser);
+      saveServerDb();
+
+      return res.json({
+        success: true,
+        user: newUser,
+        message: "跨设备账号智能同步创建并成功登录",
       });
     } catch (err) {
       console.error("Auth login endpoint error:", err);
@@ -301,29 +314,30 @@ ${content}
       const { username, password, title, avatar, name } = req.body;
       const trimmedUser = String(username || "").trim();
 
-      if (!trimmedUser || trimmedUser.length < 2) {
-        return res.status(400).json({ success: false, error: "账号/咨询师姓名至少需要 2 个字符" });
-      }
-      if (!password || String(password).length < 6) {
-        return res.status(400).json({ success: false, error: "密码长度至少需要 6 位" });
+      if (!trimmedUser || trimmedUser.length < 1) {
+        return res.status(400).json({ success: false, error: "请填写正确的账号/咨询师姓名" });
       }
 
+      const userPass = password ? String(password) : "123456";
       const existingIndex = serverDb.accounts.findIndex(
-        (a) => a.username.toLowerCase() === trimmedUser.toLowerCase()
+        (a) => a.username.toLowerCase() === trimmedUser.toLowerCase() || (a.name && a.name.toLowerCase() === trimmedUser.toLowerCase())
       );
 
       if (existingIndex !== -1) {
         const existing = serverDb.accounts[existingIndex];
-        if (existing.password === String(password)) {
-          return res.json({ success: true, user: existing, message: "该账号已注册，已为您直接完成登录" });
-        }
-        return res.status(400).json({ success: false, error: "该账号名称已被注册，请输入已有密码登录" });
+        existing.password = userPass;
+        if (title) existing.title = title;
+        if (avatar) existing.avatar = avatar;
+        if (name) existing.name = name;
+        serverDb.accounts[existingIndex] = existing;
+        saveServerDb();
+        return res.json({ success: true, user: existing, message: "账号信息已自动更新并登录" });
       }
 
       const newUser: UserAccountServer = {
         id: "u_" + Date.now(),
         username: trimmedUser,
-        password: String(password),
+        password: userPass,
         name: name ? String(name).trim() : trimmedUser,
         title: title ? String(title).trim() : "心理咨询师",
         avatar: avatar || "🩺",
@@ -337,6 +351,29 @@ ${content}
     } catch (err) {
       console.error("Auth register endpoint error:", err);
       return res.status(500).json({ success: false, error: "注册服务出现异常" });
+    }
+  });
+
+  // API Route: Sync Account from Client to Server
+  app.post("/api/auth/sync-account", (req, res) => {
+    try {
+      const { user } = req.body;
+      if (!user || !user.username) {
+        return res.status(400).json({ success: false, error: "Invalid user data" });
+      }
+      const trimmed = user.username.trim().toLowerCase();
+      const existingIndex = serverDb.accounts.findIndex(
+        (a) => a.id === user.id || a.username.toLowerCase() === trimmed
+      );
+      if (existingIndex !== -1) {
+        serverDb.accounts[existingIndex] = { ...serverDb.accounts[existingIndex], ...user };
+      } else {
+        serverDb.accounts.unshift(user);
+      }
+      saveServerDb();
+      return res.json({ success: true, message: "Account synced to server" });
+    } catch (err) {
+      return res.status(500).json({ success: false, error: "Account sync failed" });
     }
   });
 

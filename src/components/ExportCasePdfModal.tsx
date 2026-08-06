@@ -35,32 +35,40 @@ export const ExportCasePdfModal: React.FC<ExportCasePdfModalProps> = ({
 
   // 匹配绑定的督导记录
   const linkedSupervisions = React.useMemo(() => {
+    if (!caseRecord || !caseRecord.id) return [];
     const list: { mentorName: string; record: any }[] = [];
-    mentors.forEach((m) => {
-      const isBoundMentor = m.boundCaseIds?.includes(caseRecord.id);
-      m.records?.forEach((rec) => {
+    (mentors || []).forEach((m) => {
+      if (!m) return;
+      const isBoundMentor = (m.boundCaseIds || []).includes(caseRecord.id);
+      (m.records || []).forEach((rec) => {
+        if (!rec) return;
         if (rec.caseId === caseRecord.id || isBoundMentor) {
           list.push({
-            mentorName: m.name,
+            mentorName: m.name || '',
             record: rec,
           });
         }
       });
     });
     return list;
-  }, [mentors, caseRecord.id]);
+  }, [mentors, caseRecord?.id]);
 
   // 匹配关联的思考笔记
   const linkedNotes = React.useMemo(() => {
-    return thinkingNotes.filter((note) => {
-      const q = caseRecord.name.toLowerCase();
-      const numQ = caseRecord.caseNum.toLowerCase();
-      const titleMatch = note.title.toLowerCase().includes(q) || note.title.toLowerCase().includes(numQ);
-      const contentMatch = note.content.toLowerCase().includes(q) || note.content.toLowerCase().includes(numQ);
-      const tagMatch = note.tags?.some((t) => t.toLowerCase().includes(q) || t.toLowerCase().includes(numQ));
+    if (!caseRecord || !caseRecord.id) return [];
+    return (thinkingNotes || []).filter((note) => {
+      if (!note) return false;
+      const q = (caseRecord.name || '').toLowerCase();
+      const numQ = (caseRecord.caseNum || '').toLowerCase();
+      if (!q && !numQ) return false;
+      const titleMatch = Boolean((note.title || '').toLowerCase().includes(q) || (note.title || '').toLowerCase().includes(numQ));
+      const contentMatch = Boolean((note.content || '').toLowerCase().includes(q) || (note.content || '').toLowerCase().includes(numQ));
+      const tagMatch = Boolean(note.tags?.some((t) => t && ((t || '').toLowerCase().includes(q) || (t || '').toLowerCase().includes(numQ))));
       return titleMatch || contentMatch || tagMatch;
     });
-  }, [thinkingNotes, caseRecord.name, caseRecord.caseNum]);
+  }, [thinkingNotes, caseRecord?.name, caseRecord?.caseNum, caseRecord?.id]);
+
+  if (!caseRecord || !caseRecord.id) return null;
 
   // 已完成次数计算
   const completedSessionsCount = React.useMemo(() => {

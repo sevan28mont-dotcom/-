@@ -28,7 +28,7 @@ export const TotalHoursOverview: React.FC<TotalHoursOverviewProps> = ({
   const [activeViewCategory, setActiveViewCategory] = useState<ViewCategory>('all');
 
   // 1. 分解计算各个细分个案的会谈数与时长
-  const allRecords = systemData.records || [];
+  const allRecords = (systemData.records || []).filter(Boolean);
   const longTermRecords = allRecords.filter((r) => r.category === 'longTerm' || !r.category);
   const shortTermRecords = allRecords.filter((r) => r.category === 'shortTerm');
 

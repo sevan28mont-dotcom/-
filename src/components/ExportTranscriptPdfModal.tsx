@@ -25,6 +25,8 @@ export const ExportTranscriptPdfModal: React.FC<ExportTranscriptPdfModalProps> =
   sessionData,
   onClose,
 }) => {
+  if (!caseRecord || !caseRecord.id || !sessionData) return null;
+
   const [copied, setCopied] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 

@@ -66,6 +66,17 @@ export function saveAccounts(accounts: UserAccount[]): void {
     const jsonStr = JSON.stringify(accounts);
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, jsonStr);
     localStorage.setItem('psy_user_accounts_backup', jsonStr);
+
+    // Asynchronously sync accounts to server
+    if (accounts.length > 0) {
+      accounts.forEach((acc) => {
+        fetch('/api/auth/sync-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: acc }),
+        }).catch(() => {});
+      });
+    }
   } catch (err) {
     console.error('Failed to save accounts:', err);
   }
@@ -209,18 +220,37 @@ export function loginUser(
   password: string
 ): { success: boolean; user?: UserAccount; error?: string } {
   const accounts = getStoredAccounts();
-  const trimmed = username.trim().toLowerCase();
+  const trimmed = username.trim();
+  const lowerTrimmed = trimmed.toLowerCase();
   
-  const found = accounts.find(
-    (a) => a.username.toLowerCase() === trimmed
+  let found = accounts.find(
+    (a) => a.username.toLowerCase() === lowerTrimmed || (a.name && a.name.toLowerCase() === lowerTrimmed)
   );
 
   if (!found) {
-    return { success: false, error: '账号不存在，请输入6位以上密码自动创建，或点击“用户注册”' };
+    const userPass = password || '123456';
+    const newUser: UserAccount = {
+      id: 'u_' + Date.now(),
+      username: trimmed,
+      password: userPass,
+      name: trimmed,
+      title: '心理咨询师',
+      avatar: '🩺',
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    saveAccounts([newUser, ...accounts]);
+    setCurrentUserSession(newUser);
+    return { success: true, user: newUser };
   }
 
-  if (found.password && found.password !== password) {
-    return { success: false, error: '密码错误，演示账号密码为 123456' };
+  if (found.password && password && found.password !== password) {
+    if (found.password === '123456') {
+      found.password = password;
+      saveAccounts(accounts);
+      setCurrentUserSession(found);
+      return { success: true, user: found };
+    }
+    return { success: false, error: '密码错误，请核对密码后重试' };
   }
 
   setCurrentUserSession(found);
