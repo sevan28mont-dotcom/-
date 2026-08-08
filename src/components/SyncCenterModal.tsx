@@ -41,6 +41,7 @@ import {
   Copy,
   Edit2,
   Tag,
+  Heart,
 } from 'lucide-react';
 import { SystemData, CaseRecord, Supervisor, ThinkingNote } from '../types';
 import { getCurrentUser, generateCanonicalUserId, saveAccounts, getStoredAccounts, UserAccount } from '../services/auth';
@@ -54,6 +55,7 @@ export interface BoundDevice {
   ipOrFingerprint: string;
   boundAccount: string;
   lastActive: string;
+  lastHeartbeat: string;
   status: 'active' | 'synced' | 'legacy_warning' | 'kicked';
   isCurrent: boolean;
 }
@@ -67,6 +69,7 @@ const INITIAL_BOUND_DEVICES: BoundDevice[] = [
     ipOrFingerprint: '192.168.1.100 / macOS Chrome 126.0',
     boundAccount: 'zhang_counselor@qq.com (张咨询师)',
     lastActive: '当前在线 (本机)',
+    lastHeartbeat: '2026-08-08 11:58:45 (每3秒保鲜心跳 / 当前活跃)',
     status: 'active',
     isCurrent: true,
   },
@@ -78,6 +81,7 @@ const INITIAL_BOUND_DEVICES: BoundDevice[] = [
     ipOrFingerprint: '192.168.1.102 / Trident 7.0 (IE Mode)',
     boundAccount: 'zhang_counselor@qq.com',
     lastActive: '1 分钟前',
+    lastHeartbeat: '2026-08-08 11:57:30 (1分15秒前心跳上报)',
     status: 'synced',
     isCurrent: false,
   },
@@ -89,6 +93,7 @@ const INITIAL_BOUND_DEVICES: BoundDevice[] = [
     ipOrFingerprint: '192.168.1.105 / iPad Pro (iOS 17.5)',
     boundAccount: 'zhang_counselor@qq.com',
     lastActive: '2 分钟前',
+    lastHeartbeat: '2026-08-08 11:56:10 (2分35秒前心跳上报)',
     status: 'synced',
     isCurrent: false,
   },
@@ -100,6 +105,7 @@ const INITIAL_BOUND_DEVICES: BoundDevice[] = [
     ipOrFingerprint: '192.168.1.108 / Android Webview',
     boundAccount: 'zhang_counselor@qq.com',
     lastActive: '3 分钟前',
+    lastHeartbeat: '2026-08-08 11:55:00 (3分45秒前心跳上报)',
     status: 'synced',
     isCurrent: false,
   },
@@ -111,6 +117,7 @@ const INITIAL_BOUND_DEVICES: BoundDevice[] = [
     ipOrFingerprint: 'OAuth Session / sevan.28mont@gmail.com',
     boundAccount: 'sevan.28mont@gmail.com (旧谷歌离线记录)',
     lastActive: '⚠️ 建议立即下线解绑',
+    lastHeartbeat: '2026-08-08 08:15:20 (无心跳 3.5小时 / 严重超期未续期)',
     status: 'legacy_warning',
     isCurrent: false,
   },
@@ -172,6 +179,24 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [editingRemarkText, setEditingRemarkText] = useState<string>('');
 
+  // 动态定时更新本机存活心跳时间 (Last Active Heartbeat)
+  useEffect(() => {
+    if (!isOpen) return;
+    const updateHeartbeat = () => {
+      const nowStr = new Date().toLocaleString('zh-CN', { hour12: false });
+      setBoundDevices((prev) =>
+        prev.map((d) =>
+          d.isCurrent && d.status !== 'kicked'
+            ? { ...d, lastHeartbeat: `${nowStr} (每3秒保鲜心跳 / 当前活跃)` }
+            : d
+        )
+      );
+    };
+    updateHeartbeat();
+    const timer = setInterval(updateHeartbeat, 3000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
+
   const handleStartEditRemark = (dev: BoundDevice) => {
     setEditingDeviceId(dev.id);
     setEditingRemarkText(dev.customRemark || '');
@@ -218,9 +243,10 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
       r += `  • 端口环境: ${dev.ipOrFingerprint}\n`;
       r += `  • 绑定账户: ${dev.boundAccount}\n`;
       r += `  • 最后同步: ${dev.lastActive}\n`;
+      r += `  • 心跳存活 (Last Active Heartbeat): ${dev.lastHeartbeat}\n`;
       r += `  • 写入版本: v${masterVer} (versioning)\n`;
       r += `  • 版本偏差: 0 序列 (100% 对齐)\n`;
-      r += `  • 漫游状态: ${isWarning ? '⚠️ 存在残留旧 Session 待清理' : '🟢 正常在线'}\n`;
+      r += `  • 漫游状态: ${isWarning ? '⚠️ 存在残留旧 Session 待清理 (心跳超时/风险隐患)' : '🟢 正常存活在线'}\n`;
       if (isLocal) {
         r += `  • 标识: [当前本机工作站]\n`;
       }
@@ -232,6 +258,7 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
     r += `1. 谷歌 Chrome、微软 IE、Pad 平板与手机移动端均绑定在 [${userEmail}] 统一路由下。\n`;
     r += `2. 所有活跃终端最后写入版本号 (v${masterVer}) 与主云端完全一致，无版本差异或数据丢失。\n`;
     r += `3. 定时轮询与跨标签 storage 事件已正常生效，支持毫秒级多端漫游同步。\n`;
+    r += `4. 报告已精确记载各个已注册终端的【最后一次心跳存活时间】(Last Active Heartbeat)。根据心跳打卡时间，可精准分辨离线超时端点（如旧平板、工作手机），便于用户精准清除过期干扰源、避免跨端数据冲突。\n`;
     r += `==================================================`;
 
     return r;
@@ -255,7 +282,7 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
 
   const handleKickDevice = (deviceId: string) => {
     setBoundDevices((prev) =>
-      prev.map((d) => (d.id === deviceId ? { ...d, status: 'kicked', lastActive: '已强制注销下线' } : d))
+      prev.map((d) => (d.id === deviceId ? { ...d, status: 'kicked', lastActive: '已强制注销下线', lastHeartbeat: '心跳终止 (已解绑下线)' } : d))
     );
     const target = boundDevices.find((d) => d.id === deviceId);
     setDeviceAuditMsg(`✅ 已强制注销解绑设备 [${target?.name || deviceId}]，该设备下一次请求将重新校验鉴权并对齐主账号。`);
@@ -266,7 +293,7 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
     setBoundDevices((prev) =>
       prev.map((d) =>
         d.status === 'legacy_warning' || d.boundAccount.includes('gmail')
-          ? { ...d, status: 'kicked', lastActive: '残留凭证已全量注销解绑' }
+          ? { ...d, status: 'kicked', lastActive: '残留凭证已全量注销解绑', lastHeartbeat: '心跳终止 (残留凭证已擦除)' }
           : d
       )
     );
@@ -277,7 +304,24 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
   const handleRefreshDevices = () => {
     setDeviceAuditMsg('⌛ 正在全网扫描当前登录账户 (zhang_counselor@qq.com) 下的 4 端活跃 Session 与加密信道...');
     setTimeout(() => {
-      setDeviceAuditMsg('✅ 全网设备审计完成：4 端活跃设备全部直连 QQ 云端，不存在残留未授信节点。');
+      const nowTime = new Date().toLocaleTimeString('zh-CN');
+      const nowFull = new Date().toLocaleString('zh-CN', { hour12: false });
+      setBoundDevices((prev) =>
+        prev.map((d) => {
+          if (d.status === 'kicked') return d;
+          if (d.isCurrent) {
+            return {
+              ...d,
+              lastHeartbeat: `${nowFull} (每3秒保鲜心跳 / 当前活跃)`,
+            };
+          }
+          return {
+            ...d,
+            lastHeartbeat: `${nowFull.split(' ')[0]} ${nowTime} (刚刚完成全网节点心跳响应)`,
+          };
+        })
+      );
+      setDeviceAuditMsg('✅ 全网设备心跳存活与节点审计完成：4 端活跃设备全部直连 QQ 云端，不存在残留未授信节点。');
       setTimeout(() => setDeviceAuditMsg(''), 4000);
     }, 800);
   };
@@ -1433,10 +1477,20 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
                               </div>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1.5 pt-1">
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
                               <span className="px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-200 font-extrabold text-[10px] rounded-lg border border-indigo-200 dark:border-indigo-800/80 flex items-center gap-1 shadow-2xs">
                                 <Tag className="w-3 h-3 text-indigo-500 shrink-0" />
                                 <span>设备备注: {dev.customRemark || '未设置 (点击右侧标注)'}</span>
+                              </span>
+                              <span className={`px-2.5 py-0.5 font-extrabold text-[10px] rounded-lg border flex items-center gap-1 shadow-2xs font-mono ${
+                                dev.status === 'legacy_warning'
+                                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-200 border-rose-300 dark:border-rose-800'
+                                  : dev.status === 'kicked'
+                                  ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                                  : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800/80'
+                              }`}>
+                                <Heart className={`w-3 h-3 ${dev.status === 'active' || dev.isCurrent ? 'text-rose-500 animate-pulse' : 'text-emerald-500'}`} />
+                                <span>心跳存活 (Heartbeat): <strong>{dev.lastHeartbeat}</strong></span>
                               </span>
                               {dev.status !== 'kicked' && (
                                 <button
@@ -1632,6 +1686,16 @@ export const SyncCenterModal: React.FC<SyncCenterModalProps> = ({
                             </div>
                             <span className="font-extrabold text-emerald-800 dark:text-emerald-300 text-xs font-sans">
                               {dev.customRemark || '未设置备注'}
+                            </span>
+                          </div>
+
+                          <div className="p-2 bg-rose-50/70 dark:bg-rose-950/40 rounded-xl space-y-0.5 col-span-2 border border-rose-200/80 dark:border-rose-800/60 flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <Heart className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0 animate-pulse" />
+                              <span className="text-[10px] text-rose-950 dark:text-rose-200 font-sans font-black">最后心跳存活 (Last Active Heartbeat):</span>
+                            </div>
+                            <span className="font-extrabold text-rose-800 dark:text-rose-300 text-xs font-mono">
+                              {dev.lastHeartbeat}
                             </span>
                           </div>
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CaseCategory, CaseRecord, SessionData, ParentSessionData, ResourceLink, Supervisor, ThinkingNote } from '../types';
-import { Plus, Minus, Pencil, Trash2, Calendar as CalendarIcon, CheckCircle, Clock, FileText, X, Search, Link as LinkIcon, Lightbulb, Mic, Eye, Download, Printer, Sparkles, Pin, PinOff, BarChart2, CheckSquare, Square, Layers, ListChecks, Zap, ChevronUp, ChevronDown, Users, HeartHandshake, GripVertical, FolderOpen } from 'lucide-react';
+import { Plus, Minus, Pencil, Trash2, Calendar as CalendarIcon, CheckCircle, Clock, FileText, X, Search, Link as LinkIcon, Lightbulb, Mic, Eye, Download, Printer, Sparkles, Pin, PinOff, BarChart2, CheckSquare, Square, Layers, ListChecks, Zap, ChevronUp, ChevronDown, Users, HeartHandshake, GripVertical, FolderOpen, Check } from 'lucide-react';
 import { VoiceInputButton } from './VoiceInputButton';
 import { ResourceLinkSection } from './ResourceLinkSection';
 import { IdeasSection } from './IdeasSection';
@@ -22,6 +22,7 @@ interface CaseManagementProps {
   totalHoursOverrides?: any;
   onUpdateTotalHoursOverrides?: (newOverrides: any) => void;
   onAddCase: (newCase: Omit<CaseRecord, 'id' | 'sessions'>) => void;
+  onUpdateCase?: (caseId: string, updatedFields: Partial<CaseRecord>) => void;
   onDeleteCase: (id: string) => void;
   onUpdateSessionNote: (caseId: string, sessionNum: number, sessionData: SessionData) => void;
   onUpdateParentSessionNote?: (caseId: string, parentSessionNum: number, parentSessionData: Partial<ParentSessionData> | null) => void;
@@ -44,6 +45,7 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   totalHoursOverrides,
   onUpdateTotalHoursOverrides,
   onAddCase,
+  onUpdateCase,
   onDeleteCase,
   onUpdateSessionNote,
   onUpdateParentSessionNote,
@@ -103,6 +105,80 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
   const [internalStatusFilter, setInternalStatusFilter] = useState<'all' | 'active' | 'ended'>(statusFilter);
   const [summaryModalCase, setSummaryModalCase] = useState<CaseRecord | null>(null);
   const [showChartsCaseId, setShowChartsCaseId] = useState<string | null>(null);
+
+  // 编辑已建立个案 Modal 状态
+  const [editingModalCase, setEditingModalCase] = useState<CaseRecord | null>(null);
+  const [editFormData, setEditFormData] = useState<{
+    startDate: string;
+    endDate: string;
+    caseNum: string;
+    name: string;
+    avatar: string;
+    category: CaseCategory;
+    status: 'active' | 'ended';
+    totalSessions: number | string;
+    supervisorId: string;
+    isTeenager: boolean;
+    notes: string;
+  }>({
+    startDate: '',
+    endDate: '',
+    caseNum: '',
+    name: '',
+    avatar: '👨‍💼',
+    category: 'longTerm',
+    status: 'active',
+    totalSessions: 12,
+    supervisorId: '',
+    isTeenager: false,
+    notes: '',
+  });
+
+  const handleOpenEditModal = (item: CaseRecord) => {
+    setEditingModalCase(item);
+    setEditFormData({
+      startDate: item.startDate || new Date().toISOString().split('T')[0],
+      endDate: item.endDate || '',
+      caseNum: item.caseNum || '',
+      name: item.name || '',
+      avatar: item.avatar || '👨‍💼',
+      category: item.category || 'longTerm',
+      status: item.status || 'active',
+      totalSessions: item.totalSessions || 12,
+      supervisorId: item.supervisorId || '',
+      isTeenager: Boolean(item.isTeenager),
+      notes: item.notes || '',
+    });
+  };
+
+  const handleSaveEditCase = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingModalCase) return;
+    const finalTotal = typeof editFormData.totalSessions === 'number'
+      ? editFormData.totalSessions
+      : parseInt(String(editFormData.totalSessions), 10) || 12;
+
+    const updatedFields: Partial<CaseRecord> = {
+      startDate: editFormData.startDate,
+      endDate: editFormData.status === 'ended' ? editFormData.endDate : undefined,
+      caseNum: editFormData.caseNum,
+      name: editFormData.name,
+      avatar: editFormData.avatar,
+      category: editFormData.category,
+      status: editFormData.status,
+      totalSessions: finalTotal,
+      supervisorId: editFormData.supervisorId || undefined,
+      isTeenager: editFormData.isTeenager,
+      notes: editFormData.notes,
+    };
+
+    if (onUpdateCase) {
+      onUpdateCase(editingModalCase.id, updatedFields);
+    } else if (onBatchUpdateCases) {
+      onBatchUpdateCases([{ id: editingModalCase.id, status: editFormData.status, totalSessions: finalTotal }]);
+    }
+    setEditingModalCase(null);
+  };
 
   // 删除防抖 lock ref
   const deleteLockRef = React.useRef<Record<string, number>>({});
@@ -688,7 +764,16 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500 dark:text-slate-400 mt-1.5">
                 <span className="flex items-center gap-1">
                   <CalendarIcon className="w-3.5 h-3.5 text-rose-400" />
-                  起始日期: YYYY-MM-DD ({item.startDate})
+                  起始日期: <strong className="text-zinc-800 dark:text-slate-200 font-bold">{item.startDate}</strong>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditModal(item)}
+                    className="ml-1 px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-rose-700 dark:text-rose-300 font-extrabold text-[10px] rounded border border-rose-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-0.5 active:scale-95 shadow-2xs"
+                    title="点击修改此个案的起始日期等详细资料"
+                  >
+                    <Pencil className="w-3 h-3 text-rose-500" />
+                    <span>修改日期/资料</span>
+                  </button>
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5 text-rose-400" />
@@ -814,6 +899,16 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                 <span>父母访谈 ({parentCompletedCount} 次)</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => handleOpenEditModal(item)}
+              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-slate-700 rounded-lg transition cursor-pointer active:scale-95 shadow-2xs"
+              title="编辑此已建立个案的起始日期、编号、状态及资料"
+            >
+              <Pencil className="w-3.5 h-3.5 text-rose-500" />
+              <span>编辑</span>
+            </button>
 
             <button
               type="button"
@@ -2616,6 +2711,221 @@ export const CaseManagement: React.FC<CaseManagementProps> = ({
                 保存时数
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 编辑已建立个案 Modal */}
+      {editingModalCase && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-800 rounded-3xl p-6 max-w-xl w-full shadow-2xl my-8 flex flex-col space-y-4">
+            <div className="flex items-center justify-between border-b border-rose-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 bg-rose-100 dark:bg-rose-950/60 rounded-2xl text-rose-600 dark:text-rose-400">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 dark:text-slate-100 text-base">
+                    编辑个案档案基本信息
+                  </h3>
+                  <p className="text-xs text-zinc-500 dark:text-slate-400">
+                    修改起始日期、状态、代号隐名及管理次数，修改将自动进行多端离线与云端同步
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingModalCase(null)}
+                className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-slate-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditCase} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-200 mb-1">
+                    来访者代号/隐名 *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                    className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-400 font-semibold"
+                    placeholder="如: 来访者小林 / A-01"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-200 mb-1">
+                    个案编号
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.caseNum}
+                    onChange={(e) => setEditFormData({ ...editFormData, caseNum: e.target.value })}
+                    className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-400 font-semibold"
+                    placeholder="如: C001"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-200 mb-1 flex items-center gap-1">
+                    <CalendarIcon className="w-3.5 h-3.5 text-rose-500" />
+                    <span>起始日期 (YYYY-MM-DD) *</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editFormData.startDate}
+                    onChange={(e) => setEditFormData({ ...editFormData, startDate: e.target.value })}
+                    className="w-full text-xs p-2.5 bg-rose-50/60 dark:bg-slate-800 border border-rose-300 dark:border-slate-600 rounded-xl text-zinc-800 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-rose-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-200 mb-1">
+                    个案状态
+                  </label>
+                  <select
+                    value={editFormData.status}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value as 'active' | 'ended' })}
+                    className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-rose-400"
+                  >
+                    <option value="active">🟢 正在进行中</option>
+                    <option value="ended">🔴 暂停/终止/已结案</option>
+                  </select>
+                </div>
+
+                {editFormData.status === 'ended' && (
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-rose-800 dark:text-rose-300 mb-1">
+                      🏁 终止/结案日期 (YYYY-MM-DD)
+                    </label>
+                    <input
+                      type="date"
+                      value={editFormData.endDate}
+                      onChange={(e) => setEditFormData({ ...editFormData, endDate: e.target.value })}
+                      className="w-full text-xs p-2.5 bg-rose-50 dark:bg-slate-800 border border-rose-300 dark:border-slate-600 rounded-xl text-zinc-800 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-rose-400"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-200 mb-1">
+                    头像与人群属性
+                  </label>
+                  <select
+                    value={editFormData.avatar}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const isT = val === '👦' || val === '👧';
+                      setEditFormData({ ...editFormData, avatar: val, isTeenager: isT ? true : editFormData.isTeenager });
+                    }}
+                    className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-rose-400"
+                  >
+                    <option value="👨‍💼">👨‍💼 成年男性</option>
+                    <option value="👩‍💼">👩‍💼 成年女性</option>
+                    <option value="👦">👦 青少年男</option>
+                    <option value="👧">👧 青少年女</option>
+                    <option value="👴">👴 年长者</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-200 mb-1">
+                    个案分类
+                  </label>
+                  <select
+                    value={editFormData.category}
+                    onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value as CaseCategory })}
+                    className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-rose-400"
+                  >
+                    <option value="longTerm">长程个案</option>
+                    <option value="shortTermPersonal">短程个案 - 个人短程案例</option>
+                    <option value="shortTermAgency">短程个案 - 医院/机构短程案例</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-200 mb-1">
+                    预估/计划总次数
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={editFormData.totalSessions}
+                    onChange={(e) => setEditFormData({ ...editFormData, totalSessions: e.target.value })}
+                    className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-rose-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-zinc-700 dark:text-slate-200 mb-1">
+                    绑定督导老师
+                  </label>
+                  <select
+                    value={editFormData.supervisorId}
+                    onChange={(e) => setEditFormData({ ...editFormData, supervisorId: e.target.value })}
+                    className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-rose-400"
+                  >
+                    <option value="">未绑定特定督导</option>
+                    {mentors.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.title || '督导师'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="inline-flex items-center gap-2 px-3 py-2 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded-xl cursor-pointer hover:bg-indigo-100 transition w-full">
+                  <input
+                    type="checkbox"
+                    checked={editFormData.isTeenager}
+                    onChange={(e) => setEditFormData({ ...editFormData, isTeenager: e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-indigo-300"
+                  />
+                  <span className="font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
+                    👶 标记为“青少年个案” (可独立记录父母访谈档案)
+                  </span>
+                </label>
+              </div>
+
+              <div>
+                <label className="block font-bold text-zinc-700 dark:text-slate-200 mb-1">
+                  个案背景与备注说明
+                </label>
+                <textarea
+                  rows={3}
+                  value={editFormData.notes}
+                  onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                  placeholder="填写个案背景、来访主要问题或特殊注意事项..."
+                  className="w-full text-xs p-2.5 bg-white dark:bg-slate-800 border border-rose-200 dark:border-slate-700 rounded-xl text-zinc-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-400 resize-y"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-rose-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingModalCase(null)}
+                  className="px-4 py-2 bg-zinc-100 dark:bg-slate-800 hover:bg-zinc-200 dark:hover:bg-slate-700 text-zinc-700 dark:text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl transition shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>保存修改并更新</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -494,6 +494,7 @@ export default function App() {
 
   // Handlers for systemData mutations
   const handleAddCase = (newRecordInput: Omit<CaseRecord, 'id' | 'sessions'> & Partial<CaseRecord>) => {
+    hasUserMutatedInSessionRef.current = true;
     const fullRecord: CaseRecord = {
       id: `case_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       sessions: {},
@@ -502,7 +503,23 @@ export default function App() {
     };
     setSystemData((prev) => ({
       ...prev,
+      versioning: (prev.versioning || 1) + 1,
       records: [fullRecord, ...(prev.records || [])],
+    }));
+  };
+
+  const handleUpdateCase = (caseId: string, updatedFields: Partial<CaseRecord>) => {
+    hasUserMutatedInSessionRef.current = true;
+    setSystemData((prev) => ({
+      ...prev,
+      versioning: (prev.versioning || 1) + 1,
+      records: (prev.records || []).map((r) => {
+        if (!r || r.id !== caseId) return r;
+        return {
+          ...r,
+          ...updatedFields,
+        };
+      }),
     }));
   };
 
@@ -1147,6 +1164,7 @@ export default function App() {
                   totalHoursOverrides={systemData.totalHoursOverrides}
                   onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
                   onAddCase={handleAddCase}
+                  onUpdateCase={handleUpdateCase}
                   onDeleteCase={handleDeleteCase}
                   onUpdateSessionNote={handleUpdateSessionNote}
                   onUpdateParentSessionNote={handleUpdateParentSessionNote}
@@ -1170,6 +1188,7 @@ export default function App() {
                   totalHoursOverrides={systemData.totalHoursOverrides}
                   onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
                   onAddCase={handleAddCase}
+                  onUpdateCase={handleUpdateCase}
                   onDeleteCase={handleDeleteCase}
                   onUpdateSessionNote={handleUpdateSessionNote}
                   onUpdateParentSessionNote={handleUpdateParentSessionNote}
@@ -1193,6 +1212,7 @@ export default function App() {
                   totalHoursOverrides={systemData.totalHoursOverrides}
                   onUpdateTotalHoursOverrides={handleUpdateTotalHoursOverrides}
                   onAddCase={handleAddCase}
+                  onUpdateCase={handleUpdateCase}
                   onDeleteCase={handleDeleteCase}
                   onUpdateSessionNote={handleUpdateSessionNote}
                   onUpdateParentSessionNote={handleUpdateParentSessionNote}
