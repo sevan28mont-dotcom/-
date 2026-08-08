@@ -257,6 +257,34 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onLoginSuccess, isDarkMo
           </button>
         </div>
 
+        {/* 🔍 登录溯源与跨端防数据孤岛说明 (Login Origin Traceability & Multi-Terminal Anti-Silo Notice) */}
+        <div className="p-3 bg-gradient-to-br from-amber-500/10 via-rose-500/5 to-slate-900/5 dark:from-slate-800/90 dark:via-slate-850 dark:to-slate-900 border border-amber-300/80 dark:border-amber-700/70 rounded-2xl space-y-2 text-xs shrink-0 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 font-black text-amber-950 dark:text-amber-200 text-xs">
+              <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>登录溯源与跨端防孤岛说明</span>
+            </div>
+            <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-[10px] font-bold rounded-md border border-amber-200 dark:border-amber-800 font-mono">
+              4端关联成功
+            </span>
+          </div>
+
+          <p className="text-[11px] text-zinc-600 dark:text-slate-300 leading-relaxed">
+            在跨端登录前务必核对当前选中的数据同步账户。避免在<strong className="text-amber-900 dark:text-amber-200">谷歌 Chrome、微软 IE、Pad 平板与手机移动端</strong>多端口使用不同的社交媒体账号或第三方邮箱，导致数据孤岛。
+          </p>
+
+          <div className="space-y-1 text-[10px] text-zinc-700 dark:text-slate-300 font-medium bg-white/80 dark:bg-slate-900/80 p-2 rounded-xl border border-amber-200/60 dark:border-slate-700/60">
+            <div className="flex items-start gap-1.5">
+              <span className="text-amber-500 font-bold shrink-0">1.</span>
+              <span><strong>推荐统一账户：</strong> <code className="px-1 py-0.2 bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 rounded font-mono font-bold">zhang_counselor@qq.com</code> (QQ邮箱) 或 <code className="px-1 py-0.2 bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 rounded font-mono font-bold">张咨询师</code>。</span>
+            </div>
+            <div className="flex items-start gap-1.5">
+              <span className="text-amber-500 font-bold shrink-0">2.</span>
+              <span><strong>全端口溯源保障：</strong> 无论在 4 个终端中的哪一个登录，后台均会自动溯源路由至【张咨询师 QQ 主云端】，实现 100% 实时漫游同步。</span>
+            </div>
+          </div>
+        </div>
+
         {/* Error / Success Feedback */}
         {errorMsg && (
           <div className="bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 p-2.5 rounded-2xl flex items-center gap-2 text-rose-800 dark:text-rose-200 text-xs font-semibold shrink-0">

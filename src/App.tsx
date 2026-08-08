@@ -235,14 +235,13 @@ export default function App() {
     fetchBackendData(currentUser.id).then((cloudData) => {
       if (!isMounted) return;
       if (cloudData) {
-        const localVersion = systemData.versioning || 0;
-        const cloudVersion = cloudData.versioning || 0;
-        if (cloudVersion >= localVersion || !localVersion) {
+        // Priority to cloud data on login / mount if user hasn't mutated state in this session
+        if (!hasUserMutatedInSessionRef.current) {
           setSystemData(cloudData, true);
           saveDataToLocalStorage(cloudData, currentUser.id);
-          setForceRefreshKey(cloudVersion || Date.now());
+          setForceRefreshKey(cloudData.versioning || Date.now());
           setSyncStatus('success');
-          setLastSyncTime(`☁️ 跨设备云端数据已重绘同步 (v${cloudVersion || '1'})`);
+          setLastSyncTime(`☁️ 跨设备云端数据已全量对齐 (v${cloudData.versioning || '1'})`);
           setTimeout(() => setSyncStatus('idle'), 3000);
         }
       } else {
@@ -274,18 +273,20 @@ export default function App() {
           const currentStr = JSON.stringify(systemData);
           const cloudStr = JSON.stringify(cloudData);
 
-          // 核心控制：当获取到比当前本地数据更新的版本号 (cloudVersion > localVersion) 或差异数据时
-          if (cloudVersion > localVersion || (currentStr !== cloudStr && !hasUserMutatedInSessionRef.current)) {
-            console.log(`[Version Sync] Detecting newer cloud version: local=v${localVersion}, cloud=v${cloudVersion}`);
-            setSystemData(cloudData, true);
-            saveDataToLocalStorage(cloudData, currentUser.id);
-            
-            // 强制触发 UI 刷新机制与重绘
-            setForceRefreshKey(cloudVersion || Date.now());
+          // 核心控制：当本地与云端存在数据内容差异，且当前终端未处于正在编辑输入的状态时，强行重绘对齐
+          if (currentStr !== cloudStr) {
+            if (cloudVersion >= localVersion || !hasUserMutatedInSessionRef.current) {
+              console.log(`[Version Sync] Aligning newer cloud data: local=v${localVersion}, cloud=v${cloudVersion}`);
+              setSystemData(cloudData, true);
+              saveDataToLocalStorage(cloudData, currentUser.id);
+              
+              // 强制触发 UI 刷新机制与重绘
+              setForceRefreshKey(cloudVersion || Date.now());
 
-            setSyncStatus('success');
-            setLastSyncTime(`☁️ 已接收跨端最新版本强行刷新 (v${cloudVersion || 'latest'})`);
-            setTimeout(() => setSyncStatus('idle'), 3000);
+              setSyncStatus('success');
+              setLastSyncTime(`☁️ 已接收 4 端最新节点自动重绘 (v${cloudVersion || 'latest'})`);
+              setTimeout(() => setSyncStatus('idle'), 3000);
+            }
           }
         }
       } catch (err) {
@@ -293,33 +294,35 @@ export default function App() {
       }
     };
 
-    // Poll every 4 seconds for immediate updates from other devices (PC / Phone / Pad)
-    const intervalId = setInterval(syncFromCloud, 4000);
+    // Poll every 3 seconds for immediate updates from other devices (PC / Phone / Pad / IE)
+    const intervalId = setInterval(syncFromCloud, 3000);
 
-    // Refresh immediately when switching tabs, focusing window, or coming back online
+    // Refresh immediately when switching tabs, focusing window, coming back online, or localStorage storage event
     const handleFocus = () => syncFromCloud();
     window.addEventListener('focus', handleFocus);
     window.addEventListener('visibilitychange', handleFocus);
     window.addEventListener('online', handleFocus);
+    window.addEventListener('storage', handleFocus);
 
     return () => {
       clearInterval(intervalId);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('visibilitychange', handleFocus);
       window.removeEventListener('online', handleFocus);
+      window.removeEventListener('storage', handleFocus);
     };
   }, [currentUser?.id, isCloudSyncDone, systemData]);
 
-  // Auto save to LocalStorage & Backend whenever systemData changes
+  // Auto save to LocalStorage & Backend ONLY when systemData is mutated by user on THIS device
   useEffect(() => {
     saveDataToLocalStorage(systemData, currentUser?.id);
-    if (currentUser?.id && isCloudSyncDone) {
+    if (currentUser?.id && isCloudSyncDone && hasUserMutatedInSessionRef.current) {
       setSyncStatus('syncing');
       saveDataToBackend(systemData, currentUser.id).then((res) => {
         if (res.success) {
           hasUserMutatedInSessionRef.current = false;
           setSyncStatus('success');
-          setLastSyncTime(`☁️ 变动已保存 (v${systemData.versioning || ''} ${res.timestamp})`);
+          setLastSyncTime(`☁️ 变动已实时推送云端 (v${systemData.versioning || ''} ${res.timestamp})`);
           setTimeout(() => setSyncStatus('idle'), 3000);
         } else {
           setSyncStatus('error');
